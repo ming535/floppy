@@ -11,6 +11,15 @@ pub struct Field {
 }
 
 impl Field {
+    pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
+        Field {
+            name: name.to_string(),
+            data_type,
+            nullable,
+            qualifier: None,
+        }
+    }
+
     /// Builds a qualified column based on self
     pub fn qualified_column(&self) -> Column {
         Column {

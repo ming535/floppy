@@ -1,4 +1,4 @@
-use crate::catalog::CatalogRef;
+use crate::catalog::{CatalogRef, SchemaProvider};
 use crate::common::error::{FloppyError, Result};
 use crate::common::schema::{Schema, SchemaRef};
 use crate::logical_expr::column::Column;
@@ -15,13 +15,13 @@ use sqlparser::ast::{
 };
 use std::sync::Arc;
 
-pub struct LogicalPlanner {
-    catalog: CatalogRef,
+pub struct LogicalPlanner<'a, S: SchemaProvider> {
+    schema_provider: &'a S,
 }
 
-impl LogicalPlanner {
-    pub fn new(catalog: CatalogRef) -> Self {
-        LogicalPlanner { catalog }
+impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
+    pub fn new(schema_provider: &'a S) -> Self {
+        LogicalPlanner { schema_provider }
     }
 
     pub fn statement_to_plan(&self, statement: Statement) -> Result<LogicalPlan> {
@@ -86,7 +86,7 @@ impl LogicalPlanner {
                     .join(".");
                 let table_scan = LogicalPlan::TableScan(TableScan {
                     table_name: table_name.clone(),
-                    schema: self.catalog.get_schema(&table_name)?,
+                    schema: self.schema_provider.get_schema(&table_name)?,
                     filters: vec![],
                 });
                 Ok(table_scan)
@@ -205,7 +205,16 @@ impl LogicalPlanner {
         right: SQLExpr,
     ) -> Result<Expr> {
         let operator = match op {
+            BinaryOperator::Plus => Ok(Operator::Plus),
+            BinaryOperator::Minus => Ok(Operator::Minus),
             BinaryOperator::Eq => Ok(Operator::Eq),
+            BinaryOperator::NotEq => Ok(Operator::NotEq),
+            BinaryOperator::Lt => Ok(Operator::Lt),
+            BinaryOperator::LtEq => Ok(Operator::LtEq),
+            BinaryOperator::Gt => Ok(Operator::Gt),
+            BinaryOperator::GtEq => Ok(Operator::GtEq),
+            BinaryOperator::And => Ok(Operator::And),
+            BinaryOperator::Or => Ok(Operator::Or),
             _ => Err(FloppyError::NotImplemented(format!(
                 "Unsupported binary operator {:?}",
                 op
@@ -250,11 +259,33 @@ pub fn expand_wildcard(schema: &Schema, plan: &LogicalPlan) -> Result<Vec<Expr>>
 mod tests {
     use super::*;
     use crate::catalog::Catalog;
+
+    use crate::common::datatype::DataType;
+    use crate::common::field::Field;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 
+    struct MockSchemaProvider {}
+
+    impl SchemaProvider for MockSchemaProvider {
+        fn get_schema(&self, table_name: &str) -> Result<SchemaRef> {
+            match table_name {
+                "test" => Ok(Arc::new(Schema::new(vec![Field::new(
+                    "id",
+                    DataType::Int32,
+                    false,
+                )]))),
+                _ => Err(FloppyError::Schema(format!(
+                    "table name not found{}",
+                    table_name
+                ))),
+            }
+        }
+    }
+
     fn logical_plan(sql: &str) -> Result<LogicalPlan> {
-        let planner = LogicalPlanner::new(Arc::new(Catalog::empty()));
+        let mock_schema_provider = MockSchemaProvider {};
+        let planner = LogicalPlanner::new(&mock_schema_provider);
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, sql);
         match ast {
@@ -276,6 +307,24 @@ mod tests {
             "Projection: Int64(1)\
                    \n  EmptyRelation",
         );
+
+        quick_test(
+            "SELECT 1 + 1",
+            "Projection: Int64(1) + Int64(1)\
+                    \n  EmptyRelation",
+        );
+
+        quick_test(
+            "SELECT 2, 3",
+            "Projection: Int64(2), Int64(3)\
+                    \n  EmptyRelation",
+        );
+
+        quick_test(
+            "SELECT 2 + 4, 3",
+            "Projection: Int64(2) + Int64(4), Int64(3)\
+                    \n  EmptyRelation",
+        )
     }
 
     #[test]

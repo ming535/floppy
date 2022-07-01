@@ -6,6 +6,10 @@ pub struct Schema {
 }
 
 impl Schema {
+    pub fn new(fields: Vec<Field>) -> Self {
+        Self { fields }
+    }
+
     /// Creates an empty `Schema`
     pub fn empty() -> Self {
         Self { fields: vec![] }

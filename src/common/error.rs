@@ -6,4 +6,5 @@ pub enum FloppyError {
     NotImplemented(String),
     ParseError(String),
     Plan(String),
+    Schema(String),
 }
