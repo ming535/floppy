@@ -1,8 +1,10 @@
 use crate::catalog::{CatalogRef, SchemaProvider};
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::{field_not_found, FloppyError, Result};
 use crate::common::schema::{Schema, SchemaRef};
 use crate::logical_expr::column::Column;
 use crate::logical_expr::expr::Expr;
+use crate::logical_expr::expr_rewriter::normalize_col;
+use crate::logical_expr::expr_visitor::{ExprVisitable, ExpressionVisitor, Recursion};
 use crate::logical_expr::literal::lit;
 use crate::logical_expr::value::Value;
 use crate::logical_plan::operator::Operator;
@@ -86,7 +88,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
                     .join(".");
                 let table_scan = LogicalPlan::TableScan(TableScan {
                     table_name: table_name.clone(),
-                    schema: self.schema_provider.get_schema(&table_name)?,
+                    projected_schema: self.schema_provider.get_schema(&table_name)?,
                     filters: vec![],
                 });
                 Ok(table_scan)
@@ -105,7 +107,8 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
     ) -> Result<LogicalPlan> {
         match selection {
             Some(predicate_expr) => {
-                let filter_expr = self.sql_expr_to_logical_expr(predicate_expr)?;
+                let filter_expr = self.sql_to_rex(predicate_expr, plan.schema())?;
+                let filter_expr = normalize_col(filter_expr, &plan)?;
                 Ok(LogicalPlan::Filter(Filter {
                     predicate: filter_expr,
                     input: Arc::new(plan),
@@ -138,7 +141,46 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
         }))
     }
 
-    pub fn sql_expr_to_logical_expr(&self, sql: SQLExpr) -> Result<Expr> {
+    /// Validate the schema provides all of the columns referenced in the expressions.
+    pub fn validate_schema_satisfies_exprs(
+        &self,
+        schema: &Schema,
+        exprs: &[Expr],
+    ) -> Result<()> {
+        find_column_exprs(exprs)
+            .iter()
+            .try_for_each(|col| match col {
+                Expr::Column(col) => match &col.relation {
+                    Some(r) => {
+                        schema.field_with_qualified_name(r, &col.name)?;
+                        Ok(())
+                    }
+                    None => {
+                        if !schema.fields_with_unqualified_name(&col.name).is_empty() {
+                            Ok(())
+                        } else {
+                            Err(field_not_found(None, col.name.as_str(), schema))
+                        }
+                    }
+                }
+                .map_err(|_: FloppyError| {
+                    field_not_found(
+                        col.relation.as_ref().map(|s| s.to_owned()),
+                        col.name.as_str(),
+                        schema,
+                    )
+                }),
+                _ => Err(FloppyError::Internal("Not a column".to_string())),
+            })
+    }
+
+    pub fn sql_to_rex(&self, sql: SQLExpr, schema: &Schema) -> Result<Expr> {
+        let mut expr = self.sql_expr_to_logical_expr(sql)?;
+        self.validate_schema_satisfies_exprs(schema, &[expr.clone()])?;
+        Ok(expr)
+    }
+
+    fn sql_expr_to_logical_expr(&self, sql: SQLExpr) -> Result<Expr> {
         match sql {
             SQLExpr::Value(SQLValue::Number(n, _)) => parse_sql_number(&n),
             SQLExpr::Value(SQLValue::SingleQuotedString(ref s)) => Ok(lit(s.clone())),
@@ -150,10 +192,11 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
                         "Unsupported identifier starts with @"
                     )));
                 }
-                Ok(Expr::Column(Column {
+                let col = Column {
                     relation: None,
                     name: normalize_ident(&identifier),
-                }))
+                };
+                Ok(Expr::Column(col))
             }
             SQLExpr::BinaryOp { left, op, right } => {
                 self.parse_sql_binary_op(*left, op, *right)
@@ -173,9 +216,8 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
     ) -> Result<Vec<Expr>> {
         match project {
             SelectItem::UnnamedExpr(expr) => {
-                let expr = self.sql_expr_to_logical_expr(expr)?;
-                // todo normalize column?
-                Ok(vec![expr])
+                let expr = self.sql_to_rex(expr, plan.schema())?;
+                Ok(vec![normalize_col(expr, plan)?])
             }
             SelectItem::ExprWithAlias { expr, alias } => {
                 return Err(FloppyError::NotImplemented(format!(
@@ -255,13 +297,48 @@ pub fn expand_wildcard(schema: &Schema, plan: &LogicalPlan) -> Result<Vec<Expr>>
         .collect::<Vec<Expr>>())
 }
 
+/// Collect all deeply nested `Expr::Column`. They are returned
+/// in the order of appearance (depth first), and my contain duplicates.
+pub fn find_column_exprs(exprs: &[Expr]) -> Vec<Expr> {
+    exprs
+        .iter()
+        .flat_map(find_columns_referenced_by_expr)
+        .map(Expr::Column)
+        .collect()
+}
+
+/// Recursively find all columns referenced by an expression
+#[derive(Debug, Default)]
+struct ColumnCollector {
+    exprs: Vec<Column>,
+}
+
+impl ExpressionVisitor for ColumnCollector {
+    fn pre_visit(mut self, expr: &Expr) -> Result<Recursion<Self>>
+    where
+        Self: ExpressionVisitor,
+    {
+        if let Expr::Column(c) = expr {
+            self.exprs.push(c.clone())
+        }
+        Ok(Recursion::Continue(self))
+    }
+}
+
+pub fn find_columns_referenced_by_expr(e: &Expr) -> Vec<Column> {
+    let collector = e
+        .accept(ColumnCollector::default())
+        .expect("Unexpected error");
+    collector.exprs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::catalog::Catalog;
-
     use crate::common::datatype::DataType;
-    use crate::common::field::Field;
+    use crate::common::error::SchemaError;
+    use crate::common::schema::Field;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 
@@ -271,13 +348,13 @@ mod tests {
         fn get_schema(&self, table_name: &str) -> Result<SchemaRef> {
             match table_name {
                 "test" => Ok(Arc::new(Schema::new(vec![Field::new(
+                    Some("test"),
                     "id",
                     DataType::Int32,
                     false,
                 )]))),
-                _ => Err(FloppyError::Schema(format!(
-                    "table name not found{}",
-                    table_name
+                _ => Err(FloppyError::SchemaError(SchemaError::TableNotFound(
+                    format!("table name not found {}", table_name),
                 ))),
             }
         }
@@ -328,16 +405,56 @@ mod tests {
     }
 
     #[test]
-    fn select_no_relation_multiple_column() {}
+    fn select_table_not_exists() {
+        let sql = "SELECT * FROM faketable";
+        let err = logical_plan(sql).expect_err("query should have failed");
+        match err {
+            FloppyError::SchemaError(SchemaError::TableNotFound(_)) => (),
+            _ => assert!(false, "err not match: {:?}", err),
+        }
+    }
 
     #[test]
-    fn select_table_that_exists() {}
+    fn select_column_does_not_exist() {
+        let sql = "SELECT fakecolumn FROM test";
+        let err = logical_plan(sql).expect_err("query should have failed");
+        match err {
+            FloppyError::SchemaError(SchemaError::FieldNotFound {
+                qualifier,
+                name,
+                valid_fields,
+            }) => (),
+            _ => assert!(false, "err not match: {:?}", err),
+        }
+    }
 
     #[test]
-    fn select_table_not_exists() {}
+    fn select_table_that_exists() {
+        let sql = "SELECT * FROM test";
+        quick_test(
+            sql,
+            "Projection: #test.id\
+                   \n  TableScan: test",
+        );
+
+        let sql = "SELECT id FROM test";
+        quick_test(
+            sql,
+            "Projection: #test.id\
+               \n  TableScan: test",
+        )
+    }
 
     #[test]
-    fn select_filter() {}
+    fn select_filter() {
+        let sql = "SELECT * FROM test WHERE id = 100";
+        quick_test(
+            sql,
+            "Projection: #test.id\
+                   \n  Filter: #test.id = Int64(100)\
+                   \n    TableScan: test",
+        )
+    }
 
     #[test]
     fn select_projection() {}

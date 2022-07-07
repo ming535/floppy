@@ -12,20 +12,39 @@ use std::sync::Arc;
 /// each node in the tree is a LogicalPlan.
 #[derive(Clone)]
 pub enum LogicalPlan {
-    Projection(Projection),
-    TableScan(TableScan),
-    Filter(Filter),
     EmptyRelation(EmptyRelation),
+    TableScan(TableScan),
+    Projection(Projection),
+    Filter(Filter),
 }
 
 impl LogicalPlan {
-    /// Get a reference to the locial plan's schema
+    /// Get a reference to the logical plan's schema
     pub fn schema(&self) -> &SchemaRef {
         match self {
             Self::Projection(Projection { schema, .. }) => schema,
-            Self::TableScan(TableScan { schema, .. }) => schema,
+            Self::TableScan(TableScan {
+                projected_schema: schema,
+                ..
+            }) => schema,
             Self::Filter(Filter { input, .. }) => input.schema(),
             Self::EmptyRelation(EmptyRelation { schema, .. }) => schema,
+        }
+    }
+
+    /// Get a vector of reference to all schemas in every node of the logical plan
+    pub fn all_schemas(&self) -> Vec<&SchemaRef> {
+        match self {
+            Self::TableScan(TableScan {
+                projected_schema, ..
+            }) => vec![projected_schema],
+            Self::Projection(Projection { input, schema, .. }) => {
+                let mut schemas = input.all_schemas();
+                schemas.insert(0, schema);
+                schemas
+            }
+            Self::Filter(Filter { input, .. }) => input.all_schemas(),
+            Self::EmptyRelation(EmptyRelation { schema, .. }) => vec![schema],
         }
     }
 }
@@ -166,7 +185,7 @@ pub struct TableScan {
     pub table_name: String,
 
     /// The schema description of the output
-    pub schema: SchemaRef,
+    pub projected_schema: SchemaRef,
 
     /// Optional expressions to be used as filters
     pub filters: Vec<Expr>,
