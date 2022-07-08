@@ -1,5 +1,5 @@
 use crate::common::schema::SchemaRef;
-use crate::logical_expr::expr::Expr;
+use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_plan::display::IndentVisitor;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -172,7 +172,7 @@ impl fmt::Debug for LogicalPlan {
 #[derive(Clone)]
 pub struct Projection {
     /// The list of expressions
-    pub expr: Vec<Expr>,
+    pub expr: Vec<LogicalExpr>,
     /// The incoming logical plan
     pub input: Arc<LogicalPlan>,
     /// The schema description of the output
@@ -188,12 +188,12 @@ pub struct TableScan {
     pub projected_schema: SchemaRef,
 
     /// Optional expressions to be used as filters
-    pub filters: Vec<Expr>,
+    pub filters: Vec<LogicalExpr>,
 }
 
 #[derive(Clone)]
 pub struct Filter {
-    pub predicate: Expr,
+    pub predicate: LogicalExpr,
     pub input: Arc<LogicalPlan>,
 }
 

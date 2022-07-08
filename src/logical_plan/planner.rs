@@ -1,12 +1,12 @@
 use crate::catalog::{CatalogRef, SchemaProvider};
 use crate::common::error::{field_not_found, FloppyError, Result};
 use crate::common::schema::{Schema, SchemaRef};
+use crate::common::value::Value;
 use crate::logical_expr::column::Column;
-use crate::logical_expr::expr::Expr;
+use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_expr::expr_rewriter::normalize_col;
 use crate::logical_expr::expr_visitor::{ExprVisitable, ExpressionVisitor, Recursion};
 use crate::logical_expr::literal::lit;
-use crate::logical_expr::value::Value;
 use crate::logical_plan::operator::Operator;
 use crate::logical_plan::plan::{
     EmptyRelation, Filter, LogicalPlan, Projection, TableScan,
@@ -131,7 +131,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
                 Ok(vec) => vec.into_iter().map(Ok).collect(),
                 Err(err) => vec![Err(err)],
             })
-            .collect::<Result<Vec<Expr>>>()?;
+            .collect::<Result<Vec<LogicalExpr>>>()?;
 
         let schema = plan.schema().clone();
         Ok(LogicalPlan::Projection(Projection {
@@ -145,12 +145,12 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
     pub fn validate_schema_satisfies_exprs(
         &self,
         schema: &Schema,
-        exprs: &[Expr],
+        exprs: &[LogicalExpr],
     ) -> Result<()> {
         find_column_exprs(exprs)
             .iter()
             .try_for_each(|col| match col {
-                Expr::Column(col) => match &col.relation {
+                LogicalExpr::Column(col) => match &col.relation {
                     Some(r) => {
                         schema.field_with_qualified_name(r, &col.name)?;
                         Ok(())
@@ -174,18 +174,18 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
             })
     }
 
-    pub fn sql_to_rex(&self, sql: SQLExpr, schema: &Schema) -> Result<Expr> {
+    pub fn sql_to_rex(&self, sql: SQLExpr, schema: &Schema) -> Result<LogicalExpr> {
         let mut expr = self.sql_expr_to_logical_expr(sql)?;
         self.validate_schema_satisfies_exprs(schema, &[expr.clone()])?;
         Ok(expr)
     }
 
-    fn sql_expr_to_logical_expr(&self, sql: SQLExpr) -> Result<Expr> {
+    fn sql_expr_to_logical_expr(&self, sql: SQLExpr) -> Result<LogicalExpr> {
         match sql {
             SQLExpr::Value(SQLValue::Number(n, _)) => parse_sql_number(&n),
             SQLExpr::Value(SQLValue::SingleQuotedString(ref s)) => Ok(lit(s.clone())),
             SQLExpr::Value(SQLValue::Boolean(n)) => Ok(lit(n)),
-            SQLExpr::Value(SQLValue::Null) => Ok(Expr::Literal(Value::Null)),
+            SQLExpr::Value(SQLValue::Null) => Ok(LogicalExpr::Literal(Value::Null)),
             SQLExpr::Identifier(identifier) => {
                 if identifier.value.starts_with('@') {
                     return Err(FloppyError::NotImplemented(format!(
@@ -196,7 +196,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
                     relation: None,
                     name: normalize_ident(&identifier),
                 };
-                Ok(Expr::Column(col))
+                Ok(LogicalExpr::Column(col))
             }
             SQLExpr::BinaryOp { left, op, right } => {
                 self.parse_sql_binary_op(*left, op, *right)
@@ -213,7 +213,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
         project: SelectItem,
         plan: &LogicalPlan,
         input_is_empty: bool,
-    ) -> Result<Vec<Expr>> {
+    ) -> Result<Vec<LogicalExpr>> {
         match project {
             SelectItem::UnnamedExpr(expr) => {
                 let expr = self.sql_to_rex(expr, plan.schema())?;
@@ -245,7 +245,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
         left: SQLExpr,
         op: BinaryOperator,
         right: SQLExpr,
-    ) -> Result<Expr> {
+    ) -> Result<LogicalExpr> {
         let operator = match op {
             BinaryOperator::Plus => Ok(Operator::Plus),
             BinaryOperator::Minus => Ok(Operator::Minus),
@@ -263,7 +263,7 @@ impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
             ))),
         }?;
 
-        Ok(Expr::BinaryExpr {
+        Ok(LogicalExpr::BinaryExpr {
             left: Box::new(self.sql_expr_to_logical_expr(left)?),
             op: operator,
             right: Box::new(self.sql_expr_to_logical_expr(right)?),
@@ -279,31 +279,31 @@ pub fn normalize_ident(ident: &Ident) -> String {
 }
 
 // Parse number in sql string, convert it to Expr::Literal
-fn parse_sql_number(n: &str) -> Result<Expr> {
+fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
     match n.parse::<i64>() {
         Ok(n) => Ok(lit(n)),
         Err(_) => Ok(lit(n.parse::<f64>().unwrap())),
     }
 }
 
-pub fn expand_wildcard(schema: &Schema, plan: &LogicalPlan) -> Result<Vec<Expr>> {
+pub fn expand_wildcard(schema: &Schema, plan: &LogicalPlan) -> Result<Vec<LogicalExpr>> {
     Ok(schema
         .fields()
         .iter()
         .map(|f| {
             let col = f.qualified_column();
-            Expr::Column(col)
+            LogicalExpr::Column(col)
         })
-        .collect::<Vec<Expr>>())
+        .collect::<Vec<LogicalExpr>>())
 }
 
 /// Collect all deeply nested `Expr::Column`. They are returned
 /// in the order of appearance (depth first), and my contain duplicates.
-pub fn find_column_exprs(exprs: &[Expr]) -> Vec<Expr> {
+pub fn find_column_exprs(exprs: &[LogicalExpr]) -> Vec<LogicalExpr> {
     exprs
         .iter()
         .flat_map(find_columns_referenced_by_expr)
-        .map(Expr::Column)
+        .map(LogicalExpr::Column)
         .collect()
 }
 
@@ -314,18 +314,18 @@ struct ColumnCollector {
 }
 
 impl ExpressionVisitor for ColumnCollector {
-    fn pre_visit(mut self, expr: &Expr) -> Result<Recursion<Self>>
+    fn pre_visit(mut self, expr: &LogicalExpr) -> Result<Recursion<Self>>
     where
         Self: ExpressionVisitor,
     {
-        if let Expr::Column(c) = expr {
+        if let LogicalExpr::Column(c) = expr {
             self.exprs.push(c.clone())
         }
         Ok(Recursion::Continue(self))
     }
 }
 
-pub fn find_columns_referenced_by_expr(e: &Expr) -> Vec<Column> {
+pub fn find_columns_referenced_by_expr(e: &LogicalExpr) -> Vec<Column> {
     let collector = e
         .accept(ColumnCollector::default())
         .expect("Unexpected error");
@@ -336,9 +336,8 @@ pub fn find_columns_referenced_by_expr(e: &Expr) -> Vec<Column> {
 mod tests {
     use super::*;
     use crate::catalog::Catalog;
-    use crate::common::datatype::DataType;
     use crate::common::error::SchemaError;
-    use crate::common::schema::Field;
+    use crate::common::schema::{DataType, Field};
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 

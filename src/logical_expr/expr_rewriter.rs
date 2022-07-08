@@ -1,6 +1,6 @@
 use crate::common::error::Result;
 use crate::common::schema::Schema;
-use crate::logical_expr::expr::Expr;
+use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_plan::plan::LogicalPlan;
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ pub enum RewriteRecursion {
 /// tree. When passed to `Expr::rewrite`, `ExpressionVisitor::mutate` is
 /// invoked recursively on all nodes of an expression tree. See the
 /// comments on `Expr::rewrite` for details on its use
-pub trait ExprRewriter<E: ExprRewritable = Expr>: Sized {
+pub trait ExprRewriter<E: ExprRewritable = LogicalExpr>: Sized {
     /// Invoked before any children of `expr` are rewritten /
     /// visited. Default implementation returns `Ok(RewriteRecursion::Continue)`
     fn pre_visit(&mut self, _expr: &E) -> Result<RewriteRecursion> {
@@ -38,7 +38,7 @@ pub trait ExprRewritable: Sized {
     fn rewrite<R: ExprRewriter<Self>>(self, rewriter: &mut R) -> Result<Self>;
 }
 
-impl ExprRewritable for Expr {
+impl ExprRewritable for LogicalExpr {
     /// Performs a depth first walk of an expression and its children
     /// to rewrite an expression, consuming `self` producing a new
     /// [`Expr`].
@@ -85,9 +85,9 @@ impl ExprRewritable for Expr {
 
         // recurse into all sub expressions(and cover all expression types)
         let expr = match self {
-            Expr::Column(_) => self.clone(),
-            Expr::Literal(value) => Expr::Literal(value),
-            Expr::BinaryExpr { left, op, right } => Expr::BinaryExpr {
+            LogicalExpr::Column(_) => self.clone(),
+            LogicalExpr::Literal(value) => LogicalExpr::Literal(value),
+            LogicalExpr::BinaryExpr { left, op, right } => LogicalExpr::BinaryExpr {
                 left: rewrite_boxed(left, rewriter)?,
                 op,
                 right: rewrite_boxed(right, rewriter)?,
@@ -104,34 +104,40 @@ impl ExprRewritable for Expr {
 }
 
 #[allow(clippy::boxed_local)]
-fn rewrite_boxed<R>(boxed_expr: Box<Expr>, rewriter: &mut R) -> Result<Box<Expr>>
+fn rewrite_boxed<R>(
+    boxed_expr: Box<LogicalExpr>,
+    rewriter: &mut R,
+) -> Result<Box<LogicalExpr>>
 where
     R: ExprRewriter,
 {
     // TODO: It might be possible to avoid an allocation (the
     // Box::new) below by reusing the box.
-    let expr: Expr = *boxed_expr;
+    let expr: LogicalExpr = *boxed_expr;
     let rewritten_expr = expr.rewrite(rewriter)?;
     Ok(Box::new(rewritten_expr))
 }
 
 /// Recursively call [`Column::normalize_with_schemas`] on all Column expressions
 /// in the `expr` expression tree.
-pub fn normalize_col(expr: Expr, plan: &LogicalPlan) -> Result<Expr> {
+pub fn normalize_col(expr: LogicalExpr, plan: &LogicalPlan) -> Result<LogicalExpr> {
     normalize_col_with_schemas(expr, &plan.all_schemas())
 }
 
 /// Recursively call [`Column::normalize_with_schemas`] on all Column expressions
 /// in the `expr` expression tree.
-pub fn normalize_col_with_schemas(expr: Expr, schemas: &[&Arc<Schema>]) -> Result<Expr> {
+pub fn normalize_col_with_schemas(
+    expr: LogicalExpr,
+    schemas: &[&Arc<Schema>],
+) -> Result<LogicalExpr> {
     struct ColumnNormalizer<'a> {
         schemas: &'a [&'a Arc<Schema>],
     }
 
     impl<'a> ExprRewriter for ColumnNormalizer<'a> {
-        fn mutate(&mut self, expr: Expr) -> Result<Expr> {
-            if let Expr::Column(c) = expr {
-                Ok(Expr::Column(c.normalize_with_schemas(self.schemas)?))
+        fn mutate(&mut self, expr: LogicalExpr) -> Result<LogicalExpr> {
+            if let LogicalExpr::Column(c) = expr {
+                Ok(LogicalExpr::Column(c.normalize_with_schemas(self.schemas)?))
             } else {
                 Ok(expr)
             }
@@ -143,9 +149,9 @@ pub fn normalize_col_with_schemas(expr: Expr, schemas: &[&Arc<Schema>]) -> Resul
 
 /// Recursively normalize all Column expressions in a list of expression trees
 pub fn normalize_cols(
-    exprs: impl IntoIterator<Item = impl Into<Expr>>,
+    exprs: impl IntoIterator<Item = impl Into<LogicalExpr>>,
     plan: &LogicalPlan,
-) -> Result<Vec<Expr>> {
+) -> Result<Vec<LogicalExpr>> {
     exprs
         .into_iter()
         .map(|e| normalize_col(e.into(), plan))

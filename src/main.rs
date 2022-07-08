@@ -4,6 +4,8 @@ mod catalog;
 mod common;
 mod logical_expr;
 mod logical_plan;
+mod physical_expr;
+mod physical_plan;
 
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;

@@ -1,7 +1,24 @@
-use crate::common::datatype::DataType;
 use crate::common::error::{field_not_found, FloppyError, Result};
 use crate::logical_expr::column::Column;
 use std::sync::Arc;
+
+/// DataType defines data type used in schema.
+/// Data type defined in SQL is translated into
+/// this internal `DataType`.
+pub enum DataType {
+    Null,
+    Boolean,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    /// A variable-length string in Unicode with UTF-8 encoding.
+    Utf8,
+}
 
 pub struct Field {
     /// Optional qualifier (usually a table or relation name)

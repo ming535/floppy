@@ -1,5 +1,5 @@
 use crate::common::error::Result;
-use crate::logical_expr::expr::Expr;
+use crate::logical_expr::expr::LogicalExpr;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {
@@ -14,7 +14,7 @@ pub enum Recursion<V: ExpressionVisitor> {
 /// `Expr::accept`, `ExpressionVisitor::visit` is invoked
 /// recursively on all nodes of an expression tree. See the comments
 /// on `Expr::accept` for details on its use
-pub trait ExpressionVisitor<E: ExprVisitable = Expr>: Sized {
+pub trait ExpressionVisitor<E: ExprVisitable = LogicalExpr>: Sized {
     /// Invoked before any children of `expr` are visisted.
     fn pre_visit(self, expr: &E) -> Result<Recursion<Self>>
     where
@@ -33,7 +33,7 @@ pub trait ExprVisitable: Sized {
     fn accept<V: ExpressionVisitor<Self>>(&self, visitor: V) -> Result<V>;
 }
 
-impl ExprVisitable for Expr {
+impl ExprVisitable for LogicalExpr {
     /// Performs a depth first walk of an expression and
     /// its children, calling [`ExpressionVisitor::pre_visit`] and
     /// `visitor.post_visit`.
@@ -75,8 +75,8 @@ impl ExprVisitable for Expr {
 
         // recurse (and cover all expression types)
         let visitor = match self {
-            Expr::Column(_) | Expr::Literal(_) => Ok(visitor),
-            Expr::BinaryExpr { left, right, .. } => {
+            LogicalExpr::Column(_) | LogicalExpr::Literal(_) => Ok(visitor),
+            LogicalExpr::BinaryExpr { left, right, .. } => {
                 let visitor = left.accept(visitor)?;
                 right.accept(visitor)
             }
