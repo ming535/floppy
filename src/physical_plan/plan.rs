@@ -23,6 +23,7 @@ impl PhysicalPlan {
     pub fn execute(&self) -> Result<SendableTupleStream> {
         match self {
             Self::EmptyExec(p) => p.execute(),
+            Self::ProjectionExec(p) => p.execute(),
             _ => Err(FloppyError::NotImplemented(
                 "physical expression not supported".to_owned(),
             )),

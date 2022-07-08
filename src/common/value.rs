@@ -18,6 +18,17 @@ pub enum Value {
     Utf8(Option<String>),
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        use Value::*;
+        // match (self, other) {
+        //     (Boolean(v1), Boolean(v2)) => v1.eq(v2),
+        //     (Boolean(_), _) => false,
+        // }
+        todo!()
+    }
+}
+
 macro_rules! format_option {
     ($F:expr, $EXPR:expr) => {{
         match $EXPR {

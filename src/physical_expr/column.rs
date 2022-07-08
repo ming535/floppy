@@ -1,6 +1,6 @@
 /// Represents the column at a given column index in a Tuple
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Column {
-    name: String,
-    index: usize,
+    pub name: String,
+    pub index: usize,
 }

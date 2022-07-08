@@ -23,7 +23,7 @@ impl EmptyExec {
         )]));
         let values = vec![Value::Null];
         let tuple = Tuple::new(schema.clone(), values);
-        Ok(Box::new(EmptyStream::new(schema.clone(), vec![tuple])))
+        Ok(Box::pin(EmptyStream::new(schema.clone(), vec![tuple])))
     }
 }
 

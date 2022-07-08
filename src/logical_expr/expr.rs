@@ -1,6 +1,6 @@
+use crate::common::operator::Operator;
 use crate::common::value::Value;
 use crate::logical_expr::column::Column;
-use crate::logical_plan::operator::Operator;
 use std::fmt;
 use std::fmt::Formatter;
 

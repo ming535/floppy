@@ -1,5 +1,6 @@
 use crate::catalog::{CatalogRef, SchemaProvider};
 use crate::common::error::{field_not_found, FloppyError, Result};
+use crate::common::operator::Operator;
 use crate::common::schema::{Schema, SchemaRef};
 use crate::common::value::Value;
 use crate::logical_expr::column::Column;
@@ -7,7 +8,6 @@ use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_expr::expr_rewriter::normalize_col;
 use crate::logical_expr::expr_visitor::{ExprVisitable, ExpressionVisitor, Recursion};
 use crate::logical_expr::literal::lit;
-use crate::logical_plan::operator::Operator;
 use crate::logical_plan::plan::{
     EmptyRelation, Filter, LogicalPlan, Projection, TableScan,
 };
