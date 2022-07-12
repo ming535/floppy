@@ -282,7 +282,9 @@ pub fn normalize_ident(ident: &Ident) -> String {
 fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
     match n.parse::<i64>() {
         Ok(n) => Ok(lit(n)),
-        Err(_) => Ok(lit(n.parse::<f64>().unwrap())),
+        _ => Err(FloppyError::Internal(format!(
+            "unknown parser_sql_number error"
+        ))),
     }
 }
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// DataType defines data type used in schema.
 /// Data type defined in SQL is translated into
 /// this internal `DataType`.
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataType {
     Null,
     Boolean,
@@ -18,6 +19,23 @@ pub enum DataType {
     UInt64,
     /// A variable-length string in Unicode with UTF-8 encoding.
     Utf8,
+}
+
+impl DataType {
+    pub fn is_signed_numeric(&self) -> bool {
+        matches!(self, DataType::Int8 | DataType::Int16 | DataType::Int64)
+    }
+
+    pub fn is_unsigned_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
+        )
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        self.is_signed_numeric() || self.is_unsigned_numeric()
+    }
 }
 
 pub struct Field {
@@ -42,6 +60,10 @@ impl Field {
             data_type,
             nullable,
         }
+    }
+
+    pub fn data_type(&self) -> &DataType {
+        &self.data_type
     }
 
     /// Builds a qualified column based on self

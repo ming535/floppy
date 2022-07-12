@@ -32,4 +32,3 @@ macro_rules! make_literal {
 
 make_literal!(bool, Boolean, "literal expression containing a bool");
 make_literal!(i64, Int64, "literal expression containing an i64");
-make_literal!(f64, Float64, "literal expression containing an f64");
