@@ -1,4 +1,6 @@
-use crate::common::error::{field_not_found, FloppyError, Result};
+use crate::common::error::{
+    field_not_found, FloppyError, Result,
+};
 use crate::logical_expr::column::Column;
 use std::sync::Arc;
 
@@ -23,18 +25,27 @@ pub enum DataType {
 
 impl DataType {
     pub fn is_signed_numeric(&self) -> bool {
-        matches!(self, DataType::Int8 | DataType::Int16 | DataType::Int64)
+        matches!(
+            self,
+            DataType::Int8
+                | DataType::Int16
+                | DataType::Int64
+        )
     }
 
     pub fn is_unsigned_numeric(&self) -> bool {
         matches!(
             self,
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
+            DataType::UInt8
+                | DataType::UInt16
+                | DataType::UInt32
+                | DataType::UInt64
         )
     }
 
     pub fn is_numeric(&self) -> bool {
-        self.is_signed_numeric() || self.is_unsigned_numeric()
+        self.is_signed_numeric()
+            || self.is_unsigned_numeric()
     }
 }
 
@@ -121,8 +132,12 @@ impl Schema {
     }
 
     /// Find the field with the given name
-    pub fn field_with_unqualified_name(&self, name: &str) -> Result<&Field> {
-        let fields = self.fields_with_unqualified_name(name);
+    pub fn field_with_unqualified_name(
+        &self,
+        name: &str,
+    ) -> Result<&Field> {
+        let fields =
+            self.fields_with_unqualified_name(name);
         match fields.len() {
             0 => Err(field_not_found(None, name, self)),
             1 => Ok(fields[0]),
@@ -136,13 +151,32 @@ impl Schema {
         qualifier: &str,
         name: &str,
     ) -> Result<&Field> {
-        let idx = self.index_of_column_by_name(Some(qualifier), name)?;
+        let idx = self.index_of_column_by_name(
+            Some(qualifier),
+            name,
+        )?;
         Ok(self.field(idx))
     }
 
     /// Find all fields match the give name
-    pub fn fields_with_unqualified_name(&self, name: &str) -> Vec<&Field> {
-        self.fields.iter().filter(|f| f.name() == name).collect()
+    pub fn fields_with_unqualified_name(
+        &self,
+        name: &str,
+    ) -> Vec<&Field> {
+        self.fields
+            .iter()
+            .filter(|f| f.name() == name)
+            .collect()
+    }
+
+    pub fn index_of_column(
+        &self,
+        col: &Column,
+    ) -> Result<usize> {
+        self.index_of_column_by_name(
+            col.relation.as_deref(),
+            &col.name,
+        )
     }
 
     pub fn index_of_column_by_name(
@@ -154,15 +188,21 @@ impl Schema {
             .fields
             .iter()
             .enumerate()
-            .filter(|(_, field)| match (qualifier, &field.qualifier) {
-                // field to lookup is qualified.
-                // current field is qualified and not shared between relations, compare
-                // both qualifier and name.
-                (Some(q), Some(field_q)) => q == field_q && field.name == name,
-                // field to lookup is qualified but current field is unqualified.
-                (Some(_), None) => false,
-                // field to lookup is unqualified, no need to compare qualifier
-                (None, Some(_)) | (None, None) => field.name == name,
+            .filter(|(_, field)| {
+                match (qualifier, &field.qualifier) {
+                    // field to lookup is qualified.
+                    // current field is qualified and not shared between relations, compare
+                    // both qualifier and name.
+                    (Some(q), Some(field_q)) => {
+                        q == field_q && field.name == name
+                    }
+                    // field to lookup is qualified but current field is unqualified.
+                    (Some(_), None) => false,
+                    // field to lookup is unqualified, no need to compare qualifier
+                    (None, Some(_)) | (None, None) => {
+                        field.name == name
+                    }
+                }
             })
             .map(|(idx, _)| idx);
         match matches.next() {

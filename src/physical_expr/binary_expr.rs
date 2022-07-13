@@ -17,11 +17,18 @@ pub struct BinaryExpr {
 }
 
 impl BinaryExpr {
-    pub fn new(left: Arc<PhysicalExpr>, op: Operator, right: Arc<PhysicalExpr>) -> Self {
+    pub fn new(
+        left: Arc<PhysicalExpr>,
+        op: Operator,
+        right: Arc<PhysicalExpr>,
+    ) -> Self {
         Self { left, op, right }
     }
 
-    pub fn data_type(&self, input_schema: &Schema) -> Result<DataType> {
+    pub fn data_type(
+        &self,
+        input_schema: &Schema,
+    ) -> Result<DataType> {
         binary_operator_data_type(
             &self.left.data_type(input_schema)?,
             &self.op,
@@ -44,23 +51,43 @@ impl BinaryExpr {
         }
 
         match self.op {
-            Operator::Eq => Ok(Value::Boolean(Some(left_value == right_value))),
-            Operator::NotEq => Ok(Value::Boolean(Some(left_value != right_value))),
-            Operator::Lt => Ok(Value::Boolean(Some(left_value < right_value))),
-            Operator::LtEq => Ok(Value::Boolean(Some(left_value <= right_value))),
-            Operator::Gt => Ok(Value::Boolean(Some(left_value > right_value))),
-            Operator::GtEq => Ok(Value::Boolean(Some(left_value >= right_value))),
+            Operator::Eq => Ok(Value::Boolean(Some(
+                left_value == right_value,
+            ))),
+            Operator::NotEq => Ok(Value::Boolean(Some(
+                left_value != right_value,
+            ))),
+            Operator::Lt => Ok(Value::Boolean(Some(
+                left_value < right_value,
+            ))),
+            Operator::LtEq => Ok(Value::Boolean(Some(
+                left_value <= right_value,
+            ))),
+            Operator::Gt => Ok(Value::Boolean(Some(
+                left_value > right_value,
+            ))),
+            Operator::GtEq => Ok(Value::Boolean(Some(
+                left_value >= right_value,
+            ))),
             Operator::Plus => left_value + right_value,
             Operator::Minus => left_value - right_value,
-            Operator::And => left_value.logical_and(&right_value),
-            Operator::Or => left_value.logical_or(&right_value),
+            Operator::And => {
+                left_value.logical_and(&right_value)
+            }
+            Operator::Or => {
+                left_value.logical_or(&right_value)
+            }
         }
     }
 }
 
 impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {}", self.left, self.op, self.right)
+        write!(
+            f,
+            "{} {} {}",
+            self.left, self.op, self.right
+        )
     }
 }
 
@@ -69,9 +96,11 @@ pub fn binary(
     op: Operator,
     rhs: Arc<PhysicalExpr>,
     input_schema: &Schema,
-) -> Result<Arc<BinaryExpr>> {
+) -> Result<Arc<PhysicalExpr>> {
     let (l, r) = binary_cast(lhs, &op, rhs, input_schema)?;
-    Ok(Arc::new(BinaryExpr::new(l, op, r)))
+    Ok(Arc::new(PhysicalExpr::BinaryExpr(BinaryExpr::new(
+        l, op, r,
+    ))))
 }
 
 fn binary_cast(
@@ -118,16 +147,27 @@ fn coerce_types(
     rhs_type: &DataType,
 ) -> Result<DataType> {
     let result = match op {
-        Operator::And | Operator::Or => match (lhs_type, rhs_type) {
-            (DataType::Boolean, DataType::Boolean) => Some(DataType::Boolean),
-            _ => None,
-        },
-        Operator::Eq | Operator::NotEq => comparison_eq_coercion(lhs_type, rhs_type),
-        Operator::Lt | Operator::Gt | Operator::GtEq | Operator::LtEq => {
+        Operator::And | Operator::Or => {
+            match (lhs_type, rhs_type) {
+                (DataType::Boolean, DataType::Boolean) => {
+                    Some(DataType::Boolean)
+                }
+                _ => None,
+            }
+        }
+        Operator::Eq | Operator::NotEq => {
+            comparison_eq_coercion(lhs_type, rhs_type)
+        }
+        Operator::Lt
+        | Operator::Gt
+        | Operator::GtEq
+        | Operator::LtEq => {
             comparison_order_coercion(lhs_type, rhs_type)
         }
         Operator::Plus | Operator::Minus => {
-            mathematics_numerical_coercion(op, lhs_type, rhs_type)
+            mathematics_numerical_coercion(
+                op, lhs_type, rhs_type,
+            )
         }
     };
 
@@ -137,13 +177,18 @@ fn coerce_types(
     }
 }
 
-fn comparison_eq_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Option<DataType> {
+fn comparison_eq_coercion(
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Option<DataType> {
     if lhs_type == rhs_type {
         return Some(lhs_type.clone());
     }
 
     comparison_binary_numeric_coercion(lhs_type, rhs_type)
-        .or_else(|| string_numeric_coercion(lhs_type, rhs_type))
+        .or_else(|| {
+            string_numeric_coercion(lhs_type, rhs_type)
+        })
 }
 
 fn comparison_order_coercion(
@@ -164,7 +209,8 @@ fn mathematics_numerical_coercion(
 ) -> Option<DataType> {
     use crate::common::schema::DataType::*;
 
-    if !both_numeric_or_null_and_numeric(lhs_type, rhs_type) {
+    if !both_numeric_or_null_and_numeric(lhs_type, rhs_type)
+    {
         return None;
     }
 
@@ -215,7 +261,10 @@ fn comparison_binary_numeric_coercion(
     }
 }
 
-fn string_numeric_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Option<DataType> {
+fn string_numeric_coercion(
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Option<DataType> {
     use crate::common::schema::DataType::*;
     match (lhs_type, rhs_type) {
         (Utf8, _) if rhs_type.is_numeric() => Some(Utf8),
@@ -225,7 +274,10 @@ fn string_numeric_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Option<D
 }
 
 /// Determine if at least of one of lhs and rhs is numeric, and the other must be NULL or numeric
-fn both_numeric_or_null_and_numeric(lhs_type: &DataType, rhs_type: &DataType) -> bool {
+fn both_numeric_or_null_and_numeric(
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> bool {
     match (lhs_type, rhs_type) {
         (_, DataType::Null) => lhs_type.is_numeric(),
         (DataType::Null, _) => rhs_type.is_numeric(),

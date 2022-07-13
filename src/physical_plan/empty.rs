@@ -10,7 +10,7 @@ use std::task::{Context, Poll};
 
 #[derive(Clone)]
 pub struct EmptyExec {
-    schema: SchemaRef,
+    pub schema: SchemaRef,
 }
 
 impl EmptyExec {
