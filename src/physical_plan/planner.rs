@@ -14,6 +14,7 @@ use crate::physical_plan::plan::{
 use crate::physical_plan::projection::ProjectionExec;
 use std::sync::Arc;
 
+#[derive(Default)]
 pub struct PhysicalPlanner {}
 
 impl PhysicalPlanner {
@@ -46,19 +47,17 @@ impl PhysicalPlanner {
     fn create_physical_plan(
         &self,
         logical_plan: &LogicalPlan,
-    ) -> Result<Arc<PhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         match logical_plan {
             LogicalPlan::EmptyRelation(empty) => {
-                Ok(Arc::new(PhysicalPlan::EmptyExec(
-                    EmptyExec {
-                        schema: empty.schema.clone(),
-                    },
-                )))
+                Ok(PhysicalPlan::EmptyExec(EmptyExec {
+                    schema: empty.schema.clone(),
+                }))
             }
             LogicalPlan::TableScan(scan) => {
-                Ok(Arc::new(PhysicalPlan::TableScanExec(
+                Ok(PhysicalPlan::TableScanExec(
                     TableScanExec {},
-                )))
+                ))
             }
             LogicalPlan::Projection(Projection {
                 expr,
@@ -73,13 +72,13 @@ impl PhysicalPlanner {
                     .collect::<Result<Vec<_>>>()?;
                 let input =
                     self.create_physical_plan(input)?;
-                Ok(Arc::new(PhysicalPlan::ProjectionExec(
+                Ok(PhysicalPlan::ProjectionExec(
                     ProjectionExec {
                         expr: exprs,
-                        input,
+                        input: Arc::new(input),
                         schema: schema.clone(),
                     },
-                )))
+                ))
             }
             LogicalPlan::Filter(Filter {
                 predicate,
@@ -94,6 +93,21 @@ impl PhysicalPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logical_expr::literal::lit;
+    use crate::logical_plan::builder::LogicalPlanBuilder;
 
-    fn select_no_relation() {}
+    #[test]
+    fn test_select_no_relation() -> Result<()> {
+        let builder = LogicalPlanBuilder::empty();
+        let builder =
+            builder.project(vec![lit(1), lit(2)])?;
+        let logical_plan = builder.build()?;
+        println!("LogicalPlan: {:?}", logical_plan);
+
+        let planner = PhysicalPlanner::default();
+        let physical_plan =
+            planner.create_physical_plan(&logical_plan)?;
+        println!("PhysicalPlan: {:?}", physical_plan);
+        Ok(())
+    }
 }

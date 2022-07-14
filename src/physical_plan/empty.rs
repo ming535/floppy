@@ -1,9 +1,15 @@
 use crate::common::error::Result;
-use crate::common::schema::{DataType, Field, Schema, SchemaRef};
+use crate::common::schema::{
+    DataType, Field, Schema, SchemaRef,
+};
 use crate::common::tuple::Tuple;
 use crate::common::value::Value;
-use crate::physical_plan::{SendableTupleStream, TupleStream};
+use crate::physical_plan::{
+    SendableTupleStream, TupleStream,
+};
 use futures::Stream;
+use std::fmt;
+use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -15,15 +21,19 @@ pub struct EmptyExec {
 
 impl EmptyExec {
     pub fn execute(&self) -> Result<SendableTupleStream> {
-        let schema = Arc::new(Schema::new(vec![Field::new(
-            None,
-            "placeholder",
-            DataType::Null,
-            true,
-        )]));
+        let schema =
+            Arc::new(Schema::new(vec![Field::new(
+                None,
+                "placeholder",
+                DataType::Null,
+                true,
+            )]));
         let values = vec![Value::Null];
         let tuple = Tuple::new(schema.clone(), values);
-        Ok(Box::pin(EmptyStream::new(schema.clone(), vec![tuple])))
+        Ok(Box::pin(EmptyStream::new(
+            schema.clone(),
+            vec![tuple],
+        )))
     }
 }
 

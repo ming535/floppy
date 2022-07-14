@@ -1,4 +1,5 @@
 use crate::common::schema::Schema;
+use std::fmt::Error;
 use std::result;
 
 pub type Result<T> = result::Result<T, FloppyError>;
@@ -39,4 +40,10 @@ pub fn field_not_found(
         name: name.to_string(),
         valid_fields: Some(schema.field_names()),
     })
+}
+
+impl From<std::fmt::Error> for FloppyError {
+    fn from(_: Error) -> Self {
+        todo!()
+    }
 }
