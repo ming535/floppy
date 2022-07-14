@@ -90,3 +90,10 @@ impl PhysicalPlanner {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn select_no_relation() {}
+}
