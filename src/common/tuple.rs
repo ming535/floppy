@@ -4,14 +4,17 @@ use crate::common::value::Value;
 
 /// A `Tuple` represents a tuple in memory.
 /// It has contains schema and data.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Tuple {
     schema: SchemaRef,
     values: Vec<Value>,
 }
 
 impl Tuple {
-    pub fn new(schema: SchemaRef, values: Vec<Value>) -> Self {
+    pub fn new(
+        schema: SchemaRef,
+        values: Vec<Value>,
+    ) -> Self {
         Self { schema, values }
     }
 

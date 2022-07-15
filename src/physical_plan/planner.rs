@@ -95,9 +95,10 @@ mod tests {
     use super::*;
     use crate::logical_expr::literal::lit;
     use crate::logical_plan::builder::LogicalPlanBuilder;
+    use futures::{StreamExt, TryStreamExt};
 
-    #[test]
-    fn test_select_no_relation() -> Result<()> {
+    #[tokio::test]
+    async fn test_select_no_relation() -> Result<()> {
         let builder = LogicalPlanBuilder::empty();
         let builder =
             builder.project(vec![lit(1), lit(2)])?;
@@ -108,6 +109,18 @@ mod tests {
         let physical_plan =
             planner.create_physical_plan(&logical_plan)?;
         println!("PhysicalPlan: {:?}", physical_plan);
+        let mut stream = physical_plan.execute()?;
+        let data = stream
+            .try_collect::<Vec<_>>()
+            .await
+            .map_err(FloppyError::from)?;
+        // let tuple = stream.next();
+        // let t = tuple.await;
+        // let t = t.unwrap()?;
+        println!("t = {:?}", data);
+        // let result = stream.collect::<Vec<_>>();
+        // println!("result = {:?}", result);
+
         Ok(())
     }
 }
