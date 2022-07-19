@@ -23,7 +23,7 @@ impl LogicalPlanBuilder {
     }
 
     /// Create an empty relation
-    pub fn empty() -> Self {
+    pub fn empty_relation() -> Self {
         Self::from(LogicalPlan::EmptyRelation(
             EmptyRelation {
                 schema: Arc::new(Schema::empty()),
@@ -31,6 +31,7 @@ impl LogicalPlanBuilder {
         ))
     }
 
+    /// Scan from a relation
     pub fn scan(
         table_name: &str,
         schema: SchemaRef,

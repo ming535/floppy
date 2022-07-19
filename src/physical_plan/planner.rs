@@ -93,34 +93,83 @@ impl PhysicalPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::schema::{DataType, Field};
+    use crate::common::tuple::Tuple;
+    use crate::common::value::Value;
     use crate::logical_expr::literal::lit;
     use crate::logical_plan::builder::LogicalPlanBuilder;
+    use crate::storage::memory::MemoryEngine;
+    use crate::store::CatalogStore;
     use futures::{StreamExt, TryStreamExt};
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {
-        let builder = LogicalPlanBuilder::empty();
+        let builder = LogicalPlanBuilder::empty_relation();
         let builder =
             builder.project(vec![lit(1), lit(2)])?;
         let logical_plan = builder.build()?;
-        println!("LogicalPlan: {:?}", logical_plan);
 
         let planner = PhysicalPlanner::default();
         let physical_plan =
             planner.create_physical_plan(&logical_plan)?;
-        println!("PhysicalPlan: {:?}", physical_plan);
+        assert_eq!(format!("{}", physical_plan), 
+                   "ProjectionExec: Literal(Int64(1)), Literal(Int64(2))\
+                  \n  EmptyExec");
         let mut stream = physical_plan.execute()?;
         let data = stream
             .try_collect::<Vec<_>>()
             .await
             .map_err(FloppyError::from)?;
-        // let tuple = stream.next();
-        // let t = tuple.await;
-        // let t = t.unwrap()?;
-        println!("t = {:?}", data);
-        // let result = stream.collect::<Vec<_>>();
-        // println!("result = {:?}", result);
+        assert_eq!(data.len(), 1);
+        assert_eq!(
+            data[0],
+            Tuple::new(vec![
+                Value::Int64(Some(1)),
+                Value::Int64(Some(2))
+            ])
+        );
+        Ok(())
+    }
 
+    #[tokio::test]
+    async fn test_simple_scan() -> Result<()> {
+        let table_name = "test";
+
+        let mut mem_engine = MemoryEngine::default();
+        let test_schema = Schema::new(vec![Field::new(
+            Some(table_name),
+            "id",
+            DataType::Int32,
+            false,
+        )]);
+        let r =
+            mem_engine.insert_schema("test", &test_schema);
+        if r.is_err() {
+            return Err(FloppyError::Internal(
+                "h".to_string(),
+            ));
+        }
+
+        let logical_plan_builder =
+            LogicalPlanBuilder::scan(
+                table_name,
+                Arc::new(
+                    mem_engine
+                        .fetch_schema(table_name)
+                        .unwrap(),
+                ),
+                vec![],
+            )?;
+
+        let planner = PhysicalPlanner::default();
+        let physical_plan = planner.create_physical_plan(
+            &logical_plan_builder.build()?,
+        )?;
+
+        assert_eq!(
+            format!("{}", physical_plan),
+            "TableScanExec"
+        );
         Ok(())
     }
 }

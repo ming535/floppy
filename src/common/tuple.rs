@@ -4,7 +4,7 @@ use crate::common::value::Value;
 
 /// A `Tuple` represents a tuple in memory.
 /// It has contains schema and data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tuple {
     values: Vec<Value>,
 }

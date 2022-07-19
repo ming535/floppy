@@ -99,7 +99,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
         from: Vec<TableWithJoins>,
     ) -> Result<LogicalPlanBuilder> {
         if from.is_empty() {
-            return Ok(LogicalPlanBuilder::empty());
+            return Ok(LogicalPlanBuilder::empty_relation());
         }
 
         let table = &from[0];
