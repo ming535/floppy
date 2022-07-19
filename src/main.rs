@@ -6,6 +6,8 @@ mod logical_expr;
 mod logical_plan;
 mod physical_expr;
 mod physical_plan;
+mod storage;
+mod store;
 
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;

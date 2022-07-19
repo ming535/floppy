@@ -6,29 +6,31 @@ use crate::common::value::Value;
 /// It has contains schema and data.
 #[derive(Debug, Clone)]
 pub struct Tuple {
-    schema: SchemaRef,
     values: Vec<Value>,
 }
 
+pub type BlockId = i64;
+
+pub type ItemId = i64;
+
+pub struct TupleId {
+    pub block_id: BlockId,
+    pub item_id: ItemId,
+}
+
 impl Tuple {
-    pub fn new(
-        schema: SchemaRef,
-        values: Vec<Value>,
-    ) -> Self {
-        Self { schema, values }
+    pub fn new(values: Vec<Value>) -> Self {
+        Self { values }
     }
 
     pub fn value(&self, index: usize) -> Result<Value> {
         if index > self.values.len() {
             return Err(FloppyError::Internal(format!(
-                "column index out of range, index = {:}, len = {:}",
+                "column index out of range, column index = {:}, column len = {:}",
                 index,
                 self.values.len()
             )));
         }
         Ok(self.values[index].clone())
-    }
-    pub fn schema(&self) -> SchemaRef {
-        self.schema.clone()
     }
 }

@@ -44,7 +44,7 @@ impl ProjectionStream {
             .iter()
             .map(|x| x.evaluate(tuple))
             .collect();
-        Ok(Tuple::new(self.schema.clone(), values?))
+        Ok(Tuple::new(values?))
     }
 }
 

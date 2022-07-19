@@ -42,6 +42,13 @@ pub fn field_not_found(
     })
 }
 
+/// Create a "table not found" Floppy::SchemaError
+pub fn table_not_found(table_name: &str) -> FloppyError {
+    FloppyError::SchemaError(SchemaError::TableNotFound(
+        format!("table not found: {}", table_name),
+    ))
+}
+
 impl From<std::fmt::Error> for FloppyError {
     fn from(_: Error) -> Self {
         todo!()

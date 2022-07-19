@@ -49,7 +49,7 @@ impl DataType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Field {
     /// Optional qualifier (usually a table or relation name)
     qualifier: Option<String>,
@@ -99,7 +99,7 @@ impl Field {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Schema {
     fields: Vec<Field>,
 }

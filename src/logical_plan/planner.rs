@@ -1,4 +1,4 @@
-use crate::catalog::{CatalogRef, SchemaProvider};
+use crate::catalog::{CatalogRef, SchemaRepo};
 use crate::common::error::{
     field_not_found, FloppyError, Result,
 };
@@ -24,12 +24,12 @@ use sqlparser::ast::{
 };
 use std::sync::Arc;
 
-pub struct LogicalPlanner<'a, S: SchemaProvider> {
+pub struct LogicalPlanner<'a, S: SchemaRepo> {
     schema_provider: &'a S,
     builder: LogicalPlanBuilder,
 }
 
-impl<'a, S: SchemaProvider> LogicalPlanner<'a, S> {
+impl<'a, S: SchemaRepo> LogicalPlanner<'a, S> {
     pub fn new(schema_provider: &'a S) -> Self {
         LogicalPlanner {
             schema_provider,
@@ -434,7 +434,7 @@ mod tests {
 
     struct MockSchemaProvider {}
 
-    impl SchemaProvider for MockSchemaProvider {
+    impl SchemaRepo for MockSchemaProvider {
         fn get_schema(
             &self,
             table_name: &str,
