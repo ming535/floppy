@@ -1,1 +1,1 @@
-mod memory;
+pub(crate) mod memory;

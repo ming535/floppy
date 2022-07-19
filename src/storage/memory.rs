@@ -32,29 +32,27 @@ impl CatalogStore for MemoryEngine {
         let schema = self.schemas.get(table_name);
         match schema {
             Some(s) => Ok(s.clone()),
-            None => table_not_found(table_name),
+            None => Err(table_not_found(table_name)),
         }
     }
 }
 
 impl HeapStore for MemoryEngine {
-    fn scan_heap(
-        table_name: &str,
-    ) -> crate::common::error::Result<TupleIter> {
+    fn scan_heap(table_name: &str) -> Result<TupleIter> {
         todo!()
     }
 
     fn insert_to_heap(
         table_name: &str,
         tuple: &Tuple,
-    ) -> crate::common::error::Result<()> {
+    ) -> Result<()> {
         todo!()
     }
 
     fn fetch_tuple(
         table_name: &str,
         tuple_id: &TupleId,
-    ) -> crate::common::error::Result<Tuple> {
+    ) -> Result<Tuple> {
         todo!()
     }
 }

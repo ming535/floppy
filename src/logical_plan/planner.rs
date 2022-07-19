@@ -1,4 +1,3 @@
-use crate::catalog::{CatalogRef, SchemaRepo};
 use crate::common::error::{
     field_not_found, FloppyError, Result,
 };
@@ -17,6 +16,7 @@ use crate::logical_plan::plan::{
     EmptyRelation, Filter, LogicalPlan, Projection,
     TableScan,
 };
+use crate::store::CatalogStore;
 use sqlparser::ast::{
     BinaryOperator, Expr as SQLExpr, Ident, Query, Select,
     SelectItem, SetExpr, Statement, TableFactor,
@@ -24,15 +24,15 @@ use sqlparser::ast::{
 };
 use std::sync::Arc;
 
-pub struct LogicalPlanner<'a, S: SchemaRepo> {
-    schema_provider: &'a S,
+pub struct LogicalPlanner<'a, S: CatalogStore> {
+    catalog_store: &'a S,
     builder: LogicalPlanBuilder,
 }
 
-impl<'a, S: SchemaRepo> LogicalPlanner<'a, S> {
-    pub fn new(schema_provider: &'a S) -> Self {
+impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
+    pub fn new(catalog_store: &'a S) -> Self {
         LogicalPlanner {
-            schema_provider,
+            catalog_store,
             builder: LogicalPlanBuilder::default(),
         }
     }
@@ -118,8 +118,10 @@ impl<'a, S: SchemaRepo> LogicalPlanner<'a, S> {
                     .join(".");
                 LogicalPlanBuilder::scan(
                     table_name.as_str(),
-                    self.schema_provider
-                        .get_schema(&table_name)?,
+                    Arc::new(
+                        self.catalog_store
+                            .fetch_schema(&table_name)?,
+                    ),
                     vec![],
                 )
             }
@@ -426,42 +428,23 @@ pub fn find_columns_referenced_by_expr(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::Catalog;
     use crate::common::error::SchemaError;
     use crate::common::schema::{DataType, Field};
+    use crate::storage::memory::MemoryEngine;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 
-    struct MockSchemaProvider {}
-
-    impl SchemaRepo for MockSchemaProvider {
-        fn get_schema(
-            &self,
-            table_name: &str,
-        ) -> Result<SchemaRef> {
-            match table_name {
-                "test" => Ok(Arc::new(Schema::new(vec![
-                    Field::new(
-                        Some("test"),
-                        "id",
-                        DataType::Int32,
-                        false,
-                    ),
-                ]))),
-                _ => Err(FloppyError::SchemaError(
-                    SchemaError::TableNotFound(format!(
-                        "table name not found {}",
-                        table_name
-                    )),
-                )),
-            }
-        }
-    }
-
     fn logical_plan(sql: &str) -> Result<LogicalPlan> {
-        let mock_schema_provider = MockSchemaProvider {};
-        let planner =
-            LogicalPlanner::new(&mock_schema_provider);
+        let mut mem_engine = MemoryEngine::default();
+        let test_schema = Schema::new(vec![Field::new(
+            Some("test"),
+            "id",
+            DataType::Int32,
+            false,
+        )]);
+        mem_engine.insert_schema("test", &test_schema)?;
+
+        let planner = LogicalPlanner::new(&mem_engine);
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, sql);
         match ast {

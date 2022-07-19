@@ -1,6 +1,5 @@
 extern crate core;
 
-mod catalog;
 mod common;
 mod logical_expr;
 mod logical_plan;
