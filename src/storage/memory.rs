@@ -38,21 +38,26 @@ impl CatalogStore for MemoryEngine {
 }
 
 impl HeapStore for MemoryEngine {
-    fn scan_heap(table_name: &str) -> Result<TupleIter> {
-        todo!()
-    }
-
-    fn insert_to_heap(
+    fn scan_heap(
+        &self,
         table_name: &str,
-        tuple: &Tuple,
-    ) -> Result<()> {
+    ) -> Result<TupleIter> {
         todo!()
     }
 
     fn fetch_tuple(
+        &self,
         table_name: &str,
         tuple_id: &TupleId,
     ) -> Result<Tuple> {
+        todo!()
+    }
+
+    fn insert_to_heap(
+        &mut self,
+        table_name: &str,
+        tuple: &Tuple,
+    ) -> Result<()> {
         todo!()
     }
 }

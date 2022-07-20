@@ -31,18 +31,23 @@ pub type TupleIter =
 
 pub trait HeapStore {
     /// Returns a `TupleIter` to scan a table's heap
-    fn scan_heap(table_name: &str) -> Result<TupleIter>;
-    /// Insert a tuple into heap
-    fn insert_to_heap(
+    fn scan_heap(
+        &self,
         table_name: &str,
-        tuple: &Tuple,
-    ) -> Result<()>;
-
+    ) -> Result<TupleIter>;
     /// Fetch a tuple from heap using tuple_id
     fn fetch_tuple(
+        &self,
         table_name: &str,
         tuple_id: &TupleId,
     ) -> Result<Tuple>;
+
+    /// Insert a tuple into heap
+    fn insert_to_heap(
+        &mut self,
+        table_name: &str,
+        tuple: &Tuple,
+    ) -> Result<()>;
 }
 
 pub trait IndexStore {}

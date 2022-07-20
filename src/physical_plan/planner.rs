@@ -2,22 +2,31 @@ use crate::common::error::{FloppyError, Result};
 use crate::common::schema::Schema;
 use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_plan::plan::{
-    Filter, LogicalPlan, Projection,
+    Filter, LogicalPlan, Projection, TableScan,
 };
 use crate::physical_expr::binary_expr::binary;
 use crate::physical_expr::column::Column;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::empty::EmptyExec;
+use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::plan::{
     PhysicalPlan, TableScanExec,
 };
 use crate::physical_plan::projection::ProjectionExec;
+use crate::store::HeapStore;
 use std::sync::Arc;
 
-#[derive(Default)]
-pub struct PhysicalPlanner {}
+pub struct PhysicalPlanner {
+    heap_store: Arc<dyn HeapStore>,
+}
 
 impl PhysicalPlanner {
+    fn new(heap_store: Arc<dyn HeapStore>) -> Self {
+        Self {
+            heap_store: heap_store.clone(),
+        }
+    }
+
     fn create_physical_expr(
         &self,
         expr: &LogicalExpr,
@@ -54,9 +63,28 @@ impl PhysicalPlanner {
                     schema: empty.schema.clone(),
                 }))
             }
-            LogicalPlan::TableScan(scan) => {
-                Ok(PhysicalPlan::TableScanExec(
-                    TableScanExec {},
+            LogicalPlan::TableScan(TableScan {
+                table_name,
+                projected_schema,
+                filters,
+            }) => {
+                let physical_filters = filters
+                    .iter()
+                    .map(|e| {
+                        self.create_physical_expr(
+                            e,
+                            projected_schema,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(PhysicalPlan::HeapScanExec(
+                    HeapScanExec {
+                        heap_store: self.heap_store.clone(),
+                        table_name: table_name.clone(),
+                        projected_schema: projected_schema
+                            .clone(),
+                        filters: physical_filters,
+                    },
                 ))
             }
             LogicalPlan::Projection(Projection {
@@ -109,7 +137,9 @@ mod tests {
             builder.project(vec![lit(1), lit(2)])?;
         let logical_plan = builder.build()?;
 
-        let planner = PhysicalPlanner::default();
+        let mem_engine = MemoryEngine::default();
+        let planner =
+            PhysicalPlanner::new(Arc::new(mem_engine));
         let physical_plan =
             planner.create_physical_plan(&logical_plan)?;
         assert_eq!(format!("{}", physical_plan), 
@@ -133,17 +163,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_scan() -> Result<()> {
-        let table_name = "test";
+        let test_table_name = "test";
 
         let mut mem_engine = MemoryEngine::default();
         let test_schema = Schema::new(vec![Field::new(
-            Some(table_name),
+            Some(test_table_name),
             "id",
             DataType::Int32,
             false,
         )]);
-        let r =
-            mem_engine.insert_schema("test", &test_schema);
+        let r = mem_engine
+            .insert_schema(test_table_name, &test_schema);
         if r.is_err() {
             return Err(FloppyError::Internal(
                 "h".to_string(),
@@ -152,23 +182,24 @@ mod tests {
 
         let logical_plan_builder =
             LogicalPlanBuilder::scan(
-                table_name,
+                test_table_name,
                 Arc::new(
                     mem_engine
-                        .fetch_schema(table_name)
+                        .fetch_schema(test_table_name)
                         .unwrap(),
                 ),
                 vec![],
             )?;
 
-        let planner = PhysicalPlanner::default();
+        let planner =
+            PhysicalPlanner::new(Arc::new(mem_engine));
         let physical_plan = planner.create_physical_plan(
             &logical_plan_builder.build()?,
         )?;
 
         assert_eq!(
             format!("{}", physical_plan),
-            "TableScanExec"
+            "HeapScanExec: test"
         );
         Ok(())
     }

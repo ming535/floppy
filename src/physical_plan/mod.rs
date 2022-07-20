@@ -15,6 +15,7 @@ pub type SendableTupleStream =
 
 mod display;
 mod empty;
+mod heap_scan;
 mod plan;
 mod planner;
 mod projection;

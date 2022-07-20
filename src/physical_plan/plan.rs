@@ -6,6 +6,7 @@ use crate::common::tuple::Tuple;
 use crate::common::value::Value;
 use crate::physical_plan::display::IndentVisitor;
 use crate::physical_plan::empty::EmptyExec;
+use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::projection::ProjectionExec;
 use crate::physical_plan::SendableTupleStream;
 use futures::Stream;
@@ -18,7 +19,7 @@ use std::task::{Context, Poll};
 #[derive(Clone)]
 pub enum PhysicalPlan {
     EmptyExec(EmptyExec),
-    TableScanExec(TableScanExec),
+    HeapScanExec(HeapScanExec),
     ProjectionExec(ProjectionExec),
     FilterExec(FilterExec),
 }
@@ -81,7 +82,7 @@ impl PhysicalPlan {
                 todo!()
             }
             // plans without inputs
-            PhysicalPlan::TableScanExec { .. }
+            PhysicalPlan::HeapScanExec { .. }
             | PhysicalPlan::EmptyExec(_) => true,
         };
 
@@ -138,10 +139,14 @@ impl PhysicalPlan {
                 f: &mut Formatter<'_>,
             ) -> fmt::Result {
                 match self.0 {
-                    PhysicalPlan::TableScanExec(
-                        TableScanExec {},
+                    PhysicalPlan::HeapScanExec(
+                        HeapScanExec { table_name, .. },
                     ) => {
-                        todo!()
+                        write!(
+                            f,
+                            "HeapScanExec: {}",
+                            table_name
+                        )
                     }
                     PhysicalPlan::ProjectionExec(
                         ProjectionExec { ref expr, .. },
