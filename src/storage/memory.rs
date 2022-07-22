@@ -1,16 +1,16 @@
 use crate::common::error::{
     table_not_found, FloppyError, Result,
 };
+use crate::common::row::{Row, RowId};
 use crate::common::schema::Schema;
-use crate::common::tuple::{Tuple, TupleId};
 use crate::store::{
-    CatalogStore, HeapStore, IndexStore, TupleIter,
+    CatalogStore, HeapStore, IndexStore, RowIter,
 };
 use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct MemoryEngine {
-    heaps: HashMap<String, Vec<Tuple>>,
+    heaps: HashMap<String, Vec<Row>>,
     schemas: HashMap<String, Schema>,
 }
 
@@ -41,22 +41,22 @@ impl HeapStore for MemoryEngine {
     fn scan_heap(
         &self,
         table_name: &str,
-    ) -> Result<TupleIter> {
+    ) -> Result<RowIter> {
         todo!()
     }
 
     fn fetch_tuple(
         &self,
         table_name: &str,
-        tuple_id: &TupleId,
-    ) -> Result<Tuple> {
+        tuple_id: &RowId,
+    ) -> Result<Row> {
         todo!()
     }
 
     fn insert_to_heap(
         &mut self,
         table_name: &str,
-        tuple: &Tuple,
+        tuple: &Row,
     ) -> Result<()> {
         todo!()
     }

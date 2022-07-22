@@ -1,7 +1,7 @@
 use crate::common::error::{FloppyError, Result};
 use crate::common::operator::Operator;
+use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
-use crate::common::tuple::Tuple;
 use crate::common::value::Value;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_expr::try_cast::try_cast;
@@ -36,7 +36,7 @@ impl BinaryExpr {
         )
     }
 
-    pub fn evaluate(&self, tuple: &Tuple) -> Result<Value> {
+    pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
         let left_value = self.left.evaluate(tuple)?;
         let right_value = self.right.evaluate(tuple)?;
         let left_data_type = left_value.data_type();

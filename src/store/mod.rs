@@ -1,6 +1,6 @@
 use crate::common::error::Result;
+use crate::common::row::{Row, RowId};
 use crate::common::schema::Schema;
-use crate::common::tuple::{Tuple, TupleId};
 
 /// `CatalogStore`, `HeapStore` and `IndexStore` are basic abstractions
 /// for Floppy's storage engine.
@@ -26,27 +26,27 @@ pub trait CatalogStore {
     ) -> Result<Schema>;
 }
 
-pub type TupleIter =
-    Box<dyn Iterator<Item = Result<Tuple>>>;
+#[derive(Clone)]
+pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
 
 pub trait HeapStore {
     /// Returns a `TupleIter` to scan a table's heap
     fn scan_heap(
         &self,
         table_name: &str,
-    ) -> Result<TupleIter>;
+    ) -> Result<RowIter>;
     /// Fetch a tuple from heap using tuple_id
     fn fetch_tuple(
         &self,
         table_name: &str,
-        tuple_id: &TupleId,
-    ) -> Result<Tuple>;
+        tuple_id: &RowId,
+    ) -> Result<Row>;
 
     /// Insert a tuple into heap
     fn insert_to_heap(
         &mut self,
         table_name: &str,
-        tuple: &Tuple,
+        tuple: &Row,
     ) -> Result<()>;
 }
 

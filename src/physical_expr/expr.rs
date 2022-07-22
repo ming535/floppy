@@ -1,7 +1,7 @@
 use crate::common::error::{FloppyError, Result};
 use crate::common::operator::Operator;
+use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
-use crate::common::tuple::Tuple;
 use crate::common::value::Value;
 use crate::physical_expr::binary_expr::BinaryExpr;
 use crate::physical_expr::column::Column;
@@ -20,16 +20,24 @@ pub enum PhysicalExpr {
 }
 
 impl PhysicalExpr {
-    pub fn data_type(&self, input_schema: &Schema) -> Result<DataType> {
+    pub fn data_type(
+        &self,
+        input_schema: &Schema,
+    ) -> Result<DataType> {
         match self {
-            Self::Column(c) => Ok(input_schema.field(c.index).data_type().clone()),
+            Self::Column(c) => Ok(input_schema
+                .field(c.index)
+                .data_type()
+                .clone()),
             Self::Literal(v) => Ok(v.data_type()),
-            Self::BinaryExpr(b) => b.data_type(input_schema),
+            Self::BinaryExpr(b) => {
+                b.data_type(input_schema)
+            }
             Self::TryCastExpr(t) => t.data_type(),
         }
     }
 
-    pub fn evaluate(&self, tuple: &Tuple) -> Result<Value> {
+    pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
         match self {
             Self::Column(c) => tuple.value(c.index),
             Self::Literal(v) => Ok(v.clone()),

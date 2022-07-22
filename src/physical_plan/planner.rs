@@ -58,11 +58,9 @@ impl PhysicalPlanner {
         logical_plan: &LogicalPlan,
     ) -> Result<PhysicalPlan> {
         match logical_plan {
-            LogicalPlan::EmptyRelation(empty) => {
-                Ok(PhysicalPlan::EmptyExec(EmptyExec {
-                    schema: empty.schema.clone(),
-                }))
-            }
+            LogicalPlan::EmptyRelation(empty) => Ok(
+                PhysicalPlan::EmptyExec(EmptyExec::new()),
+            ),
             LogicalPlan::TableScan(TableScan {
                 table_name,
                 projected_schema,
@@ -78,13 +76,12 @@ impl PhysicalPlanner {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::HeapScanExec(
-                    HeapScanExec {
-                        heap_store: self.heap_store.clone(),
-                        table_name: table_name.clone(),
-                        projected_schema: projected_schema
-                            .clone(),
-                        filters: physical_filters,
-                    },
+                    HeapScanExec::try_new(
+                        self.heap_store.clone(),
+                        table_name.clone(),
+                        projected_schema.clone(),
+                        physical_filters,
+                    )?,
                 ))
             }
             LogicalPlan::Projection(Projection {
@@ -103,7 +100,7 @@ impl PhysicalPlanner {
                 Ok(PhysicalPlan::ProjectionExec(
                     ProjectionExec {
                         expr: exprs,
-                        input: Arc::new(input),
+                        input: Box::new(input),
                         schema: schema.clone(),
                     },
                 ))
@@ -121,8 +118,8 @@ impl PhysicalPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::row::Row;
     use crate::common::schema::{DataType, Field};
-    use crate::common::tuple::Tuple;
     use crate::common::value::Value;
     use crate::logical_expr::literal::lit;
     use crate::logical_plan::builder::LogicalPlanBuilder;
@@ -153,7 +150,7 @@ mod tests {
         assert_eq!(data.len(), 1);
         assert_eq!(
             data[0],
-            Tuple::new(vec![
+            Row::new(vec![
                 Value::Int64(Some(1)),
                 Value::Int64(Some(2))
             ])

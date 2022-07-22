@@ -1,12 +1,12 @@
 use crate::common::error::Result;
+use crate::common::row::Row;
 use crate::common::schema::SchemaRef;
-use crate::common::tuple::Tuple;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::{
     SendableTupleStream, TupleStream,
 };
-use crate::store::{HeapStore, TupleIter};
-use futures::Stream;
+use crate::store::{HeapStore, RowIter};
+use futures::*;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -37,44 +37,58 @@ pub struct HeapScanExec {
     pub projected_schema: SchemaRef,
     // todo why not Vec<PhysicalExpr>?
     pub filters: Vec<Arc<PhysicalExpr>>,
+
+    pub iter: Arc<RowIter>,
 }
 
 impl HeapScanExec {
-    pub fn execute(&self) -> Result<SendableTupleStream> {
-        Ok(Box::pin(HeapStream {
-            heap_store: self.heap_store.clone(),
-            schema: self.projected_schema.clone(),
-            table_name: self.table_name.clone(),
-            filters: self.filters.clone(),
-            tuple_iter: self
-                .heap_store
-                .scan_heap(self.table_name.as_str())?,
-        }))
+    pub fn try_new(
+        heap_store: Arc<dyn HeapStore>,
+        table_name: String,
+        projected_schema: SchemaRef,
+        filters: Vec<Arc<PhysicalExpr>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            heap_store: heap_store.clone(),
+            table_name: table_name.clone(),
+            projected_schema,
+            filters,
+            iter: Arc::new(
+                heap_store
+                    .scan_heap(table_name.as_str())?,
+            ),
+        })
     }
 }
 
-pub struct HeapStream {
-    heap_store: Arc<dyn HeapStore>,
-    schema: SchemaRef,
-    table_name: String,
-    filters: Vec<Arc<PhysicalExpr>>,
-    tuple_iter: TupleIter,
-}
-
-impl Stream for HeapStream {
-    type Item = Result<Tuple>;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        let tuple = self.tuple_iter.next();
-        Poll::Ready(tuple)
+impl HeapScanExec {
+    pub fn next(&mut self) -> Result<Option<Row>> {
+        self.iter.next().transpose()
     }
 }
 
-impl TupleStream for HeapStream {
-    fn schema(&self) -> SchemaRef {
-        self.schema.clone()
-    }
-}
+// pub struct HeapStream {
+//     heap_store: Arc<dyn HeapStore>,
+//     schema: SchemaRef,
+//     table_name: String,
+//     filters: Vec<Arc<PhysicalExpr>>,
+//     tuple_iter: TupleIter,
+// }
+//
+// impl Stream for HeapStream {
+//     type Item = Result<Row>;
+//
+//     fn poll_next(
+//         mut self: Pin<&mut Self>,
+//         cx: &mut Context<'_>,
+//     ) -> Poll<Option<Self::Item>> {
+//         let tuple = self.tuple_iter.next();
+//         Poll::Ready(tuple)
+//     }
+// }
+//
+// impl TupleStream for HeapStream {
+//     fn schema(&self) -> SchemaRef {
+//         self.schema.clone()
+//     }
+// }

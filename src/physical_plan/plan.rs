@@ -1,8 +1,8 @@
 use crate::common::error::{FloppyError, Result};
+use crate::common::row::Row;
 use crate::common::schema::{
     DataType, Field, Schema, SchemaRef,
 };
-use crate::common::tuple::Tuple;
 use crate::common::value::Value;
 use crate::physical_plan::display::IndentVisitor;
 use crate::physical_plan::empty::EmptyExec;
@@ -25,10 +25,10 @@ pub enum PhysicalPlan {
 }
 
 impl PhysicalPlan {
-    pub fn execute(&self) -> Result<SendableTupleStream> {
+    pub fn next(&mut self) -> Result<Option<Row>> {
         match self {
-            Self::EmptyExec(p) => p.execute(),
-            Self::ProjectionExec(p) => p.execute(),
+            Self::EmptyExec(p) => p.next(),
+            Self::ProjectionExec(p) => p.next(),
             _ => Err(FloppyError::NotImplemented(
                 "physical expression not supported"
                     .to_owned(),

@@ -1,7 +1,7 @@
 use crate::common::error::FloppyError;
 use crate::common::error::Result;
+use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
-use crate::common::tuple::Tuple;
 use crate::common::value::Value;
 use crate::physical_expr::expr::PhysicalExpr;
 use std::fmt;
@@ -19,7 +19,10 @@ pub struct TryCastExpr {
 }
 
 impl TryCastExpr {
-    pub fn new(expr: Arc<PhysicalExpr>, cast_type: DataType) -> Self {
+    pub fn new(
+        expr: Arc<PhysicalExpr>,
+        cast_type: DataType,
+    ) -> Self {
         Self { expr, cast_type }
     }
 
@@ -27,7 +30,7 @@ impl TryCastExpr {
         Ok(self.cast_type.clone())
     }
 
-    pub fn evaluate(&self, tuple: &Tuple) -> Result<Value> {
+    pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
         let v = self.expr.evaluate(tuple)?;
         todo!()
     }
@@ -35,7 +38,11 @@ impl TryCastExpr {
 
 impl fmt::Display for TryCastExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "CAST({} AS {:?})", self.expr, self.cast_type)
+        write!(
+            f,
+            "CAST({} AS {:?})",
+            self.expr, self.cast_type
+        )
     }
 }
 
@@ -48,9 +55,11 @@ pub fn try_cast(
     if expr_type == cast_type {
         Ok(expr.clone())
     } else {
-        Ok(Arc::new(PhysicalExpr::TryCastExpr(TryCastExpr {
-            expr: expr.clone(),
-            cast_type,
-        })))
+        Ok(Arc::new(PhysicalExpr::TryCastExpr(
+            TryCastExpr {
+                expr: expr.clone(),
+                cast_type,
+            },
+        )))
     }
 }

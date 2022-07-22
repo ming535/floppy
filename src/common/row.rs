@@ -2,10 +2,10 @@ use crate::common::error::{FloppyError, Result};
 use crate::common::schema::SchemaRef;
 use crate::common::value::Value;
 
-/// A `Tuple` represents a tuple in memory.
+/// A `Row` represents a tuple in memory.
 /// It has contains schema and data.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Tuple {
+pub struct Row {
     values: Vec<Value>,
 }
 
@@ -13,12 +13,12 @@ pub type BlockId = i64;
 
 pub type ItemId = i64;
 
-pub struct TupleId {
+pub struct RowId {
     pub block_id: BlockId,
     pub item_id: ItemId,
 }
 
-impl Tuple {
+impl Row {
     pub fn new(values: Vec<Value>) -> Self {
         Self { values }
     }
