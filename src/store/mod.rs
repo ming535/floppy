@@ -26,8 +26,8 @@ pub trait CatalogStore {
     ) -> Result<Schema>;
 }
 
-#[derive(Clone)]
-pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
+pub type RowIter =
+    Box<dyn Iterator<Item = Result<Option<Row>>>>;
 
 pub trait HeapStore {
     /// Returns a `TupleIter` to scan a table's heap

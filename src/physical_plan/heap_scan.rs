@@ -30,7 +30,6 @@ use std::task::{Context, Poll};
 //     pub filters: Vec<PhysicalExpr>,
 // }
 
-#[derive(Clone)]
 pub struct HeapScanExec {
     pub heap_store: Arc<dyn HeapStore>,
     pub table_name: String,
@@ -38,7 +37,7 @@ pub struct HeapScanExec {
     // todo why not Vec<PhysicalExpr>?
     pub filters: Vec<Arc<PhysicalExpr>>,
 
-    pub iter: Arc<RowIter>,
+    pub iter: RowIter,
 }
 
 impl HeapScanExec {
@@ -53,17 +52,16 @@ impl HeapScanExec {
             table_name: table_name.clone(),
             projected_schema,
             filters,
-            iter: Arc::new(
-                heap_store
-                    .scan_heap(table_name.as_str())?,
-            ),
+            iter: heap_store
+                .scan_heap(table_name.as_str())?,
         })
     }
 }
 
 impl HeapScanExec {
     pub fn next(&mut self) -> Result<Option<Row>> {
-        self.iter.next().transpose()
+        // self.iter.next().transpose()
+        todo!()
     }
 }
 

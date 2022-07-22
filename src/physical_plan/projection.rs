@@ -13,7 +13,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-#[derive(Clone)]
 pub struct ProjectionExec {
     pub expr: Vec<Arc<PhysicalExpr>>,
     pub input: Box<PhysicalPlan>,
