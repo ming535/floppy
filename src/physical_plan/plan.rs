@@ -28,6 +28,7 @@ impl PhysicalPlan {
         match self {
             Self::EmptyExec(p) => p.next(),
             Self::ProjectionExec(p) => p.next(),
+            Self::HeapScanExec(p) => p.next(),
             _ => Err(FloppyError::NotImplemented(
                 "physical expression not supported"
                     .to_owned(),

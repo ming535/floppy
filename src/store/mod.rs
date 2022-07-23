@@ -1,6 +1,7 @@
 use crate::common::error::Result;
 use crate::common::row::{Row, RowId};
 use crate::common::schema::Schema;
+use std::sync::Arc;
 
 /// `CatalogStore`, `HeapStore` and `IndexStore` are basic abstractions
 /// for Floppy's storage engine.
@@ -26,8 +27,7 @@ pub trait CatalogStore {
     ) -> Result<Schema>;
 }
 
-pub type RowIter =
-    Box<dyn Iterator<Item = Result<Option<Row>>>>;
+pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
 
 pub trait HeapStore {
     /// Returns a `TupleIter` to scan a table's heap

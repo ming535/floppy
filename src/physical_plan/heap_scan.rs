@@ -37,7 +37,7 @@ pub struct HeapScanExec {
     // todo why not Vec<PhysicalExpr>?
     pub filters: Vec<Arc<PhysicalExpr>>,
 
-    pub iter: RowIter,
+    iter: RowIter,
 }
 
 impl HeapScanExec {
@@ -60,33 +60,6 @@ impl HeapScanExec {
 
 impl HeapScanExec {
     pub fn next(&mut self) -> Result<Option<Row>> {
-        // self.iter.next().transpose()
-        todo!()
+        self.iter.next().transpose()
     }
 }
-
-// pub struct HeapStream {
-//     heap_store: Arc<dyn HeapStore>,
-//     schema: SchemaRef,
-//     table_name: String,
-//     filters: Vec<Arc<PhysicalExpr>>,
-//     tuple_iter: TupleIter,
-// }
-//
-// impl Stream for HeapStream {
-//     type Item = Result<Row>;
-//
-//     fn poll_next(
-//         mut self: Pin<&mut Self>,
-//         cx: &mut Context<'_>,
-//     ) -> Poll<Option<Self::Item>> {
-//         let tuple = self.tuple_iter.next();
-//         Poll::Ready(tuple)
-//     }
-// }
-//
-// impl TupleStream for HeapStream {
-//     fn schema(&self) -> SchemaRef {
-//         self.schema.clone()
-//     }
-// }

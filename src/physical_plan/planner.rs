@@ -137,24 +137,23 @@ mod tests {
         let mem_engine = MemoryEngine::default();
         let planner =
             PhysicalPlanner::new(Arc::new(mem_engine));
-        let physical_plan =
+        let mut physical_plan =
             planner.create_physical_plan(&logical_plan)?;
         assert_eq!(format!("{}", physical_plan), 
                    "ProjectionExec: Literal(Int64(1)), Literal(Int64(2))\
                   \n  EmptyExec");
-        let mut stream = physical_plan.execute()?;
-        let data = stream
-            .try_collect::<Vec<_>>()
-            .await
-            .map_err(FloppyError::from)?;
-        assert_eq!(data.len(), 1);
+        let row = physical_plan.next()?;
+        assert_eq!(row.is_some(), true);
         assert_eq!(
-            data[0],
+            row.unwrap(),
             Row::new(vec![
                 Value::Int64(Some(1)),
                 Value::Int64(Some(2))
             ])
         );
+
+        let row = physical_plan.next()?;
+        assert_eq!(row.is_none(), true);
         Ok(())
     }
 
@@ -169,13 +168,9 @@ mod tests {
             DataType::Int32,
             false,
         )]);
-        let r = mem_engine
-            .insert_schema(test_table_name, &test_schema);
-        if r.is_err() {
-            return Err(FloppyError::Internal(
-                "h".to_string(),
-            ));
-        }
+        mem_engine
+            .insert_schema(test_table_name, &test_schema)
+            .unwrap();
 
         let logical_plan_builder =
             LogicalPlanBuilder::scan(
