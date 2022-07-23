@@ -172,6 +172,10 @@ mod tests {
             .insert_schema(test_table_name, &test_schema)
             .unwrap();
 
+        // seed with some data
+        let r = Row::new(vec![Value::Int32(Some(1))]);
+        mem_engine.insert_to_heap(test_table_name, &r)?;
+
         let logical_plan_builder =
             LogicalPlanBuilder::scan(
                 test_table_name,
@@ -185,13 +189,23 @@ mod tests {
 
         let planner =
             PhysicalPlanner::new(Arc::new(mem_engine));
-        let physical_plan = planner.create_physical_plan(
-            &logical_plan_builder.build()?,
-        )?;
+        let mut physical_plan = planner
+            .create_physical_plan(
+                &logical_plan_builder.build()?,
+            )?;
 
         assert_eq!(
             format!("{}", physical_plan),
             "HeapScanExec: test"
+        );
+
+        let r = physical_plan.next()?;
+        assert_eq!(r.is_some(), true);
+
+        let r = r.unwrap();
+        assert_eq!(
+            r,
+            Row::new(vec![Value::Int32(Some(1))])
         );
         Ok(())
     }

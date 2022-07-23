@@ -15,7 +15,7 @@ pub struct MemoryEngine {
     // `heaps` is a HashMap contains all table's row.
     // The key of the HashMap is table name, while the value is
     // all the table's row.
-    heaps: HashMap<String, Arc<Vec<Row>>>,
+    heaps: HashMap<String, Box<Vec<Row>>>,
     // `schemas` is a HashMap contains all table's schema.
     // The key of the HashMap is table name, while the value is
     // a table's schema.
@@ -32,7 +32,7 @@ impl CatalogStore for MemoryEngine {
             .insert(table_name.to_string(), schema.clone());
         self.heaps.insert(
             table_name.to_string(),
-            Arc::new(vec![]),
+            Box::new(vec![]),
         );
         Ok(())
     }
@@ -41,11 +41,6 @@ impl CatalogStore for MemoryEngine {
         &self,
         table_name: &str,
     ) -> Result<Schema> {
-        assert_eq!(self.schemas.len(), 1);
-        assert_eq!(
-            self.schemas.contains_key(table_name),
-            true
-        );
         let schema = self.schemas.get(table_name);
         match schema {
             Some(s) => Ok(s.clone()),
@@ -82,19 +77,28 @@ impl HeapStore for MemoryEngine {
         table_name: &str,
         tuple: &Row,
     ) -> Result<()> {
-        todo!()
+        if self.schemas.get(table_name).is_none()
+            || self.heaps.get(table_name).is_none()
+        {
+            return Err(table_not_found(table_name));
+        }
+
+        self.heaps
+            .entry(table_name.to_string())
+            .and_modify(|r| r.push(tuple.clone()));
+        Ok(())
     }
 }
 
 impl IndexStore for MemoryEngine {}
 
 struct MemIter {
-    rows: Arc<Vec<Row>>,
+    rows: Box<Vec<Row>>,
     idx: usize,
 }
 
 impl MemIter {
-    fn new(rows: Arc<Vec<Row>>) -> Self {
+    fn new(rows: Box<Vec<Row>>) -> Self {
         Self {
             rows: rows.clone(),
             idx: 0,
