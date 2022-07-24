@@ -9,9 +9,7 @@ use crate::physical_expr::column::Column;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::empty::EmptyExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
-use crate::physical_plan::plan::{
-    PhysicalPlan, TableScanExec,
-};
+use crate::physical_plan::plan::PhysicalPlan;
 use crate::physical_plan::projection::ProjectionExec;
 use crate::store::HeapStore;
 use std::sync::Arc;

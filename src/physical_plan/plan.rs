@@ -193,7 +193,4 @@ impl Display for PhysicalPlan {
 }
 
 #[derive(Clone)]
-pub struct TableScanExec {}
-
-#[derive(Clone)]
 pub struct FilterExec {}
