@@ -1,17 +1,12 @@
 use crate::common::error::{FloppyError, Result};
 use crate::common::row::Row;
 
-
 use crate::physical_plan::display::IndentVisitor;
 use crate::physical_plan::empty::EmptyExec;
 use crate::physical_plan::filter::FilterExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::projection::ProjectionExec;
 use std::fmt::{self, Display, Formatter};
-
-
-
-
 
 pub enum PhysicalPlan {
     EmptyExec(EmptyExec),

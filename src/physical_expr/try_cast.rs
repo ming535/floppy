@@ -1,4 +1,3 @@
-
 use crate::common::error::Result;
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
@@ -56,10 +55,7 @@ pub fn try_cast(
         Ok(expr)
     } else {
         Ok(Arc::new(PhysicalExpr::TryCastExpr(
-            TryCastExpr {
-                expr,
-                cast_type,
-            },
+            TryCastExpr { expr, cast_type },
         )))
     }
 }

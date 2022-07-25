@@ -3,12 +3,8 @@ use crate::common::row::Row;
 use crate::common::schema::SchemaRef;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::plan::PhysicalPlan;
-use futures::{StreamExt};
-
-
 
 use std::sync::Arc;
-
 
 pub struct ProjectionExec {
     pub expr: Vec<Arc<PhysicalExpr>>,

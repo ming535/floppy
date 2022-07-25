@@ -1,4 +1,4 @@
-use crate::common::error::{Result};
+use crate::common::error::Result;
 use crate::common::schema::Schema;
 use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_plan::plan::{
@@ -133,7 +133,6 @@ mod tests {
     use crate::logical_plan::builder::LogicalPlanBuilder;
     use crate::storage::memory::MemoryEngine;
     use crate::store::CatalogStore;
-    use futures::{StreamExt};
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {

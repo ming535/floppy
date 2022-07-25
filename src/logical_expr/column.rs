@@ -17,19 +17,25 @@ pub struct Column {
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.relation {
-            Some(ref r) => write!(f, "#{}.{}", r, self.name),
+            Some(ref r) => {
+                write!(f, "#{}.{}", r, self.name)
+            }
             None => write!(f, "#{}", self.name),
         }
     }
 }
 
 impl Column {
-    pub fn normalize_with_schema(self, schema: &Schema) -> Result<Self> {
+    pub fn normalize_with_schema(
+        self,
+        schema: &Schema,
+    ) -> Result<Self> {
         if self.relation.is_some() {
             return Ok(self);
         }
 
-        let fields = schema.fields_with_unqualified_name(&self.name);
+        let fields =
+            schema.fields_with_unqualified_name(&self.name);
         match fields.len() {
             1 => Ok(fields[0].qualified_column()),
             _ => Err(FloppyError::Internal(
@@ -38,13 +44,17 @@ impl Column {
         }
     }
 
-    pub fn normalize_with_schemas(self, schemas: &[&Arc<Schema>]) -> Result<Self> {
+    pub fn normalize_with_schemas(
+        self,
+        schemas: &[&Arc<Schema>],
+    ) -> Result<Self> {
         if self.relation.is_some() {
             return Ok(self);
         }
 
         for schema in schemas {
-            let fields = schema.fields_with_unqualified_name(&self.name);
+            let fields = schema
+                .fields_with_unqualified_name(&self.name);
             match fields.len() {
                 0 => continue,
                 1 => {
@@ -52,7 +62,8 @@ impl Column {
                 }
                 _ => {
                     return Err(FloppyError::Internal(
-                        "failed to normalize column".to_string(),
+                        "failed to normalize column"
+                            .to_string(),
                     ));
                 }
             }

@@ -3,9 +3,6 @@ use crate::common::row::Row;
 
 use crate::common::value::Value;
 
-
-
-
 #[derive(Clone)]
 pub struct EmptyExec {
     index: usize,

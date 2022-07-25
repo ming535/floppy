@@ -20,10 +20,15 @@ pub enum RewriteRecursion {
 /// tree. When passed to `Expr::rewrite`, `ExpressionVisitor::mutate` is
 /// invoked recursively on all nodes of an expression tree. See the
 /// comments on `Expr::rewrite` for details on its use
-pub trait ExprRewriter<E: ExprRewritable = LogicalExpr>: Sized {
+pub trait ExprRewriter<E: ExprRewritable = LogicalExpr>:
+    Sized
+{
     /// Invoked before any children of `expr` are rewritten /
     /// visited. Default implementation returns `Ok(RewriteRecursion::Continue)`
-    fn pre_visit(&mut self, _expr: &E) -> Result<RewriteRecursion> {
+    fn pre_visit(
+        &mut self,
+        _expr: &E,
+    ) -> Result<RewriteRecursion> {
         Ok(RewriteRecursion::Continue)
     }
 
@@ -35,7 +40,10 @@ pub trait ExprRewriter<E: ExprRewritable = LogicalExpr>: Sized {
 /// a trait for marking types that are rewritable by [ExprRewriter]
 pub trait ExprRewritable: Sized {
     /// rewrite the expression tree using the given [ExprRewriter]
-    fn rewrite<R: ExprRewriter<Self>>(self, rewriter: &mut R) -> Result<Self>;
+    fn rewrite<R: ExprRewriter<Self>>(
+        self,
+        rewriter: &mut R,
+    ) -> Result<Self>;
 }
 
 impl ExprRewritable for LogicalExpr {
@@ -77,7 +85,9 @@ impl ExprRewritable for LogicalExpr {
         R: ExprRewriter<Self>,
     {
         let need_mutate = match rewriter.pre_visit(&self)? {
-            RewriteRecursion::Mutate => return rewriter.mutate(self),
+            RewriteRecursion::Mutate => {
+                return rewriter.mutate(self)
+            }
             RewriteRecursion::Stop => return Ok(self),
             RewriteRecursion::Continue => true,
             RewriteRecursion::Skip => false,
@@ -86,12 +96,16 @@ impl ExprRewritable for LogicalExpr {
         // recurse into all sub expressions(and cover all expression types)
         let expr = match self {
             LogicalExpr::Column(_) => self.clone(),
-            LogicalExpr::Literal(value) => LogicalExpr::Literal(value),
-            LogicalExpr::BinaryExpr { left, op, right } => LogicalExpr::BinaryExpr {
-                left: rewrite_boxed(left, rewriter)?,
-                op,
-                right: rewrite_boxed(right, rewriter)?,
-            },
+            LogicalExpr::Literal(value) => {
+                LogicalExpr::Literal(value)
+            }
+            LogicalExpr::BinaryExpr { left, op, right } => {
+                LogicalExpr::BinaryExpr {
+                    left: rewrite_boxed(left, rewriter)?,
+                    op,
+                    right: rewrite_boxed(right, rewriter)?,
+                }
+            }
         };
 
         // now rewrite this expression itself
@@ -120,7 +134,10 @@ where
 
 /// Recursively call [`Column::normalize_with_schemas`] on all Column expressions
 /// in the `expr` expression tree.
-pub fn normalize_col(expr: LogicalExpr, plan: &LogicalPlan) -> Result<LogicalExpr> {
+pub fn normalize_col(
+    expr: LogicalExpr,
+    plan: &LogicalPlan,
+) -> Result<LogicalExpr> {
     normalize_col_with_schemas(expr, &plan.all_schemas())
 }
 
@@ -135,9 +152,14 @@ pub fn normalize_col_with_schemas(
     }
 
     impl<'a> ExprRewriter for ColumnNormalizer<'a> {
-        fn mutate(&mut self, expr: LogicalExpr) -> Result<LogicalExpr> {
+        fn mutate(
+            &mut self,
+            expr: LogicalExpr,
+        ) -> Result<LogicalExpr> {
             if let LogicalExpr::Column(c) = expr {
-                Ok(LogicalExpr::Column(c.normalize_with_schemas(self.schemas)?))
+                Ok(LogicalExpr::Column(
+                    c.normalize_with_schemas(self.schemas)?,
+                ))
             } else {
                 Ok(expr)
             }

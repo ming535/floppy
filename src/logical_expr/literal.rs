@@ -15,7 +15,9 @@ pub trait Literal {
 
 impl Literal for String {
     fn lit(&self) -> LogicalExpr {
-        LogicalExpr::Literal(Value::Utf8(Some((*self).to_owned())))
+        LogicalExpr::Literal(Value::Utf8(Some(
+            (*self).to_owned(),
+        )))
     }
 }
 
@@ -24,11 +26,21 @@ macro_rules! make_literal {
         #[doc = $DOC]
         impl Literal for $TYPE {
             fn lit(&self) -> LogicalExpr {
-                LogicalExpr::Literal(Value::$SCALAR(Some(self.clone())))
+                LogicalExpr::Literal(Value::$SCALAR(Some(
+                    self.clone(),
+                )))
             }
         }
     };
 }
 
-make_literal!(bool, Boolean, "literal expression containing a bool");
-make_literal!(i64, Int64, "literal expression containing an i64");
+make_literal!(
+    bool,
+    Boolean,
+    "literal expression containing a bool"
+);
+make_literal!(
+    i64,
+    Int64,
+    "literal expression containing an i64"
+);

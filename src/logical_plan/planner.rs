@@ -2,7 +2,7 @@ use crate::common::error::{
     field_not_found, FloppyError, Result,
 };
 use crate::common::operator::Operator;
-use crate::common::schema::{Schema};
+use crate::common::schema::Schema;
 use crate::common::value::Value;
 use crate::logical_expr::column::Column;
 use crate::logical_expr::expr::LogicalExpr;
@@ -12,9 +12,7 @@ use crate::logical_expr::expr_visitor::{
 };
 use crate::logical_expr::literal::lit;
 use crate::logical_plan::builder::LogicalPlanBuilder;
-use crate::logical_plan::plan::{
-    LogicalPlan,
-};
+use crate::logical_plan::plan::LogicalPlan;
 use crate::store::CatalogStore;
 use sqlparser::ast::{
     BinaryOperator, Expr as SQLExpr, Ident, Query, Select,
@@ -236,8 +234,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
         sql: SQLExpr,
         schema: &Schema,
     ) -> Result<LogicalExpr> {
-        let expr =
-            self.sql_expr_to_logical_expr(sql)?;
+        let expr = self.sql_expr_to_logical_expr(sql)?;
         self.validate_schema_satisfies_exprs(
             schema,
             &[expr.clone()],
@@ -354,7 +351,9 @@ pub fn normalize_ident(ident: &Ident) -> String {
 fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
     match n.parse::<i64>() {
         Ok(n) => Ok(lit(n)),
-        _ => Err(FloppyError::Internal("unknown parser_sql_number error".to_string())),
+        _ => Err(FloppyError::Internal(
+            "unknown parser_sql_number error".to_string(),
+        )),
     }
 }
 
@@ -441,9 +440,7 @@ mod tests {
                 planner.statement_to_plan(ast[0].clone())
             }
             Err(e) => {
-                Err(FloppyError::ParseError(
-                    e.to_string(),
-                ))
+                Err(FloppyError::ParseError(e.to_string()))
             }
         }
     }

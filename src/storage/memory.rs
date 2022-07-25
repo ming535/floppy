@@ -7,9 +7,7 @@ use crate::store::{
     CatalogStore, HeapStore, IndexStore, RowIter,
 };
 
-
 use std::collections::HashMap;
-
 
 #[derive(Default)]
 pub struct MemoryEngine {

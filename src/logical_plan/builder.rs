@@ -47,14 +47,18 @@ impl LogicalPlanBuilder {
 
     pub fn plan(&self) -> Result<&LogicalPlan> {
         let plan = self.plan.as_ref().ok_or(
-            FloppyError::Internal("plan is none".to_string()),
+            FloppyError::Internal(
+                "plan is none".to_string(),
+            ),
         )?;
         Ok(plan)
     }
 
     pub fn build(&self) -> Result<LogicalPlan> {
         let plan = self.plan.as_ref().ok_or(
-            FloppyError::Internal("plan is none".to_string()),
+            FloppyError::Internal(
+                "plan is none".to_string(),
+            ),
         )?;
         Ok(plan.clone())
     }
@@ -64,7 +68,9 @@ impl LogicalPlanBuilder {
         expr: Vec<LogicalExpr>,
     ) -> Result<Self> {
         let input = self.plan.as_ref().ok_or(
-            FloppyError::Internal("plan is none".to_string()),
+            FloppyError::Internal(
+                "plan is none".to_string(),
+            ),
         )?;
 
         let plan = LogicalPlan::Projection(Projection {
@@ -81,7 +87,9 @@ impl LogicalPlanBuilder {
         expr: LogicalExpr,
     ) -> Result<Self> {
         let input = self.plan.as_ref().ok_or(
-            FloppyError::Internal("plan is none".to_string()),
+            FloppyError::Internal(
+                "plan is none".to_string(),
+            ),
         )?;
 
         let plan = LogicalPlan::Filter(Filter {

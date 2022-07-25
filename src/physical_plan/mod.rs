@@ -1,7 +1,3 @@
-
-
-
-
 mod display;
 mod empty;
 mod filter;

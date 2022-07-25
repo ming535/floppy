@@ -17,17 +17,28 @@ impl<'a, 'b> IndentVisitor<'a, 'b> {
 impl<'a, 'b> PlanVisitor for IndentVisitor<'a, 'b> {
     type Error = fmt::Error;
 
-    fn pre_visit(&mut self, plan: &LogicalPlan) -> Result<bool, Self::Error> {
+    fn pre_visit(
+        &mut self,
+        plan: &LogicalPlan,
+    ) -> Result<bool, Self::Error> {
         if self.indent > 0 {
             writeln!(self.f)?;
         }
-        write!(self.f, "{:indent$}", "", indent = self.indent * 2)?;
+        write!(
+            self.f,
+            "{:indent$}",
+            "",
+            indent = self.indent * 2
+        )?;
         write!(self.f, "{}", plan.display())?;
         self.indent += 1;
         Ok(true)
     }
 
-    fn post_visit(&mut self, _plan: &LogicalPlan) -> Result<bool, Self::Error> {
+    fn post_visit(
+        &mut self,
+        _plan: &LogicalPlan,
+    ) -> Result<bool, Self::Error> {
         self.indent -= 1;
         Ok(true)
     }
