@@ -19,8 +19,9 @@ impl PhysicalPlan {
     pub fn next(&mut self) -> Result<Option<Row>> {
         match self {
             Self::EmptyExec(p) => p.next(),
-            Self::ProjectionExec(p) => p.next(),
             Self::HeapScanExec(p) => p.next(),
+            Self::ProjectionExec(p) => p.next(),
+            Self::FilterExec(p) => p.next(),
             _ => Err(FloppyError::NotImplemented(
                 "physical expression not supported"
                     .to_owned(),

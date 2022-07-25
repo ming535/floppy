@@ -1,4 +1,4 @@
-use crate::common::error::Result;
+use crate::common::error::{FloppyError, Result};
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
 use crate::common::value::Value;
@@ -30,8 +30,16 @@ impl TryCastExpr {
     }
 
     pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
-        let _v = self.expr.evaluate(tuple)?;
-        todo!()
+        let from_value = self.expr.evaluate(tuple)?;
+        match (&from_value, &self.cast_type) {
+            (Value::Int32(Some(v1)), DataType::Int64) => {
+                Ok(Value::Int64(Some(*v1 as i64)))
+            }
+            _ => Err(FloppyError::NotImplemented(format!(
+                "cast not implemented from {:?} to {:?}",
+                from_value, self.cast_type
+            ))),
+        }
     }
 }
 

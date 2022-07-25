@@ -126,13 +126,32 @@ impl PhysicalPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::operator::Operator;
     use crate::common::row::Row;
     use crate::common::schema::{DataType, Field};
     use crate::common::value::Value;
+    use crate::logical_expr::column::col;
     use crate::logical_expr::literal::lit;
     use crate::logical_plan::builder::LogicalPlanBuilder;
     use crate::storage::memory::MemoryEngine;
-    use crate::store::CatalogStore;
+    use crate::store::{CatalogStore, RowIter};
+
+    fn seed_mem_engine(
+        engine: &mut MemoryEngine,
+        table_name: &str,
+        schema: &Schema,
+        rows: &Vec<Row>,
+    ) -> Result<()> {
+        // let test_table_name = "test";
+        // let test_schema = Schema::new(vec![Field::new(
+        //     Some(test_table_name),
+        //     "id",
+        //     DataType::Int32,
+        //     false,
+        // )]);
+        engine.insert_schema(table_name, schema)?;
+        engine.seed(table_name, rows.iter())
+    }
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {
@@ -167,21 +186,22 @@ mod tests {
     #[tokio::test]
     async fn test_simple_scan() -> Result<()> {
         let test_table_name = "test";
-
-        let mut mem_engine = MemoryEngine::default();
         let test_schema = Schema::new(vec![Field::new(
             Some(test_table_name),
             "id",
             DataType::Int32,
             false,
         )]);
-        mem_engine
-            .insert_schema(test_table_name, &test_schema)
-            .unwrap();
+        let data =
+            vec![Row::new(vec![Value::Int32(Some(1))])];
 
-        // seed with some data
-        let r = Row::new(vec![Value::Int32(Some(1))]);
-        mem_engine.insert_to_heap(test_table_name, &r)?;
+        let mut mem_engine = MemoryEngine::default();
+        seed_mem_engine(
+            &mut mem_engine,
+            test_table_name,
+            &test_schema,
+            &data,
+        );
 
         let logical_plan_builder =
             LogicalPlanBuilder::scan(
@@ -214,6 +234,61 @@ mod tests {
             r,
             Row::new(vec![Value::Int32(Some(1))])
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_filter() -> Result<()> {
+        let test_table_name = "test";
+        let test_schema = Schema::new(vec![Field::new(
+            Some(test_table_name),
+            "id",
+            DataType::Int32,
+            false,
+        )]);
+        let data =
+            vec![Row::new(vec![Value::Int32(Some(1))])];
+
+        let data: Vec<Row> = (0..100)
+            .map(|n| Row::new(vec![Value::Int32(Some(n))]))
+            .collect();
+
+        let mut mem_engine = MemoryEngine::default();
+        seed_mem_engine(
+            &mut mem_engine,
+            test_table_name,
+            &test_schema,
+            &data,
+        );
+
+        let builder = LogicalPlanBuilder::scan(
+            test_table_name,
+            Arc::new(
+                mem_engine
+                    .fetch_schema(test_table_name)
+                    .unwrap(),
+            ),
+            vec![],
+        )?
+        .filter(LogicalExpr::BinaryExpr {
+            left: Box::new(col(test_table_name, "id")),
+            op: Operator::Eq,
+            right: Box::new(lit(50)),
+        })?;
+
+        let planner =
+            PhysicalPlanner::new(Arc::new(mem_engine));
+        let mut physical_plan = planner
+            .create_physical_plan(&builder.build()?)?;
+
+        let r = physical_plan.next()?;
+        assert_eq!(
+            r,
+            Some(Row::new(vec![Value::Int32(Some(50))]))
+        );
+
+        let r = physical_plan.next()?;
+        assert_eq!(r, None);
         Ok(())
     }
 }

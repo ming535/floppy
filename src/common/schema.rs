@@ -29,6 +29,7 @@ impl DataType {
             self,
             DataType::Int8
                 | DataType::Int16
+                | DataType::Int32
                 | DataType::Int64
         )
     }

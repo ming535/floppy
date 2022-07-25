@@ -71,17 +71,39 @@ impl HeapStore for MemoryEngine {
     fn insert_to_heap(
         &mut self,
         table_name: &str,
-        tuple: &Row,
+        row: &Row,
+    ) -> Result<()> {
+        self.validate_schema_exists(table_name)?;
+        self.heaps
+            .entry(table_name.to_string())
+            .and_modify(|r| r.push(row.clone()));
+        Ok(())
+    }
+}
+
+impl MemoryEngine {
+    fn validate_schema_exists(
+        &self,
+        table_name: &str,
     ) -> Result<()> {
         if self.schemas.get(table_name).is_none()
             || self.heaps.get(table_name).is_none()
         {
-            return Err(table_not_found(table_name));
+            Err(table_not_found(table_name))
+        } else {
+            Ok(())
         }
+    }
 
-        self.heaps
-            .entry(table_name.to_string())
-            .and_modify(|r| r.push(tuple.clone()));
+    pub fn seed<'a>(
+        &mut self,
+        table_name: &str,
+        mut rows: impl Iterator<Item = &'a Row>,
+    ) -> Result<()> {
+        self.validate_schema_exists(table_name)?;
+        while let Some(r) = rows.next() {
+            self.insert_to_heap(table_name, r)?;
+        }
         Ok(())
     }
 }

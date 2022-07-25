@@ -37,11 +37,12 @@ impl PhysicalExpr {
         }
     }
 
-    pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
+    pub fn evaluate(&self, row: &Row) -> Result<Value> {
         match self {
-            Self::Column(c) => tuple.value(c.index),
+            Self::Column(c) => row.value(c.index),
             Self::Literal(v) => Ok(v.clone()),
-            Self::TryCastExpr(t) => t.evaluate(tuple),
+            Self::TryCastExpr(t) => t.evaluate(row),
+            Self::BinaryExpr(e) => e.evaluate(row),
             _ => Err(FloppyError::NotImplemented(format!(
                 "physical expr not implemented {:?}",
                 self

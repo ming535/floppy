@@ -1,6 +1,7 @@
 use crate::common::error::FloppyError;
 use crate::common::error::Result;
 use crate::common::schema::Schema;
+use crate::logical_expr::expr::LogicalExpr;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -73,4 +74,14 @@ impl Column {
             "failed to normalize column".to_string(),
         ))
     }
+}
+
+pub fn col(
+    table_name: &str,
+    col_name: &str,
+) -> LogicalExpr {
+    LogicalExpr::Column(Column {
+        relation: Some(table_name.to_string()),
+        name: col_name.to_string(),
+    })
 }
