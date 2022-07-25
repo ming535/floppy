@@ -85,7 +85,7 @@ impl PartialOrd for Value {
             (Int32(v1), Int32(v2)) => v1.partial_cmp(v2),
             (Int32(_), _) => None,
             (Int64(v1), Int64(v2)) => v1.partial_cmp(v2),
-            (Int64(v_), _) => None,
+            (Int64(_v_), _) => None,
             (UInt8(v1), UInt8(v2)) => v1.partial_cmp(v2),
             (UInt8(_), _) => None,
             (UInt16(v1), UInt16(v2)) => v1.partial_cmp(v2),

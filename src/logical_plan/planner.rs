@@ -2,7 +2,7 @@ use crate::common::error::{
     field_not_found, FloppyError, Result,
 };
 use crate::common::operator::Operator;
-use crate::common::schema::{Schema, SchemaRef};
+use crate::common::schema::{Schema};
 use crate::common::value::Value;
 use crate::logical_expr::column::Column;
 use crate::logical_expr::expr::LogicalExpr;
@@ -13,8 +13,7 @@ use crate::logical_expr::expr_visitor::{
 use crate::logical_expr::literal::lit;
 use crate::logical_plan::builder::LogicalPlanBuilder;
 use crate::logical_plan::plan::{
-    EmptyRelation, Filter, LogicalPlan, Projection,
-    TableScan,
+    LogicalPlan,
 };
 use crate::store::CatalogStore;
 use sqlparser::ast::{
@@ -91,7 +90,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
         let builder = self
             .plan_projection(select.projection, builder)?;
 
-        Ok(builder.build()?)
+        builder.build()
     }
 
     pub fn plan_from_tables(
@@ -107,7 +106,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
         match relation {
             TableFactor::Table {
                 name: ref sql_object_name,
-                alias,
+                alias: _,
                 ..
             } => {
                 let table_name = sql_object_name
@@ -237,7 +236,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
         sql: SQLExpr,
         schema: &Schema,
     ) -> Result<LogicalExpr> {
-        let mut expr =
+        let expr =
             self.sql_expr_to_logical_expr(sql)?;
         self.validate_schema_satisfies_exprs(
             schema,
@@ -265,9 +264,7 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
             }
             SQLExpr::Identifier(identifier) => {
                 if identifier.value.starts_with('@') {
-                    return Err(FloppyError::NotImplemented(format!(
-                        "Unsupported identifier starts with @"
-                    )));
+                    return Err(FloppyError::NotImplemented("Unsupported identifier starts with @".to_string()));
                 }
                 let col = Column {
                     relation: None,
@@ -296,23 +293,17 @@ impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
                 let expr = self.sql_to_rex(expr, plan.schema())?;
                 Ok(vec![normalize_col(expr, plan)?])
             }
-            SelectItem::ExprWithAlias { expr, alias } => {
-                return Err(FloppyError::NotImplemented(format!(
-                    "Alias is not supported"
-                )));
+            SelectItem::ExprWithAlias { expr: _, alias: _ } => {
+                Err(FloppyError::NotImplemented("Alias is not supported".to_string()))
             }
             SelectItem::Wildcard => {
                 if input_is_empty {
-                    return Err(FloppyError::Plan(format!(
-                        "SELECT * with no tables specified is not valid"
-                    )));
+                    return Err(FloppyError::Plan("SELECT * with no tables specified is not valid".to_string()));
                 }
                 expand_wildcard(plan.schema(), plan)
             }
-            SelectItem::QualifiedWildcard(ref object_name) => {
-                return Err(FloppyError::NotImplemented(format!(
-                    "alias.* or schema.table.* is not supported"
-                )))
+            SelectItem::QualifiedWildcard(ref _object_name) => {
+                Err(FloppyError::NotImplemented("alias.* or schema.table.* is not supported".to_string()))
             }
         }
     }
@@ -363,15 +354,13 @@ pub fn normalize_ident(ident: &Ident) -> String {
 fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
     match n.parse::<i64>() {
         Ok(n) => Ok(lit(n)),
-        _ => Err(FloppyError::Internal(format!(
-            "unknown parser_sql_number error"
-        ))),
+        _ => Err(FloppyError::Internal("unknown parser_sql_number error".to_string())),
     }
 }
 
 pub fn expand_wildcard(
     schema: &Schema,
-    plan: &LogicalPlan,
+    _plan: &LogicalPlan,
 ) -> Result<Vec<LogicalExpr>> {
     Ok(schema
         .fields()
@@ -452,7 +441,7 @@ mod tests {
                 planner.statement_to_plan(ast[0].clone())
             }
             Err(e) => {
-                return Err(FloppyError::ParseError(
+                Err(FloppyError::ParseError(
                     e.to_string(),
                 ))
             }
@@ -513,9 +502,9 @@ mod tests {
         match err {
             FloppyError::SchemaError(
                 SchemaError::FieldNotFound {
-                    qualifier,
-                    name,
-                    valid_fields,
+                    qualifier: _,
+                    name: _,
+                    valid_fields: _,
                 },
             ) => (),
             _ => assert!(false, "err not match: {:?}", err),

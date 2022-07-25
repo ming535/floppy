@@ -203,7 +203,7 @@ fn comparison_order_coercion(
 }
 
 fn mathematics_numerical_coercion(
-    op: &Operator,
+    _op: &Operator,
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Option<DataType> {

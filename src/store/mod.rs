@@ -1,7 +1,7 @@
 use crate::common::error::Result;
 use crate::common::row::{Row, RowId};
 use crate::common::schema::Schema;
-use std::sync::Arc;
+
 
 /// `CatalogStore`, `HeapStore` and `IndexStore` are basic abstractions
 /// for Floppy's storage engine.

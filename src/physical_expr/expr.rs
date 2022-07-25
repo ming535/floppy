@@ -1,5 +1,5 @@
 use crate::common::error::{FloppyError, Result};
-use crate::common::operator::Operator;
+
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
 use crate::common::value::Value;

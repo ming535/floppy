@@ -6,10 +6,10 @@ use crate::common::schema::Schema;
 use crate::store::{
     CatalogStore, HeapStore, IndexStore, RowIter,
 };
-use std::cell::RefCell;
-use std::cmp::Ordering;
+
+
 use std::collections::HashMap;
-use std::sync::Arc;
+
 
 #[derive(Default)]
 pub struct MemoryEngine {
@@ -64,8 +64,8 @@ impl HeapStore for MemoryEngine {
 
     fn fetch_tuple(
         &self,
-        table_name: &str,
-        tuple_id: &RowId,
+        _table_name: &str,
+        _tuple_id: &RowId,
     ) -> Result<Row> {
         todo!()
     }

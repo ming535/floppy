@@ -206,7 +206,7 @@ impl LogicalPlan {
                         write!(f, "Filter: {:?}", predicate)
                     }
                     LogicalPlan::EmptyRelation(
-                        EmptyRelation_,
+                        _EmptyRelation_,
                     ) => {
                         write!(f, "EmptyRelation")
                     }

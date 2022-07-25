@@ -1,4 +1,4 @@
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::{Result};
 use crate::common::schema::Schema;
 use crate::logical_expr::expr::LogicalExpr;
 use crate::logical_plan::plan::{
@@ -33,7 +33,7 @@ impl PhysicalPlanner {
     ) -> Result<Arc<PhysicalExpr>> {
         match expr {
             LogicalExpr::Column(c) => {
-                let idx = schema.index_of_column(&c)?;
+                let idx = schema.index_of_column(c)?;
                 Ok(Arc::new(PhysicalExpr::Column(Column {
                     name: c.name.clone(),
                     index: idx,
@@ -57,7 +57,7 @@ impl PhysicalPlanner {
         logical_plan: &LogicalPlan,
     ) -> Result<PhysicalPlan> {
         match logical_plan {
-            LogicalPlan::EmptyRelation(empty) => Ok(
+            LogicalPlan::EmptyRelation(_empty) => Ok(
                 PhysicalPlan::EmptyExec(EmptyExec::new()),
             ),
             LogicalPlan::TableScan(TableScan {
@@ -133,7 +133,7 @@ mod tests {
     use crate::logical_plan::builder::LogicalPlanBuilder;
     use crate::storage::memory::MemoryEngine;
     use crate::store::CatalogStore;
-    use futures::{StreamExt, TryStreamExt};
+    use futures::{StreamExt};
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {

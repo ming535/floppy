@@ -1,12 +1,10 @@
 use crate::common::error::Result;
 use crate::common::row::Row;
-use crate::common::schema::{
-    DataType, Field, Schema, SchemaRef,
-};
+
 use crate::common::value::Value;
-use std::fmt;
-use std::fmt::Formatter;
-use std::sync::Arc;
+
+
+
 
 #[derive(Clone)]
 pub struct EmptyExec {

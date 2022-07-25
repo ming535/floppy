@@ -1,4 +1,4 @@
-use crate::common::error::FloppyError;
+
 use crate::common::error::Result;
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Schema};
@@ -31,7 +31,7 @@ impl TryCastExpr {
     }
 
     pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
-        let v = self.expr.evaluate(tuple)?;
+        let _v = self.expr.evaluate(tuple)?;
         todo!()
     }
 }
@@ -53,11 +53,11 @@ pub fn try_cast(
 ) -> Result<Arc<PhysicalExpr>> {
     let expr_type = expr.data_type(input_schema)?;
     if expr_type == cast_type {
-        Ok(expr.clone())
+        Ok(expr)
     } else {
         Ok(Arc::new(PhysicalExpr::TryCastExpr(
             TryCastExpr {
-                expr: expr.clone(),
+                expr,
                 cast_type,
             },
         )))

@@ -3,12 +3,12 @@ use crate::common::row::Row;
 use crate::common::schema::SchemaRef;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::plan::PhysicalPlan;
-use futures::{Stream, StreamExt};
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
-use std::pin::Pin;
+use futures::{StreamExt};
+
+
+
 use std::sync::Arc;
-use std::task::{Context, Poll};
+
 
 pub struct ProjectionExec {
     pub expr: Vec<Arc<PhysicalExpr>>,

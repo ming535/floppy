@@ -1,19 +1,17 @@
 use crate::common::error::{FloppyError, Result};
 use crate::common::row::Row;
-use crate::common::schema::{
-    DataType, Field, Schema, SchemaRef,
-};
-use crate::common::value::Value;
+
+
 use crate::physical_plan::display::IndentVisitor;
 use crate::physical_plan::empty::EmptyExec;
 use crate::physical_plan::filter::FilterExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::projection::ProjectionExec;
 use std::fmt::{self, Display, Formatter};
-use std::io::Empty;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+
+
+
+
 
 pub enum PhysicalPlan {
     EmptyExec(EmptyExec),
@@ -77,7 +75,7 @@ impl PhysicalPlan {
                 ProjectionExec { input, .. },
             ) => input.accept(visitor)?,
             PhysicalPlan::FilterExec(FilterExec {
-                predicate,
+                predicate: _,
                 input,
                 ..
             }) => input.accept(visitor)?,
@@ -173,7 +171,7 @@ impl PhysicalPlan {
                         Ok(())
                     }
                     PhysicalPlan::EmptyExec(
-                        EmptyRelation_,
+                        _EmptyRelation_,
                     ) => {
                         write!(f, "EmptyExec")
                     }

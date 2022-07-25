@@ -30,12 +30,12 @@ impl Column {
         }
 
         let fields = schema.fields_with_unqualified_name(&self.name);
-        return match fields.len() {
+        match fields.len() {
             1 => Ok(fields[0].qualified_column()),
             _ => Err(FloppyError::Internal(
                 "failed to normalize column".to_string(),
             )),
-        };
+        }
     }
 
     pub fn normalize_with_schemas(self, schemas: &[&Arc<Schema>]) -> Result<Self> {
@@ -58,8 +58,8 @@ impl Column {
             }
         }
 
-        return Err(FloppyError::Internal(
+        Err(FloppyError::Internal(
             "failed to normalize column".to_string(),
-        ));
+        ))
     }
 }
