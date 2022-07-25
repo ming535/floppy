@@ -6,6 +6,7 @@ use crate::common::schema::{
 use crate::common::value::Value;
 use crate::physical_plan::display::IndentVisitor;
 use crate::physical_plan::empty::EmptyExec;
+use crate::physical_plan::filter::FilterExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::projection::ProjectionExec;
 use crate::physical_plan::SendableTupleStream;
@@ -77,10 +78,11 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectionExec(
                 ProjectionExec { input, .. },
             ) => input.accept(visitor)?,
-            PhysicalPlan::FilterExec(FilterExec {}) => {
-                // input.accept(visitor)?
-                todo!()
-            }
+            PhysicalPlan::FilterExec(FilterExec {
+                predicate,
+                input,
+                ..
+            }) => input.accept(visitor)?,
             // plans without inputs
             PhysicalPlan::HeapScanExec { .. }
             | PhysicalPlan::EmptyExec(_) => true,
@@ -163,10 +165,14 @@ impl PhysicalPlan {
                         Ok(())
                     }
                     PhysicalPlan::FilterExec(
-                        FilterExec {},
+                        FilterExec { predicate, .. },
                     ) => {
-                        // write!(f, "Filter: {:?}", predicate)
-                        todo!()
+                        write!(
+                            f,
+                            "FilterExec: {:?}",
+                            predicate
+                        );
+                        Ok(())
                     }
                     PhysicalPlan::EmptyExec(
                         EmptyRelation_,
@@ -191,6 +197,3 @@ impl Display for PhysicalPlan {
         self.display_indent().fmt(f)
     }
 }
-
-#[derive(Clone)]
-pub struct FilterExec {}

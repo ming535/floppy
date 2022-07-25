@@ -8,6 +8,7 @@ use crate::physical_expr::binary_expr::binary;
 use crate::physical_expr::column::Column;
 use crate::physical_expr::expr::PhysicalExpr;
 use crate::physical_plan::empty::EmptyExec;
+use crate::physical_plan::filter::FilterExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::plan::PhysicalPlan;
 use crate::physical_plan::projection::ProjectionExec;
@@ -107,7 +108,16 @@ impl PhysicalPlanner {
                 predicate,
                 input,
             }) => {
-                todo!()
+                let expr = self.create_physical_expr(
+                    predicate,
+                    input.schema(),
+                )?;
+                let input =
+                    self.create_physical_plan(input)?;
+                Ok(PhysicalPlan::FilterExec(FilterExec {
+                    predicate: expr,
+                    input: Box::new(input),
+                }))
             }
         }
     }
