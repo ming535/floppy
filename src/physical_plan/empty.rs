@@ -4,15 +4,9 @@ use crate::common::schema::{
     DataType, Field, Schema, SchemaRef,
 };
 use crate::common::value::Value;
-use crate::physical_plan::{
-    SendableTupleStream, TupleStream,
-};
-use futures::Stream;
 use std::fmt;
 use std::fmt::Formatter;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 #[derive(Clone)]
 pub struct EmptyExec {

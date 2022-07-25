@@ -1,5 +1,4 @@
 use crate::common::error::{FloppyError, Result};
-use crate::common::schema::SchemaRef;
 use crate::common::value::Value;
 
 /// A `Row` represents a tuple in memory.

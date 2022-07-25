@@ -9,8 +9,6 @@ use crate::physical_plan::empty::EmptyExec;
 use crate::physical_plan::filter::FilterExec;
 use crate::physical_plan::heap_scan::HeapScanExec;
 use crate::physical_plan::projection::ProjectionExec;
-use crate::physical_plan::SendableTupleStream;
-use futures::Stream;
 use std::fmt::{self, Display, Formatter};
 use std::io::Empty;
 use std::pin::Pin;

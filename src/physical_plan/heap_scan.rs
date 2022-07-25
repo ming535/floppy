@@ -2,14 +2,10 @@ use crate::common::error::Result;
 use crate::common::row::Row;
 use crate::common::schema::SchemaRef;
 use crate::physical_expr::expr::PhysicalExpr;
-use crate::physical_plan::{
-    SendableTupleStream, TupleStream,
-};
+
 use crate::store::{HeapStore, RowIter};
-use futures::*;
-use std::pin::Pin;
+
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 // todo what's the difference???
 
