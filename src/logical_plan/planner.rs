@@ -21,13 +21,15 @@ use sqlparser::ast::{
 };
 use std::sync::Arc;
 
-pub struct LogicalPlanner<'a, S: CatalogStore> {
-    catalog_store: &'a S,
+pub struct LogicalPlanner {
+    catalog_store: Arc<dyn CatalogStore>,
     builder: LogicalPlanBuilder,
 }
 
-impl<'a, S: CatalogStore> LogicalPlanner<'a, S> {
-    pub fn new(catalog_store: &'a S) -> Self {
+impl LogicalPlanner {
+    pub fn new(
+        catalog_store: Arc<dyn CatalogStore>,
+    ) -> Self {
         LogicalPlanner {
             catalog_store,
             builder: LogicalPlanBuilder::default(),
@@ -432,7 +434,8 @@ mod tests {
         )]);
         mem_engine.insert_schema("test", &test_schema)?;
 
-        let planner = LogicalPlanner::new(&mem_engine);
+        let planner =
+            LogicalPlanner::new(Arc::new(mem_engine));
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, sql);
         match ast {

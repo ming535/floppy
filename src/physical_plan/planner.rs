@@ -20,7 +20,7 @@ pub struct PhysicalPlanner {
 }
 
 impl PhysicalPlanner {
-    fn new(heap_store: Arc<dyn HeapStore>) -> Self {
+    pub fn new(heap_store: Arc<dyn HeapStore>) -> Self {
         Self {
             heap_store: heap_store.clone(),
         }
