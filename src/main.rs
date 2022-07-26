@@ -60,7 +60,19 @@ fn main() {
 
     let sql = "SELECT a, b \
            FROM test \
-           WHERE a > b AND b < 100";
+           WHERE b > 100";
 
-    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+    let statements =
+        Parser::parse_sql(&dialect, sql).unwrap();
+
+    for s in statements {
+        let plan =
+            logical_planner.statement_to_plan(s).unwrap();
+        let mut plan = physical_planner
+            .create_physical_plan(&plan)
+            .unwrap();
+        while let Ok(Some(r)) = plan.next() {
+            println!("row = {:?}", r);
+        }
+    }
 }

@@ -10,6 +10,9 @@ use crate::common::schema::Schema;
 /// holds a table's tuple.
 /// `IndexStore` is used to manage index data. Index data is a sorted area that
 /// holds a table's index.
+///
+/// Note that traits that modify store is defined as immutable method, so
+/// implementations of trait should enforce the borrow rule at runtime.
 pub trait CatalogStore {
     /// Insert a schema into catalog. `table_name` is a qualified name
     /// like "database_name.table_name".

@@ -52,7 +52,7 @@ impl PhysicalPlanner {
         }
     }
 
-    fn create_physical_plan(
+    pub fn create_physical_plan(
         &self,
         logical_plan: &LogicalPlan,
     ) -> Result<PhysicalPlan> {
