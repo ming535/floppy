@@ -3,5 +3,5 @@ mod empty;
 mod filter;
 mod heap_scan;
 mod plan;
-mod planner;
+pub(crate) mod planner;
 mod projection;

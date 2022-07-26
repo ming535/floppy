@@ -142,13 +142,6 @@ mod tests {
         schema: &Schema,
         rows: &Vec<Row>,
     ) -> Result<()> {
-        // let test_table_name = "test";
-        // let test_schema = Schema::new(vec![Field::new(
-        //     Some(test_table_name),
-        //     "id",
-        //     DataType::Int32,
-        //     false,
-        // )]);
         engine.insert_schema(table_name, schema)?;
         engine.seed(table_name, rows.iter())
     }

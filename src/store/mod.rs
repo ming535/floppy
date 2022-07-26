@@ -14,7 +14,7 @@ pub trait CatalogStore {
     /// Insert a schema into catalog. `table_name` is a qualified name
     /// like "database_name.table_name".
     fn insert_schema(
-        &mut self,
+        &self,
         table_name: &str,
         schema: &Schema,
     ) -> Result<()>;
@@ -43,7 +43,7 @@ pub trait HeapStore {
 
     /// Insert a tuple into heap
     fn insert_to_heap(
-        &mut self,
+        &self,
         table_name: &str,
         tuple: &Row,
     ) -> Result<()>;
