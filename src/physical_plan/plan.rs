@@ -43,7 +43,7 @@ pub trait PlanVisitor {
     fn pre_visit(
         &mut self,
         plan: &PhysicalPlan,
-    ) -> Result<bool>;
+    ) -> std::result::Result<bool, fmt::Error>;
 
     /// Invoked on a logical plan after all of its child inputs have
     /// been visited. The return value is handled the same as the
@@ -52,13 +52,16 @@ pub trait PlanVisitor {
     fn post_visit(
         &mut self,
         _plan: &PhysicalPlan,
-    ) -> Result<bool> {
+    ) -> std::result::Result<bool, fmt::Error> {
         Ok(true)
     }
 }
 
 impl PhysicalPlan {
-    pub fn accept<V>(&self, visitor: &mut V) -> Result<bool>
+    pub fn accept<V>(
+        &self,
+        visitor: &mut V,
+    ) -> std::result::Result<bool, fmt::Error>
     where
         V: PlanVisitor,
     {

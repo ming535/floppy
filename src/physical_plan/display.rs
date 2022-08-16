@@ -1,4 +1,3 @@
-use crate::common::error::Result;
 use crate::physical_plan::plan::{
     PhysicalPlan, PlanVisitor,
 };
@@ -21,7 +20,7 @@ impl<'a, 'b> PlanVisitor for IndentVisitor<'a, 'b> {
     fn pre_visit(
         &mut self,
         plan: &PhysicalPlan,
-    ) -> Result<bool> {
+    ) -> Result<bool, fmt::Error> {
         if self.indent > 0 {
             writeln!(self.f)?;
         }
@@ -39,7 +38,7 @@ impl<'a, 'b> PlanVisitor for IndentVisitor<'a, 'b> {
     fn post_visit(
         &mut self,
         _plan: &PhysicalPlan,
-    ) -> Result<bool> {
+    ) -> Result<bool, fmt::Error> {
         self.indent -= 1;
         Ok(true)
     }

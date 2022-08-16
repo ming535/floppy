@@ -5,12 +5,14 @@ mod logical_expr;
 mod logical_plan;
 mod physical_expr;
 mod physical_plan;
+mod session_ctx;
 mod storage;
 mod store;
 
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Field, Schema};
 use crate::common::value::Value;
+use crate::session_ctx::SessionContext;
 use crate::storage::memory::MemoryEngine;
 use crate::store::CatalogStore;
 use sqlparser::dialect::GenericDialect;
@@ -49,29 +51,18 @@ fn main() {
     mem_engine.insert_schema(table_name, &schema);
     mem_engine.seed(table_name, data.iter());
 
-    let logical_planner =
-        logical_plan::planner::LogicalPlanner::new(
-            mem_engine.clone(),
-        );
-    let physical_planner =
-        physical_plan::planner::PhysicalPlanner::new(
-            mem_engine.clone(),
-        );
+    let session = SessionContext::new(
+        mem_engine.clone(),
+        mem_engine.clone(),
+    );
 
     let sql = "SELECT a, b \
            FROM test \
            WHERE b > 100";
 
-    let statements =
-        Parser::parse_sql(&dialect, sql).unwrap();
-
-    for s in statements {
-        let plan =
-            logical_planner.statement_to_plan(s).unwrap();
-        let mut plan = physical_planner
-            .create_physical_plan(&plan)
-            .unwrap();
-        while let Ok(Some(r)) = plan.next() {
+    let physical_plan = session.create_plan(sql).unwrap();
+    for mut p in physical_plan {
+        while let (Ok(Some(r))) = p.next() {
             println!("row = {:?}", r);
         }
     }

@@ -52,4 +52,6 @@ pub trait HeapStore {
     ) -> Result<()>;
 }
 
+pub trait Store: CatalogStore + HeapStore {}
+
 pub trait IndexStore {}

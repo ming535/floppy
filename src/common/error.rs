@@ -1,5 +1,5 @@
 use crate::common::schema::Schema;
-use std::fmt::Error;
+use sqlparser::parser::ParserError;
 use std::result;
 
 pub type Result<T> = result::Result<T, FloppyError>;
@@ -13,9 +13,9 @@ pub enum FloppyError {
     /// to check for us. This error is raised when one of those invariants
     /// is not verified during execution.
     Internal(String),
-    ParseError(String),
     Plan(String),
     SchemaError(SchemaError),
+    ParserError(ParserError),
 }
 
 #[derive(Debug)]
@@ -49,8 +49,14 @@ pub fn table_not_found(table_name: &str) -> FloppyError {
     ))
 }
 
-impl From<std::fmt::Error> for FloppyError {
-    fn from(_: Error) -> Self {
-        todo!()
+// impl From<Error> for FloppyError {
+//     fn from(_: Error) -> Self {
+//         todo!()
+//     }
+// }
+
+impl From<ParserError> for FloppyError {
+    fn from(e: ParserError) -> Self {
+        FloppyError::ParserError(e)
     }
 }
