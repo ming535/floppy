@@ -1,8 +1,14 @@
 use crate::common::schema::Schema;
 use sqlparser::parser::ParserError;
-use std::result;
+use std::fmt::Formatter;
+use std::{fmt, result};
 
+/// Result type for operations that could result in [FloppyError]
 pub type Result<T> = result::Result<T, FloppyError>;
+
+/// Error type for generic operations that could result in FloppyError::External
+pub type GenericError =
+    Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
 pub enum FloppyError {
@@ -16,6 +22,9 @@ pub enum FloppyError {
     Plan(String),
     SchemaError(SchemaError),
     ParserError(ParserError),
+    IoError(std::io::Error),
+    /// Errors originating from outside Floppy's codebase.
+    External(GenericError),
 }
 
 #[derive(Debug)]
@@ -49,14 +58,89 @@ pub fn table_not_found(table_name: &str) -> FloppyError {
     ))
 }
 
-// impl From<Error> for FloppyError {
-//     fn from(_: Error) -> Self {
-//         todo!()
-//     }
-// }
+impl fmt::Display for SchemaError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TableNotFound(desc) => {
+                write!(f, "{}", desc)
+            }
+            Self::FieldNotFound {
+                qualifier,
+                name,
+                valid_fields,
+            } => {
+                write!(f, "No field named ")?;
+                if let Some(q) = qualifier {
+                    write!(f, "'{}.{}'", q, name)?;
+                } else {
+                    write!(f, "'{}'", name)?;
+                }
+                if let Some(field_names) = valid_fields {
+                    write!(
+                        f,
+                        ". Valid fields are {}",
+                        field_names
+                            .iter()
+                            .map(|name| format!(
+                                "'{}'",
+                                name
+                            ))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    )?;
+                }
+                write!(f, ".")
+            }
+        }
+    }
+}
 
 impl From<ParserError> for FloppyError {
     fn from(e: ParserError) -> Self {
         FloppyError::ParserError(e)
+    }
+}
+
+impl From<std::io::Error> for FloppyError {
+    fn from(e: std::io::Error) -> Self {
+        FloppyError::IoError(e)
+    }
+}
+
+impl From<GenericError> for FloppyError {
+    fn from(e: GenericError) -> Self {
+        FloppyError::External(e)
+    }
+}
+
+impl fmt::Display for FloppyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            FloppyError::NotImplemented(desc) => {
+                write!(
+                    f,
+                    "This feature is not implemented: {}",
+                    desc
+                )
+            }
+            FloppyError::Internal(desc) => {
+                write!(f, "Internal error: {}. This was likely caused by a bug", desc)
+            }
+            FloppyError::Plan(desc) => {
+                write!(f, "Planner error: {}", desc)
+            }
+            FloppyError::SchemaError(e) => {
+                write!(f, "Schema error: {}", e)
+            }
+            FloppyError::ParserError(e) => {
+                write!(f, "Parser error: {}", e)
+            }
+            FloppyError::IoError(e) => {
+                write!(f, "Io error: {}", e)
+            }
+            FloppyError::External(e) => {
+                write!(f, "external error: {}", e)
+            }
+        }
     }
 }

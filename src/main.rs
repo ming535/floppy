@@ -5,22 +5,31 @@ mod logical_expr;
 mod logical_plan;
 mod physical_expr;
 mod physical_plan;
+mod server;
 mod session_ctx;
 mod storage;
 mod store;
 
+use crate::common::error::Result;
 use crate::common::row::Row;
 use crate::common::schema::{DataType, Field, Schema};
 use crate::common::value::Value;
 use crate::session_ctx::SessionContext;
 use crate::storage::memory::MemoryEngine;
 use crate::store::CatalogStore;
+use postgres_protocol::message::backend;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
+use tokio::signal;
 
-fn main() {
-    let dialect = GenericDialect {}; // or AnsiDialect
+#[tokio::main]
+async fn main() -> Result<()> {
+    // enable logging
+    tracing_subscriber::fmt::try_init()?;
 
     let table_name = "test";
 
@@ -56,14 +65,20 @@ fn main() {
         mem_engine.clone(),
     );
 
-    let sql = "SELECT a, b \
-           FROM test \
-           WHERE b > 100";
+    // let sql = "SELECT a, b \
+    //        FROM test \
+    //        WHERE b > 100";
+    //
+    // let physical_plan = session.create_plan(sql).unwrap();
+    // for mut p in physical_plan {
+    //     while let (Ok(Some(r))) = p.next() {
+    //         println!("row = {:?}", r);
+    //     }
+    // }
 
-    let physical_plan = session.create_plan(sql).unwrap();
-    for mut p in physical_plan {
-        while let (Ok(Some(r))) = p.next() {
-            println!("row = {:?}", r);
-        }
-    }
+    let shutdown = signal::ctrl_c();
+    let listener =
+        TcpListener::bind("127.0.0.1:6432").await?;
+    server::run(listener, shutdown).await;
+    Ok(())
 }
