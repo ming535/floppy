@@ -3,9 +3,9 @@ extern crate core;
 mod common;
 mod logical_expr;
 mod logical_plan;
+mod pgwire;
 mod physical_expr;
 mod physical_plan;
-mod server;
 mod session_ctx;
 mod storage;
 mod store;
@@ -65,20 +65,9 @@ async fn main() -> Result<()> {
         mem_engine.clone(),
     );
 
-    // let sql = "SELECT a, b \
-    //        FROM test \
-    //        WHERE b > 100";
-    //
-    // let physical_plan = session.create_plan(sql).unwrap();
-    // for mut p in physical_plan {
-    //     while let (Ok(Some(r))) = p.next() {
-    //         println!("row = {:?}", r);
-    //     }
-    // }
-
     let shutdown = signal::ctrl_c();
     let listener =
         TcpListener::bind("127.0.0.1:6432").await?;
-    server::run(listener, shutdown).await;
+    pgwire::server::run(listener, shutdown).await;
     Ok(())
 }

@@ -1,6 +1,7 @@
 use crate::common::error::Result;
+use crate::pgwire::codec::FramedConn;
 use std::future::Future;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, error, info, instrument};
 
 struct Listener {
@@ -14,8 +15,24 @@ impl Listener {
         loop {
             let (socket, addr) =
                 self.listener.accept().await?;
-            info!("new connection from {}", addr);
+
+            let mut handler = Handler {};
+            tokio::spawn(async move {
+                handler.run(socket).await;
+            });
         }
+    }
+}
+
+/// Per-connection handler. Read requests from `connection`
+struct Handler {
+    // conn: TcpStream,
+}
+
+impl Handler {
+    async fn run(&mut self, conn: TcpStream) {
+        info!("handle connection");
+        FramedConn::new(1, conn);
     }
 }
 
