@@ -1,0 +1,14 @@
+[package]
+name = "physical_plan"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = {path = "../common"}
+logical_expr = {path = "../logical_expr"}
+logical_plan = {path = "../logical_plan"}
+physical_expr = {path = "../physical_expr"}
+storage = {path = "../storage"}
+
