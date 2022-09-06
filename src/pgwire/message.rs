@@ -31,6 +31,7 @@ pub const VERSIONS: &[i32] = &[
 
 /// Like [`FrontendMessage`], but only the messages that can occur during
 /// startup protocol negotiation.
+#[derive(Debug)]
 pub enum FrontendStartupMessage {
     Startup {
         version: i32,
@@ -71,4 +72,14 @@ pub enum FrontendMessage {
 /// [message]: https://www.postgresql.org/docs/11/protocol-message-formats.html
 pub enum BackendMessage {
     AuthenticationOk,
+    ReadyForQuery(TransactionStatus),
+}
+
+pub enum TransactionStatus {
+    /// Not currently in a transaction
+    Idle,
+    /// Currently in a transaction
+    InTransaction,
+    /// Currently in a transaction block which is failed
+    Failed,
 }

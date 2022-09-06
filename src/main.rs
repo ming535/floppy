@@ -3,6 +3,7 @@ extern crate core;
 mod common;
 mod logical_expr;
 mod logical_plan;
+mod pgrepr;
 mod pgwire;
 mod physical_expr;
 mod physical_plan;

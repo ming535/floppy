@@ -109,6 +109,7 @@ name = "floppy"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "byteorder",
  "bytes",
  "futures",
  "postgres-protocol",
