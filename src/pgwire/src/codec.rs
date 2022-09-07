@@ -285,6 +285,7 @@ impl Decoder for Codec {
                     let buf =
                         src.split_to(frame_len).freeze();
                     let buf = Cursor::new(&buf);
+
                     let msg = match msg_type {
                         // Simple query flow.
                         b'Q' => decode_query(buf)?,
@@ -296,8 +297,8 @@ impl Decoder for Codec {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
                                 format!(
-                                "unknown message type {}",
-                                msg_type
+                                "decode frame unknown message type {}",
+                                char::from(msg_type)
                             ),
                             ))
                         }

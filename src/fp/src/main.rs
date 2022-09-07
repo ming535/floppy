@@ -19,13 +19,13 @@ async fn main() -> Result<()> {
     let schema = Schema::new(vec![
         Field::new(
             Some(table_name),
-            "a",
+            "c1",
             DataType::Int32,
             false,
         ),
         Field::new(
             Some(table_name),
-            "b",
+            "c2",
             DataType::Int32,
             false,
         ),

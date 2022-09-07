@@ -9,4 +9,6 @@ members = [
     "src/pgrepr",
     "src/pgwire",
     "src/fp",
+
+    "clients"
 ]
