@@ -1,3 +1,4 @@
+use common::error::Result;
 use std::collections::HashMap;
 use txn_mgr::Transaction;
 
@@ -7,23 +8,58 @@ pub struct Session {
     conn_id: u32,
     // prepared_statements: HashMap<String, PreparedStatement>,
     // portals: HashMap<String, Portal>,
-    txn_status: TransactionState,
+    txn_state: TransactionState,
 }
 
 impl Session {
     pub fn new(conn_id: u32) -> Session {
         Session {
             conn_id,
-            txn_status: TransactionState::Default,
+            txn_state: TransactionState::Default,
         }
     }
 
-    pub fn txn_status(&self) -> &TransactionState {
-        &self.txn_status
+    pub fn txn(&self) -> &TransactionState {
+        &self.txn_state
+    }
+
+    pub fn is_aborted_txn(&self) -> bool {
+        matches!(
+            self.txn_state,
+            TransactionState::Failed(_)
+        )
+    }
+
+    pub async fn start_txn(
+        &mut self,
+        num_stmts: Option<usize>,
+    ) {
+        todo!()
+    }
+
+    pub async fn commit_txn(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    pub async fn rollback_txn(&mut self) -> Result<()> {
+        todo!()
     }
 
     pub fn fail_txn(&mut self) {
-        todo!()
+        match &self.txn_state {
+            TransactionState::Default => {
+                assert!(false)
+            }
+            TransactionState::Started(txn)
+            | TransactionState::InTransactionImplicit(
+                txn,
+            )
+            | TransactionState::InTransaction(txn) => {
+                self.txn_state =
+                    TransactionState::Failed(txn.clone());
+            }
+            TransactionState::Failed(_) => {}
+        };
     }
 }
 

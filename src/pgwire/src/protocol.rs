@@ -25,7 +25,7 @@ where
 
     let mut buf = vec![BackendMessage::AuthenticationOk];
     buf.push(BackendMessage::ReadyForQuery(
-        session.txn_status().into(),
+        session.txn().into(),
     ));
     conn.send_all(buf).await?;
     conn.flush().await?;
@@ -108,7 +108,7 @@ where
     }
 
     async fn ready(&mut self) -> Result<State> {
-        let txn_state = self.session.txn_status().into();
+        let txn_state = self.session.txn().into();
         self.send(BackendMessage::ReadyForQuery(txn_state))
             .await?;
         self.flush().await
@@ -130,10 +130,10 @@ where
 
         for stmt in stmts {
             // In an aborted transaction, reject all commands except COMMIT/ROLLBACK.
-            if self.is_aborted_txn()
+            if self.session.is_aborted_txn()
                 && !is_txn_exit_stmt(Some(&stmt))
             {
-                self.abort_txn_error().await?;
+                self.aborted_txn_error().await?;
                 break;
             }
 
@@ -144,7 +144,7 @@ where
             // This needs to be done in the loop instead of once at the top because
             // a COMMIT/ROLLBACK statement needs to start a new transaction on next
             // statement.
-            self.start_txn(Some(num_stmts)).await;
+            self.session.start_txn(Some(num_stmts)).await;
 
             match self.one_query(stmt).await? {
                 State::Ready => (),
@@ -154,8 +154,8 @@ where
         }
 
         // Implicit transactions are closed at the end of a Query message.
-        if self.session.txn_status().is_implicit() {
-            self.commit_txn().await?;
+        if self.session.txn().is_implicit() {
+            self.session.commit_txn().await?;
         }
 
         if num_stmts == 0 {
@@ -172,27 +172,12 @@ where
         todo!()
     }
 
-    async fn start_txn(
-        &mut self,
-        num_stmts: Option<usize>,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    fn is_aborted_txn(&self) -> bool {
-        todo!()
-    }
-
-    async fn abort_txn_error(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    async fn commit_txn(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    async fn rollback_txn(&mut self) -> Result<()> {
-        todo!()
+    async fn aborted_txn_error(&mut self) -> Result<State> {
+        self.send(BackendMessage::ErrorResponse(ErrorResponse::error(
+            SqlState::IN_FAILED_SQL_TRANSACTION,
+            "current transaction is aborted, commands ignored until end of transaction block",
+        ))).await?;
+        Ok(State::Drain)
     }
 
     async fn error(
@@ -203,7 +188,7 @@ where
         let is_fatal = err.severity.is_fatal();
         self.send(BackendMessage::ErrorResponse(err))
             .await?;
-        let txn_status = self.session.txn_status();
+        let txn_status = self.session.txn();
         match txn_status {
             // Error can be called from describe and parse and so might not be in an active
             // transaction.
@@ -211,11 +196,11 @@ where
             | TransactionState::Failed(_) => {}
             // In Started (i.e., a single statement), cleanup ourselves.
             TransactionState::Started(_) => {
-                self.rollback_txn().await?;
+                self.session.rollback_txn().await?;
             }
             // Implicit transactions also clear themselves.
             TransactionState::InTransactionImplicit(_) => {
-                self.rollback_txn().await?;
+                self.session.rollback_txn().await?;
             }
             // Explicit transactions move to failed.
             TransactionState::InTransaction(_) => {
