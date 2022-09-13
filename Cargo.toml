@@ -9,6 +9,9 @@ members = [
     "src/pgrepr",
     "src/pgwire",
     "src/fp",
+    "src/session",
+    "src/txn_mgr",
+    "src/log_mgr",
 
     "clients"
 ]

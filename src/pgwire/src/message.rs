@@ -28,6 +28,8 @@ pub const VERSIONS: &[i32] = &[
     VERSION_SSL,
     VERSION_GSSENC,
 ];
+use postgres::error::SqlState;
+use session::TransactionState;
 
 /// Like [`FrontendMessage`], but only the messages that can occur during
 /// startup protocol negotiation.
@@ -73,7 +75,9 @@ pub enum FrontendMessage {
 /// [message]: https://www.postgresql.org/docs/11/protocol-message-formats.html
 pub enum BackendMessage {
     AuthenticationOk,
+    EmptyQueryResponse,
     ReadyForQuery(TransactionStatus),
+    ErrorResponse(ErrorResponse),
 }
 
 pub enum TransactionStatus {
@@ -83,4 +87,109 @@ pub enum TransactionStatus {
     InTransaction,
     /// Currently in a transaction block which is failed
     Failed,
+}
+
+impl From<&TransactionState> for TransactionStatus {
+    fn from(state: &TransactionState) -> Self {
+        match state {
+            TransactionState::Default => Self::Idle,
+            TransactionState::Started(_) => {
+                Self::InTransaction
+            }
+            TransactionState::InTransaction(_) => {
+                Self::InTransaction
+            }
+            TransactionState::InTransactionImplicit(_) => {
+                Self::InTransaction
+            }
+            TransactionState::Failed(_) => Self::Failed,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ErrorResponse {
+    pub severity: Severity,
+    pub code: SqlState,
+    pub message: String,
+    pub detail: Option<String>,
+    pub hint: Option<String>,
+    pub position: Option<usize>,
+}
+
+impl ErrorResponse {
+    pub fn error<S>(
+        code: SqlState,
+        message: S,
+    ) -> ErrorResponse
+    where
+        S: Into<String>,
+    {
+        ErrorResponse::new(Severity::Error, code, message)
+    }
+
+    fn new<S>(
+        severity: Severity,
+        code: SqlState,
+        message: S,
+    ) -> ErrorResponse
+    where
+        S: Into<String>,
+    {
+        ErrorResponse {
+            severity,
+            code,
+            message: message.into(),
+            detail: None,
+            hint: None,
+            position: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Severity {
+    Panic,
+    Fatal,
+    Error,
+    Warning,
+    Notice,
+    Debug,
+    Info,
+    Log,
+}
+
+impl Severity {
+    pub fn is_error(&self) -> bool {
+        matches!(
+            self,
+            Severity::Panic
+                | Severity::Fatal
+                | Severity::Error
+        )
+    }
+
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, Severity::Fatal)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Error => "ERROR",
+            Self::Fatal => "FATAL",
+            Self::Panic => "PANIC",
+            Self::Warning => "WARNING",
+            Self::Notice => "NOTICE",
+            Self::Debug => "DEBUG",
+            Self::Info => "INFO",
+            Self::Log => "LOG",
+        }
+    }
+
+    pub fn should_output_to_client(&self) -> bool {
+        match self {
+            Self::Debug => false,
+            _ => true,
+        }
+    }
 }

@@ -3,6 +3,7 @@
 //!
 //! [1]: https://www.postgresql.org/docs/11/protocol-message-formats.html
 
+use crate::message::ErrorResponse;
 use crate::message::{
     BackendMessage, FrontendMessage,
     FrontendStartupMessage, TransactionStatus,
@@ -215,9 +216,17 @@ impl Encoder<BackendMessage> for Codec {
         msg: BackendMessage,
         dst: &mut BytesMut,
     ) -> std::result::Result<(), Self::Error> {
-        let byte = match msg {
+        let byte = match &msg {
             BackendMessage::AuthenticationOk => b'R',
+            BackendMessage::EmptyQueryResponse => b'I',
             BackendMessage::ReadyForQuery(_) => b'Z',
+            BackendMessage::ErrorResponse(r) => {
+                if r.severity.is_error() {
+                    b'E'
+                } else {
+                    b'N'
+                }
+            }
         };
         dst.put_u8(byte);
 
@@ -230,6 +239,7 @@ impl Encoder<BackendMessage> for Codec {
             BackendMessage::AuthenticationOk => {
                 dst.put_u32(0);
             }
+            BackendMessage::EmptyQueryResponse => (),
             BackendMessage::ReadyForQuery(status) => {
                 dst.put_u8(match status {
                     TransactionStatus::Idle => b'I',
@@ -238,6 +248,36 @@ impl Encoder<BackendMessage> for Codec {
                     }
                     TransactionStatus::Failed => b'E',
                 });
+            }
+            BackendMessage::ErrorResponse(
+                ErrorResponse {
+                    severity,
+                    code,
+                    message,
+                    detail,
+                    hint,
+                    position,
+                },
+            ) => {
+                dst.put_u8(b'S');
+                dst.put_string(severity.as_str());
+                dst.put_u8(b'C');
+                dst.put_string(code.code());
+                dst.put_u8(b'M');
+                dst.put_string(&message);
+                if let Some(detail) = &detail {
+                    dst.put_u8(b'D');
+                    dst.put_string(detail);
+                }
+                if let Some(hint) = &hint {
+                    dst.put_u8(b'H');
+                    dst.put_string(hint);
+                }
+                if let Some(position) = &position {
+                    dst.put_u8(b'P');
+                    dst.put_string(&position.to_string());
+                }
+                dst.put_u8(b'\0');
             }
         }
 
@@ -250,6 +290,49 @@ impl Encoder<BackendMessage> for Codec {
         dst[base..base + 4]
             .copy_from_slice(&len.to_be_bytes());
         Ok(())
+    }
+}
+
+trait Pgbuf: BufMut {
+    fn put_string(&mut self, s: &str);
+    fn put_length_i16(
+        &mut self,
+        len: usize,
+    ) -> std::result::Result<(), io::Error>;
+    fn put_format_i8(&mut self, format: pgrepr::Format);
+    fn put_format_i16(&mut self, format: pgrepr::Format);
+}
+
+impl<B: BufMut> Pgbuf for B {
+    fn put_string(&mut self, s: &str) {
+        self.put(s.as_bytes());
+        self.put_u8(b'\0');
+    }
+
+    fn put_length_i16(
+        &mut self,
+        len: usize,
+    ) -> std::result::Result<(), io::Error> {
+        let len = i16::try_from(len).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "length does not fit in an i16",
+            )
+        })?;
+        self.put_i16(len);
+        Ok(())
+    }
+
+    fn put_format_i8(&mut self, format: pgrepr::Format) {
+        self.put_i8(match format {
+            pgrepr::Format::Text => 0,
+            pgrepr::Format::Binary => 1,
+        })
+    }
+
+    fn put_format_i16(&mut self, format: pgrepr::Format) {
+        self.put_i8(0);
+        self.put_format_i8(format);
     }
 }
 

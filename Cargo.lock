@@ -292,6 +292,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "log_mgr"
+version = "0.1.0"
+
+[[package]]
 name = "logical_expr"
 version = "0.1.0"
 dependencies = [
@@ -393,7 +397,10 @@ dependencies = [
  "common",
  "futures",
  "pgrepr",
+ "postgres",
  "postgres-protocol",
+ "session",
+ "sqlparser",
  "tokio",
  "tokio-util 0.6.10",
  "tracing",
@@ -578,6 +585,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "session"
+version = "0.1.0"
+dependencies = [
+ "txn_mgr",
 ]
 
 [[package]]
@@ -846,6 +860,10 @@ dependencies = [
  "tracing-core",
  "tracing-log",
 ]
+
+[[package]]
+name = "txn_mgr"
+version = "0.1.0"
 
 [[package]]
 name = "typenum"
