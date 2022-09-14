@@ -1,4 +1,5 @@
 use common::error::Result;
+use sqlparser::ast::Statement;
 use std::collections::HashMap;
 use txn_mgr::Transaction;
 
@@ -6,8 +7,8 @@ use txn_mgr::Transaction;
 #[derive(Debug)]
 pub struct Session {
     conn_id: u32,
-    // prepared_statements: HashMap<String, PreparedStatement>,
-    // portals: HashMap<String, Portal>,
+    prepared_statements: HashMap<String, PreparedStatement>,
+    portals: HashMap<String, Portal>,
     txn_state: TransactionState,
 }
 
@@ -16,6 +17,8 @@ impl Session {
         Session {
             conn_id,
             txn_state: TransactionState::Default,
+            prepared_statements: HashMap::new(),
+            portals: HashMap::new(),
         }
     }
 
@@ -65,9 +68,13 @@ impl Session {
 
 /// A prepared statement.
 #[derive(Debug)]
-pub struct PreparedStatement {}
+pub struct PreparedStatement {
+    // stmt: Option<Statement>,
+    // desc: StatementDesc,
+}
 
 /// A portal represents the execution state of a running or runnable query.
+#[derive(Debug)]
 pub struct Portal {}
 
 /// The transaction status of a session.

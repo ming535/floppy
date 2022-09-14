@@ -169,6 +169,10 @@ where
         &mut self,
         stmt: Statement,
     ) -> Result<State> {
+        // Bind the portal.
+        // let param_types = vec![];
+        const EMPTY_PORTAL: &str = "";
+
         todo!()
     }
 

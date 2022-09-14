@@ -3,8 +3,8 @@ use crate::try_cast::try_cast;
 use common::error::{FloppyError, Result};
 use common::operator::Operator;
 use common::row::Row;
-use common::schema::{DataType, Schema};
-use common::value::Value;
+use common::scalar::{Datum, ScalarType};
+use common::schema::Schema;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -28,7 +28,7 @@ impl BinaryExpr {
     pub fn data_type(
         &self,
         input_schema: &Schema,
-    ) -> Result<DataType> {
+    ) -> Result<ScalarType> {
         binary_operator_data_type(
             &self.left.data_type(input_schema)?,
             &self.op,
@@ -36,7 +36,7 @@ impl BinaryExpr {
         )
     }
 
-    pub fn evaluate(&self, tuple: &Row) -> Result<Value> {
+    pub fn evaluate(&self, tuple: &Row) -> Result<Datum> {
         let left_value = self.left.evaluate(tuple)?;
         let right_value = self.right.evaluate(tuple)?;
         let left_data_type = left_value.data_type();
@@ -51,22 +51,22 @@ impl BinaryExpr {
         }
 
         match self.op {
-            Operator::Eq => Ok(Value::Boolean(Some(
+            Operator::Eq => Ok(Datum::Boolean(Some(
                 left_value == right_value,
             ))),
-            Operator::NotEq => Ok(Value::Boolean(Some(
+            Operator::NotEq => Ok(Datum::Boolean(Some(
                 left_value != right_value,
             ))),
-            Operator::Lt => Ok(Value::Boolean(Some(
+            Operator::Lt => Ok(Datum::Boolean(Some(
                 left_value < right_value,
             ))),
-            Operator::LtEq => Ok(Value::Boolean(Some(
+            Operator::LtEq => Ok(Datum::Boolean(Some(
                 left_value <= right_value,
             ))),
-            Operator::Gt => Ok(Value::Boolean(Some(
+            Operator::Gt => Ok(Datum::Boolean(Some(
                 left_value > right_value,
             ))),
-            Operator::GtEq => Ok(Value::Boolean(Some(
+            Operator::GtEq => Ok(Datum::Boolean(Some(
                 left_value >= right_value,
             ))),
             Operator::Plus => left_value + right_value,
@@ -120,10 +120,10 @@ fn binary_cast(
 }
 
 fn binary_operator_data_type(
-    lhs_type: &DataType,
+    lhs_type: &ScalarType,
     op: &Operator,
-    rhs_type: &DataType,
-) -> Result<DataType> {
+    rhs_type: &ScalarType,
+) -> Result<ScalarType> {
     let result_type = coerce_types(lhs_type, op, rhs_type)?;
 
     match op {
@@ -134,7 +134,7 @@ fn binary_operator_data_type(
         | Operator::Gt
         | Operator::GtEq
         | Operator::And
-        | Operator::Or => Ok(DataType::Boolean),
+        | Operator::Or => Ok(ScalarType::Boolean),
         Operator::Plus | Operator::Minus => Ok(result_type),
     }
 }
@@ -142,16 +142,17 @@ fn binary_operator_data_type(
 /// Coercion rules for all binary operators. Returns the output type
 /// of applying `op` to an argument of `lhs_type` and `rhs_type`.
 fn coerce_types(
-    lhs_type: &DataType,
+    lhs_type: &ScalarType,
     op: &Operator,
-    rhs_type: &DataType,
-) -> Result<DataType> {
+    rhs_type: &ScalarType,
+) -> Result<ScalarType> {
     let result = match op {
         Operator::And | Operator::Or => {
             match (lhs_type, rhs_type) {
-                (DataType::Boolean, DataType::Boolean) => {
-                    Some(DataType::Boolean)
-                }
+                (
+                    ScalarType::Boolean,
+                    ScalarType::Boolean,
+                ) => Some(ScalarType::Boolean),
                 _ => None,
             }
         }
@@ -178,9 +179,9 @@ fn coerce_types(
 }
 
 fn comparison_eq_coercion(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Option<DataType> {
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
+) -> Option<ScalarType> {
     if lhs_type == rhs_type {
         return Some(lhs_type.clone());
     }
@@ -192,9 +193,9 @@ fn comparison_eq_coercion(
 }
 
 fn comparison_order_coercion(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Option<DataType> {
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
+) -> Option<ScalarType> {
     if lhs_type == rhs_type {
         return Some(lhs_type.clone());
     }
@@ -204,10 +205,10 @@ fn comparison_order_coercion(
 
 fn mathematics_numerical_coercion(
     _op: &Operator,
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Option<DataType> {
-    use common::schema::DataType::*;
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
+) -> Option<ScalarType> {
+    use common::scalar::ScalarType::*;
 
     if !both_numeric_or_null_and_numeric(lhs_type, rhs_type)
     {
@@ -234,10 +235,10 @@ fn mathematics_numerical_coercion(
 }
 
 fn comparison_binary_numeric_coercion(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Option<DataType> {
-    use common::schema::DataType::*;
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
+) -> Option<ScalarType> {
+    use common::scalar::ScalarType::*;
     if !lhs_type.is_numeric() || !rhs_type.is_numeric() {
         return None;
     }
@@ -262,10 +263,10 @@ fn comparison_binary_numeric_coercion(
 }
 
 fn string_numeric_coercion(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
-) -> Option<DataType> {
-    use common::schema::DataType::*;
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
+) -> Option<ScalarType> {
+    use common::scalar::ScalarType::*;
     match (lhs_type, rhs_type) {
         (Utf8, _) if rhs_type.is_numeric() => Some(Utf8),
         (_, Utf8) if lhs_type.is_numeric() => Some(Utf8),
@@ -275,12 +276,12 @@ fn string_numeric_coercion(
 
 /// Determine if at least of one of lhs and rhs is numeric, and the other must be NULL or numeric
 fn both_numeric_or_null_and_numeric(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
+    lhs_type: &ScalarType,
+    rhs_type: &ScalarType,
 ) -> bool {
     match (lhs_type, rhs_type) {
-        (_, DataType::Null) => lhs_type.is_numeric(),
-        (DataType::Null, _) => rhs_type.is_numeric(),
+        (_, ScalarType::Null) => lhs_type.is_numeric(),
+        (ScalarType::Null, _) => rhs_type.is_numeric(),
         _ => lhs_type.is_numeric() && rhs_type.is_numeric(),
     }
 }

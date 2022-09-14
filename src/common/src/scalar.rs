@@ -1,13 +1,13 @@
 use crate::error::FloppyError;
 use crate::error::Result;
-use crate::schema::DataType;
 use std::cmp::Ordering;
 use std::fmt::Formatter;
 use std::{fmt, ops};
 
+/// A single value.
 #[derive(Clone)]
-pub enum Value {
-    /// represents `DataType::Null`
+pub enum Datum {
+    /// An unknown value.
     Null,
     Boolean(Option<bool>),
     Int8(Option<i8>),
@@ -21,29 +21,28 @@ pub enum Value {
     Utf8(Option<String>),
 }
 
-impl Value {
-    pub fn data_type(&self) -> DataType {
+impl Datum {
+    pub fn data_type(&self) -> ScalarType {
         match self {
-            Self::Null => DataType::Null,
-            Self::Boolean(_) => DataType::Boolean,
-            Self::Int8(_) => DataType::Int8,
-            Self::Int16(_) => DataType::Int16,
-            Self::Int32(_) => DataType::Int32,
-            Self::Int64(_) => DataType::Int64,
-            Self::UInt8(_) => DataType::UInt8,
-            Self::UInt16(_) => DataType::UInt16,
-            Self::UInt32(_) => DataType::UInt32,
-            Self::UInt64(_) => DataType::UInt64,
-            Self::Utf8(_) => DataType::Utf8,
+            Self::Null => ScalarType::Null,
+            Self::Boolean(_) => ScalarType::Boolean,
+            Self::Int8(_) => ScalarType::Int8,
+            Self::Int16(_) => ScalarType::Int16,
+            Self::Int32(_) => ScalarType::Int32,
+            Self::Int64(_) => ScalarType::Int64,
+            Self::UInt8(_) => ScalarType::UInt8,
+            Self::UInt16(_) => ScalarType::UInt16,
+            Self::UInt32(_) => ScalarType::UInt32,
+            Self::UInt64(_) => ScalarType::UInt64,
+            Self::Utf8(_) => ScalarType::Utf8,
         }
     }
 }
 
-impl PartialEq for Value {
+impl PartialEq for Datum {
     fn eq(&self, other: &Self) -> bool {
-        use Value::*;
+        use Datum::*;
         match (self, other) {
-            (Null, Null) => true,
             (Null, _) => false,
             (Boolean(v1), Boolean(v2)) => v1.eq(v2),
             (Boolean(_), _) => false,
@@ -69,15 +68,14 @@ impl PartialEq for Value {
     }
 }
 
-impl PartialOrd for Value {
+impl PartialOrd for Datum {
     fn partial_cmp(
         &self,
         other: &Self,
     ) -> Option<Ordering> {
-        use Value::*;
+        use Datum::*;
 
         match (self, other) {
-            (Null, Null) => Some(Ordering::Equal),
             (Null, _) => None,
             (Boolean(v1), Boolean(v2)) => {
                 v1.partial_cmp(v2)
@@ -105,12 +103,12 @@ impl PartialOrd for Value {
     }
 }
 
-impl Eq for Value {}
+impl Eq for Datum {}
 
-impl ops::Add<Value> for Value {
-    type Output = Result<Value>;
+impl ops::Add<Datum> for Datum {
+    type Output = Result<Datum>;
 
-    fn add(self, rhs: Value) -> Self::Output {
+    fn add(self, rhs: Datum) -> Self::Output {
         let left_data_type = self.data_type();
         let right_data_type = rhs.data_type();
         if left_data_type != right_data_type {
@@ -173,10 +171,10 @@ impl ops::Add<Value> for Value {
     }
 }
 
-impl ops::Sub<Value> for Value {
-    type Output = Result<Value>;
+impl ops::Sub<Datum> for Datum {
+    type Output = Result<Datum>;
 
-    fn sub(self, rhs: Value) -> Self::Output {
+    fn sub(self, rhs: Datum) -> Self::Output {
         let left_data_type = self.data_type();
         let right_data_type = rhs.data_type();
 
@@ -241,11 +239,11 @@ impl ops::Sub<Value> for Value {
     }
 }
 
-impl Value {
+impl Datum {
     pub fn logical_and(
         &self,
-        rhs: &Value,
-    ) -> Result<Value> {
+        rhs: &Datum,
+    ) -> Result<Datum> {
         match (self, rhs) {
             (Self::Boolean(Some(first)), Self::Boolean(Some(second))) => {
                 if *first && *second {
@@ -264,7 +262,7 @@ impl Value {
         }
     }
 
-    pub fn logical_or(&self, rhs: &Value) -> Result<Value> {
+    pub fn logical_or(&self, rhs: &Datum) -> Result<Datum> {
         match (self, rhs) {
             (Self::Boolean(Some(first)), Self::Boolean(Some(second))) => {
                 if *first {
@@ -292,7 +290,7 @@ macro_rules! format_option {
     }};
 }
 
-impl fmt::Display for Value {
+impl fmt::Display for Datum {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Null => write!(f, "NULL")?,
@@ -311,7 +309,7 @@ impl fmt::Display for Value {
     }
 }
 
-impl fmt::Debug for Value {
+impl fmt::Debug for Datum {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Null => write!(f, "NULL"),
@@ -335,5 +333,52 @@ impl fmt::Debug for Value {
                 write!(f, "Utf8(\"{}\")", self)
             }
         }
+    }
+}
+
+/// ScalarType defines the type of a [`Datum`]
+///
+/// There is a direct correspondence between `Datum` variants and `ScalarType`
+/// variants.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScalarType {
+    Null,
+    Boolean,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    /// A variable-length string in Unicode with UTF-8 encoding.
+    Utf8,
+}
+
+impl ScalarType {
+    pub fn is_signed_numeric(&self) -> bool {
+        matches!(
+            self,
+            ScalarType::Int8
+                | ScalarType::Int16
+                | ScalarType::Int32
+                | ScalarType::Int64
+        )
+    }
+
+    pub fn is_unsigned_numeric(&self) -> bool {
+        matches!(
+            self,
+            ScalarType::UInt8
+                | ScalarType::UInt16
+                | ScalarType::UInt32
+                | ScalarType::UInt64
+        )
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        self.is_signed_numeric()
+            || self.is_unsigned_numeric()
     }
 }

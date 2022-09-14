@@ -1,6 +1,6 @@
 use common::operator::Operator;
+use common::scalar::Datum;
 use common::schema::Column;
-use common::value::Value;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -9,7 +9,7 @@ pub enum LogicalExpr {
     /// A column reference
     Column(Column),
     /// A constant value
-    Literal(Value),
+    Literal(Datum),
     /// A binary expression
     BinaryExpr {
         left: Box<LogicalExpr>,

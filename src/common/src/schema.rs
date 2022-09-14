@@ -1,53 +1,8 @@
 use crate::error::{field_not_found, FloppyError, Result};
+use crate::scalar::ScalarType;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
-
-/// DataType defines data type used in schema.
-/// Data type defined in SQL is translated into
-/// this internal `DataType`.
-#[derive(Debug, Clone, PartialEq)]
-pub enum DataType {
-    Null,
-    Boolean,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    /// A variable-length string in Unicode with UTF-8 encoding.
-    Utf8,
-}
-
-impl DataType {
-    pub fn is_signed_numeric(&self) -> bool {
-        matches!(
-            self,
-            DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-        )
-    }
-
-    pub fn is_unsigned_numeric(&self) -> bool {
-        matches!(
-            self,
-            DataType::UInt8
-                | DataType::UInt16
-                | DataType::UInt32
-                | DataType::UInt64
-        )
-    }
-
-    pub fn is_numeric(&self) -> bool {
-        self.is_signed_numeric()
-            || self.is_unsigned_numeric()
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -55,7 +10,7 @@ pub struct Field {
     qualifier: Option<String>,
     /// Field's name
     name: String,
-    data_type: DataType,
+    data_type: ScalarType,
     nullable: bool,
 }
 
@@ -63,7 +18,7 @@ impl Field {
     pub fn new(
         qualifier: Option<&str>,
         name: &str,
-        data_type: DataType,
+        data_type: ScalarType,
         nullable: bool,
     ) -> Self {
         Field {
@@ -74,7 +29,7 @@ impl Field {
         }
     }
 
-    pub fn data_type(&self) -> &DataType {
+    pub fn data_type(&self) -> &ScalarType {
         &self.data_type
     }
 

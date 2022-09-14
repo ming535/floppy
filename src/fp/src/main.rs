@@ -1,7 +1,7 @@
 use common::error::Result;
 use common::row::Row;
-use common::schema::{DataType, Field, Schema};
-use common::value::Value;
+use common::scalar::{Datum, ScalarType};
+use common::schema::{Field, Schema};
 use std::sync::Arc;
 use storage::{memory::MemoryEngine, CatalogStore};
 use tokio::net::TcpListener;
@@ -20,13 +20,13 @@ async fn main() -> Result<()> {
         Field::new(
             Some(table_name),
             "c1",
-            DataType::Int32,
+            ScalarType::Int32,
             false,
         ),
         Field::new(
             Some(table_name),
             "c2",
-            DataType::Int32,
+            ScalarType::Int32,
             false,
         ),
     ]);
@@ -34,8 +34,8 @@ async fn main() -> Result<()> {
     let data: Vec<Row> = (0..100)
         .map(|n| {
             Row::new(vec![
-                Value::Int32(Some(n)),
-                Value::Int32(Some(n * 2)),
+                Datum::Int32(Some(n)),
+                Datum::Int32(Some(n * 2)),
             ])
         })
         .collect();

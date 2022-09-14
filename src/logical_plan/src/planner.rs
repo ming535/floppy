@@ -3,9 +3,9 @@ use crate::expr_rewriter::normalize_col;
 use crate::plan::LogicalPlan;
 use common::error::{field_not_found, FloppyError, Result};
 use common::operator::Operator;
+use common::scalar::Datum;
 use common::schema::Column;
 use common::schema::Schema;
-use common::value::Value;
 use logical_expr::expr::LogicalExpr;
 use logical_expr::expr_visitor::{
     ExprVisitable, ExpressionVisitor, Recursion,
@@ -257,7 +257,7 @@ impl LogicalPlanner {
                 Ok(lit(n))
             }
             SQLExpr::Value(SQLValue::Null) => {
-                Ok(LogicalExpr::Literal(Value::Null))
+                Ok(LogicalExpr::Literal(Datum::Null))
             }
             SQLExpr::Identifier(identifier) => {
                 if identifier.value.starts_with('@') {
@@ -418,7 +418,8 @@ mod tests {
     use super::*;
     use crate::storage::memory::MemoryEngine;
     use common::error::SchemaError;
-    use common::schema::{DataType, Field};
+    use common::scalar::ScalarType;
+    use common::schema::Field;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 
@@ -427,7 +428,7 @@ mod tests {
         let test_schema = Schema::new(vec![Field::new(
             Some("test"),
             "id",
-            DataType::Int32,
+            ScalarType::Int32,
             false,
         )]);
         mem_engine.insert_schema("test", &test_schema)?;

@@ -1,7 +1,7 @@
 //! Literal module contains foundational types that are used to represent literals.
 
 use crate::expr::LogicalExpr;
-use common::value::Value;
+use common::scalar::Datum;
 
 /// Create a literal expression
 pub fn lit<T: Literal>(n: T) -> LogicalExpr {
@@ -15,7 +15,7 @@ pub trait Literal {
 
 impl Literal for String {
     fn lit(&self) -> LogicalExpr {
-        LogicalExpr::Literal(Value::Utf8(Some(
+        LogicalExpr::Literal(Datum::Utf8(Some(
             (*self).to_owned(),
         )))
     }
@@ -26,7 +26,7 @@ macro_rules! make_literal {
         #[doc = $DOC]
         impl Literal for $TYPE {
             fn lit(&self) -> LogicalExpr {
-                LogicalExpr::Literal(Value::$SCALAR(Some(
+                LogicalExpr::Literal(Datum::$SCALAR(Some(
                     self.clone(),
                 )))
             }

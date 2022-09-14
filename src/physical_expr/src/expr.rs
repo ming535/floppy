@@ -4,8 +4,8 @@ use crate::binary_expr::BinaryExpr;
 use crate::column::Column;
 use crate::try_cast::TryCastExpr;
 use common::row::Row;
-use common::schema::{DataType, Schema};
-use common::value::Value;
+use common::scalar::{Datum, ScalarType};
+use common::schema::Schema;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -14,7 +14,7 @@ pub enum PhysicalExpr {
     /// A column reference
     Column(Column),
     /// A constant value
-    Literal(Value),
+    Literal(Datum),
     BinaryExpr(BinaryExpr),
     TryCastExpr(TryCastExpr),
 }
@@ -23,7 +23,7 @@ impl PhysicalExpr {
     pub fn data_type(
         &self,
         input_schema: &Schema,
-    ) -> Result<DataType> {
+    ) -> Result<ScalarType> {
         match self {
             Self::Column(c) => Ok(input_schema
                 .field(c.index)
@@ -37,7 +37,7 @@ impl PhysicalExpr {
         }
     }
 
-    pub fn evaluate(&self, row: &Row) -> Result<Value> {
+    pub fn evaluate(&self, row: &Row) -> Result<Datum> {
         match self {
             Self::Column(c) => row.value(c.index),
             Self::Literal(v) => Ok(v.clone()),

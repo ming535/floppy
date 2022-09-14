@@ -130,8 +130,8 @@ mod tests {
     use crate::storage::{CatalogStore, RowIter};
     use common::operator::Operator;
     use common::row::Row;
-    use common::schema::{DataType, Field};
-    use common::value::Value;
+    use common::scalar::{Datum, ScalarType};
+    use common::schema::Field;
     use logical_expr::column::col;
     use logical_expr::literal::lit;
     use logical_plan::builder::LogicalPlanBuilder;
@@ -166,8 +166,8 @@ mod tests {
         assert_eq!(
             row.unwrap(),
             Row::new(vec![
-                Value::Int64(Some(1)),
-                Value::Int64(Some(2))
+                Datum::Int64(Some(1)),
+                Datum::Int64(Some(2))
             ])
         );
 
@@ -182,11 +182,11 @@ mod tests {
         let test_schema = Schema::new(vec![Field::new(
             Some(test_table_name),
             "id",
-            DataType::Int32,
+            ScalarType::Int32,
             false,
         )]);
         let data =
-            vec![Row::new(vec![Value::Int32(Some(1))])];
+            vec![Row::new(vec![Datum::Int32(Some(1))])];
 
         let mut mem_engine = MemoryEngine::default();
         seed_mem_engine(
@@ -225,7 +225,7 @@ mod tests {
         let r = r.unwrap();
         assert_eq!(
             r,
-            Row::new(vec![Value::Int32(Some(1))])
+            Row::new(vec![Datum::Int32(Some(1))])
         );
         Ok(())
     }
@@ -236,14 +236,14 @@ mod tests {
         let test_schema = Schema::new(vec![Field::new(
             Some(test_table_name),
             "id",
-            DataType::Int32,
+            ScalarType::Int32,
             false,
         )]);
         let data =
-            vec![Row::new(vec![Value::Int32(Some(1))])];
+            vec![Row::new(vec![Datum::Int32(Some(1))])];
 
         let data: Vec<Row> = (0..100)
-            .map(|n| Row::new(vec![Value::Int32(Some(n))]))
+            .map(|n| Row::new(vec![Datum::Int32(Some(n))]))
             .collect();
 
         let mut mem_engine = MemoryEngine::default();
@@ -277,7 +277,7 @@ mod tests {
         let r = physical_plan.next()?;
         assert_eq!(
             r,
-            Some(Row::new(vec![Value::Int32(Some(50))]))
+            Some(Row::new(vec![Datum::Int32(Some(50))]))
         );
 
         let r = physical_plan.next()?;

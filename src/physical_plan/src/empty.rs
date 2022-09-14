@@ -1,7 +1,7 @@
 use common::error::Result;
 use common::row::Row;
 
-use common::value::Value;
+use common::scalar::Datum;
 
 #[derive(Clone)]
 pub struct EmptyExec {
@@ -21,7 +21,7 @@ impl EmptyExec {
         }
 
         self.index += 1;
-        let values = vec![Value::Null];
+        let values = vec![Datum::Null];
         let row = Row::new(values);
         Ok(Some(row))
     }
