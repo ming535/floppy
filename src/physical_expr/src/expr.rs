@@ -3,16 +3,17 @@ use common::error::{FloppyError, Result};
 use crate::binary_expr::BinaryExpr;
 use crate::column::Column;
 use crate::try_cast::TryCastExpr;
+use common::row::ColumnRef;
 use common::row::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::Schema;
+use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 
 #[derive(Debug, Clone)]
 pub enum PhysicalExpr {
     /// A column reference
-    Column(Column),
+    Column(ColumnRef),
     /// A constant value
     Literal(Datum),
     BinaryExpr(BinaryExpr),
@@ -22,24 +23,22 @@ pub enum PhysicalExpr {
 impl PhysicalExpr {
     pub fn data_type(
         &self,
-        input_schema: &Schema,
+        input_rel: &RelationDesc,
     ) -> Result<ScalarType> {
         match self {
-            Self::Column(c) => Ok(input_schema
-                .field(c.index)
-                .data_type()
+            Self::Column(c) => Ok(input_rel
+                .column_type(c.idx)?
+                .scalar_type()
                 .clone()),
             Self::Literal(v) => Ok(v.data_type()),
-            Self::BinaryExpr(b) => {
-                b.data_type(input_schema)
-            }
+            Self::BinaryExpr(b) => b.data_type(input_rel),
             Self::TryCastExpr(t) => t.data_type(),
         }
     }
 
     pub fn evaluate(&self, row: &Row) -> Result<Datum> {
         match self {
-            Self::Column(c) => row.value(c.index),
+            Self::Column(c) => row.value(c.idx),
             Self::Literal(v) => Ok(v.clone()),
             Self::TryCastExpr(t) => t.evaluate(row),
             Self::BinaryExpr(e) => e.evaluate(row),

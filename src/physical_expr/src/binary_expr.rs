@@ -4,7 +4,7 @@ use common::error::{FloppyError, Result};
 use common::operator::Operator;
 use common::row::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::Schema;
+use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ impl BinaryExpr {
 
     pub fn data_type(
         &self,
-        input_schema: &Schema,
+        input_schema: &RelationDesc,
     ) -> Result<ScalarType> {
         binary_operator_data_type(
             &self.left.data_type(input_schema)?,
@@ -95,7 +95,7 @@ pub fn binary(
     lhs: Arc<PhysicalExpr>,
     op: Operator,
     rhs: Arc<PhysicalExpr>,
-    input_schema: &Schema,
+    input_schema: &RelationDesc,
 ) -> Result<Arc<PhysicalExpr>> {
     let (l, r) = binary_cast(lhs, &op, rhs, input_schema)?;
     Ok(Arc::new(PhysicalExpr::BinaryExpr(BinaryExpr::new(
@@ -107,7 +107,7 @@ fn binary_cast(
     lhs: Arc<PhysicalExpr>,
     op: &Operator,
     rhs: Arc<PhysicalExpr>,
-    input_schema: &Schema,
+    input_schema: &RelationDesc,
 ) -> Result<(Arc<PhysicalExpr>, Arc<PhysicalExpr>)> {
     let lhs_type = &lhs.data_type(input_schema)?;
     let rhs_type = &rhs.data_type(input_schema)?;

@@ -1,6 +1,6 @@
 use common::error::Result;
 use common::row::{Row, RowId};
-use common::schema::Schema;
+use common::schema::RelationDesc;
 
 pub mod memory;
 
@@ -18,17 +18,17 @@ pub mod memory;
 pub trait CatalogStore {
     /// Insert a schema into catalog. `table_name` is a qualified name
     /// like "database_name.table_name".
-    fn insert_schema(
+    fn insert_rel(
         &self,
         table_name: &str,
-        schema: &Schema,
+        rel: &RelationDesc,
     ) -> Result<()>;
 
     /// Fetch schema for this table.
-    fn fetch_schema(
+    fn fetch_rel(
         &self,
         table_name: &str,
-    ) -> Result<Schema>;
+    ) -> Result<RelationDesc>;
 }
 
 pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;

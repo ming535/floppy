@@ -4,7 +4,7 @@ use crate::heap_scan::HeapScanExec;
 use crate::plan::PhysicalPlan;
 use crate::projection::ProjectionExec;
 use common::error::Result;
-use common::schema::Schema;
+use common::schema::RelationDesc;
 use logical_expr::expr::LogicalExpr;
 use logical_plan::plan::{
     Filter, LogicalPlan, Projection, TableScan,
@@ -29,25 +29,21 @@ impl PhysicalPlanner {
     fn create_physical_expr(
         &self,
         expr: &LogicalExpr,
-        schema: &Schema,
+        rel: &RelationDesc,
     ) -> Result<Arc<PhysicalExpr>> {
         match expr {
-            LogicalExpr::Column(c) => {
-                let idx = schema.index_of_column(c)?;
-                Ok(Arc::new(PhysicalExpr::Column(Column {
-                    name: c.name.clone(),
-                    index: idx,
-                })))
-            }
+            LogicalExpr::Column(c) => Ok(Arc::new(
+                PhysicalExpr::Column(c.clone()),
+            )),
             LogicalExpr::Literal(v) => Ok(Arc::new(
                 PhysicalExpr::Literal(v.clone()),
             )),
             LogicalExpr::BinaryExpr { left, op, right } => {
-                let lhs = self
-                    .create_physical_expr(left, schema)?;
-                let rhs = self
-                    .create_physical_expr(right, schema)?;
-                binary(lhs, *op, rhs, schema)
+                let lhs =
+                    self.create_physical_expr(left, rel)?;
+                let rhs =
+                    self.create_physical_expr(right, rel)?;
+                binary(lhs, *op, rhs, rel)
             }
         }
     }
@@ -100,7 +96,7 @@ impl PhysicalPlanner {
                     ProjectionExec {
                         expr: exprs,
                         input: Box::new(input),
-                        schema: schema.clone(),
+                        rel: schema.clone(),
                     },
                 ))
             }
@@ -110,7 +106,7 @@ impl PhysicalPlanner {
             }) => {
                 let expr = self.create_physical_expr(
                     predicate,
-                    input.schema(),
+                    input.relation_desc(),
                 )?;
                 let input =
                     self.create_physical_plan(input)?;
@@ -126,23 +122,23 @@ impl PhysicalPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::memory::MemoryEngine;
-    use crate::storage::{CatalogStore, RowIter};
     use common::operator::Operator;
+    use common::row::ColumnRef;
     use common::row::Row;
     use common::scalar::{Datum, ScalarType};
-    use common::schema::Field;
-    use logical_expr::column::col;
+    use common::schema::ColumnType;
     use logical_expr::literal::lit;
     use logical_plan::builder::LogicalPlanBuilder;
+    use storage::memory::MemoryEngine;
+    use storage::{CatalogStore, RowIter};
 
     fn seed_mem_engine(
         engine: &mut MemoryEngine,
         table_name: &str,
-        schema: &Schema,
+        schema: &RelationDesc,
         rows: &Vec<Row>,
     ) -> Result<()> {
-        engine.insert_schema(table_name, schema)?;
+        engine.insert_rel(table_name, schema)?;
         engine.seed(table_name, rows.iter())
     }
 
@@ -179,12 +175,10 @@ mod tests {
     #[tokio::test]
     async fn test_simple_scan() -> Result<()> {
         let test_table_name = "test";
-        let test_schema = Schema::new(vec![Field::new(
-            Some(test_table_name),
-            "id",
-            ScalarType::Int32,
-            false,
-        )]);
+        let test_schema = RelationDesc::new(
+            vec![ColumnType::new(ScalarType::Int32, false)],
+            vec!["id".to_string()],
+        );
         let data =
             vec![Row::new(vec![Datum::Int32(Some(1))])];
 
@@ -201,7 +195,7 @@ mod tests {
                 test_table_name,
                 Arc::new(
                     mem_engine
-                        .fetch_schema(test_table_name)
+                        .fetch_rel(test_table_name)
                         .unwrap(),
                 ),
                 vec![],
@@ -233,12 +227,10 @@ mod tests {
     #[tokio::test]
     async fn test_filter() -> Result<()> {
         let test_table_name = "test";
-        let test_schema = Schema::new(vec![Field::new(
-            Some(test_table_name),
-            "id",
-            ScalarType::Int32,
-            false,
-        )]);
+        let test_schema = RelationDesc::new(
+            vec![ColumnType::new(ScalarType::Int32, false)],
+            vec!["id".to_string()],
+        );
         let data =
             vec![Row::new(vec![Datum::Int32(Some(1))])];
 
@@ -258,13 +250,15 @@ mod tests {
             test_table_name,
             Arc::new(
                 mem_engine
-                    .fetch_schema(test_table_name)
+                    .fetch_rel(test_table_name)
                     .unwrap(),
             ),
             vec![],
         )?
         .filter(LogicalExpr::BinaryExpr {
-            left: Box::new(col(test_table_name, "id")),
+            left: Box::new(LogicalExpr::Column(
+                ColumnRef { idx: 0 },
+            )),
             op: Operator::Eq,
             right: Box::new(lit(50)),
         })?;

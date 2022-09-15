@@ -1,4 +1,4 @@
-use crate::schema::Schema;
+use crate::schema::RelationDesc;
 use sqlparser::parser::ParserError;
 use std::fmt::Formatter;
 use std::{fmt, result};
@@ -42,12 +42,12 @@ pub enum SchemaError {
 pub fn field_not_found(
     qualifier: Option<String>,
     name: &str,
-    schema: &Schema,
+    rel_desc: &RelationDesc,
 ) -> FloppyError {
     FloppyError::SchemaError(SchemaError::FieldNotFound {
         qualifier,
         name: name.to_string(),
-        valid_fields: Some(schema.field_names()),
+        valid_fields: Some(rel_desc.column_names().clone()),
     })
 }
 

@@ -1,7 +1,7 @@
 use crate::{CatalogStore, HeapStore, IndexStore, RowIter};
 use common::error::{table_not_found, FloppyError, Result};
 use common::row::{Row, RowId};
-use common::schema::Schema;
+use common::schema::RelationDesc;
 use std::cell::RefCell;
 
 use std::collections::HashMap;
@@ -15,28 +15,28 @@ pub struct MemoryEngine {
     // `schemas` is a HashMap contains all table's schema.
     // The key of the HashMap is table name, while the value is
     // a table's schema.
-    schemas: RefCell<HashMap<String, Schema>>,
+    schemas: RefCell<HashMap<String, RelationDesc>>,
 }
 
 impl CatalogStore for MemoryEngine {
-    fn insert_schema(
+    fn insert_rel(
         &self,
         table_name: &str,
-        schema: &Schema,
+        rel: &RelationDesc,
     ) -> Result<()> {
         self.schemas
             .borrow_mut()
-            .insert(table_name.to_string(), schema.clone());
+            .insert(table_name.to_string(), rel.clone());
         self.heaps
             .borrow_mut()
             .insert(table_name.to_string(), vec![]);
         Ok(())
     }
 
-    fn fetch_schema(
+    fn fetch_rel(
         &self,
         table_name: &str,
-    ) -> Result<Schema> {
+    ) -> Result<RelationDesc> {
         let schemas = self.schemas.borrow();
         let schema = schemas.get(table_name);
         match schema {

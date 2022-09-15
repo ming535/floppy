@@ -1,13 +1,14 @@
 use common::operator::Operator;
 use common::scalar::Datum;
-use common::schema::Column;
+// use common::schema::Column;
+use common::row::ColumnRef;
 use std::fmt;
 use std::fmt::Formatter;
 
 #[derive(Clone)]
 pub enum LogicalExpr {
     /// A column reference
-    Column(Column),
+    Column(ColumnRef),
     /// A constant value
     Literal(Datum),
     /// A binary expression

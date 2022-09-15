@@ -1,5 +1,5 @@
 use crate::display::IndentVisitor;
-use common::schema::SchemaRef;
+use common::schema::RelationDescRef;
 use logical_expr::expr::LogicalExpr;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub enum LogicalPlan {
 
 impl LogicalPlan {
     /// Get a reference to the logical plan's schema
-    pub fn schema(&self) -> &SchemaRef {
+    pub fn relation_desc(&self) -> &RelationDescRef {
         match self {
             Self::Projection(Projection {
                 schema, ..
@@ -30,17 +30,17 @@ impl LogicalPlan {
                 ..
             }) => schema,
             Self::Filter(Filter { input, .. }) => {
-                input.schema()
+                input.relation_desc()
             }
             Self::EmptyRelation(EmptyRelation {
-                schema,
+                rel: schema,
                 ..
             }) => schema,
         }
     }
 
     /// Get a vector of reference to all schemas in every node of the logical plan
-    pub fn all_schemas(&self) -> Vec<&SchemaRef> {
+    pub fn all_schemas(&self) -> Vec<&RelationDescRef> {
         match self {
             Self::TableScan(TableScan {
                 projected_schema,
@@ -59,7 +59,7 @@ impl LogicalPlan {
                 input.all_schemas()
             }
             Self::EmptyRelation(EmptyRelation {
-                schema,
+                rel: schema,
                 ..
             }) => vec![schema],
         }
@@ -236,7 +236,7 @@ pub struct Projection {
     /// The incoming logical plan
     pub input: Arc<LogicalPlan>,
     /// The schema description of the output
-    pub schema: SchemaRef,
+    pub schema: RelationDescRef,
 }
 
 #[derive(Clone)]
@@ -245,7 +245,7 @@ pub struct TableScan {
     pub table_name: String,
 
     /// The schema description of the output
-    pub projected_schema: SchemaRef,
+    pub projected_schema: RelationDescRef,
 
     /// Optional expressions to be used as filters
     pub filters: Vec<LogicalExpr>,
@@ -260,5 +260,5 @@ pub struct Filter {
 #[derive(Clone)]
 pub struct EmptyRelation {
     /// The schema description of the output
-    pub schema: SchemaRef,
+    pub rel: RelationDescRef,
 }

@@ -441,6 +441,7 @@ dependencies = [
  "logical_plan",
  "physical_expr",
  "storage",
+ "tokio",
 ]
 
 [[package]]

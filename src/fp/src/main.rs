@@ -1,7 +1,7 @@
 use common::error::Result;
 use common::row::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::{Field, Schema};
+use common::schema::{ColumnType, RelationDesc};
 use std::sync::Arc;
 use storage::{memory::MemoryEngine, CatalogStore};
 use tokio::net::TcpListener;
@@ -16,20 +16,13 @@ async fn main() -> Result<()> {
     let table_name = "test";
 
     let mem_engine = Arc::new(MemoryEngine::default());
-    let schema = Schema::new(vec![
-        Field::new(
-            Some(table_name),
-            "c1",
-            ScalarType::Int32,
-            false,
-        ),
-        Field::new(
-            Some(table_name),
-            "c2",
-            ScalarType::Int32,
-            false,
-        ),
-    ]);
+    let rel = RelationDesc::new(
+        vec![
+            ColumnType::new(ScalarType::Int32, false),
+            ColumnType::new(ScalarType::Int32, false),
+        ],
+        vec!["c1".to_string(), "c2".to_string()],
+    );
 
     let data: Vec<Row> = (0..100)
         .map(|n| {
@@ -39,7 +32,7 @@ async fn main() -> Result<()> {
             ])
         })
         .collect();
-    mem_engine.insert_schema(table_name, &schema);
+    mem_engine.insert_rel(table_name, &rel);
     mem_engine.seed(table_name, data.iter());
 
     let shutdown = signal::ctrl_c();

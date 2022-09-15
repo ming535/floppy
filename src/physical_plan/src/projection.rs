@@ -1,14 +1,14 @@
 use crate::plan::PhysicalPlan;
 use common::error::Result;
 use common::row::Row;
-use common::schema::SchemaRef;
+use common::schema::RelationDescRef;
 use physical_expr::expr::PhysicalExpr;
 use std::sync::Arc;
 
 pub struct ProjectionExec {
     pub expr: Vec<Arc<PhysicalExpr>>,
     pub input: Box<PhysicalPlan>,
-    pub schema: SchemaRef,
+    pub rel: RelationDescRef,
 }
 
 impl ProjectionExec {

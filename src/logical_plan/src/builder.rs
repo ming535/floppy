@@ -4,7 +4,7 @@ use crate::plan::{
 };
 use common::error::FloppyError;
 use common::error::Result;
-use common::schema::{Schema, SchemaRef};
+use common::schema::{RelationDesc, RelationDescRef};
 use logical_expr::expr::LogicalExpr;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ impl LogicalPlanBuilder {
     pub fn empty_relation() -> Self {
         Self::from(LogicalPlan::EmptyRelation(
             EmptyRelation {
-                schema: Arc::new(Schema::empty()),
+                rel: Arc::new(RelationDesc::empty()),
             },
         ))
     }
@@ -34,7 +34,7 @@ impl LogicalPlanBuilder {
     /// Scan from a relation
     pub fn scan(
         table_name: &str,
-        schema: SchemaRef,
+        schema: RelationDescRef,
         filters: Vec<LogicalExpr>,
     ) -> Result<Self> {
         let plan = LogicalPlan::TableScan(TableScan {
@@ -76,7 +76,7 @@ impl LogicalPlanBuilder {
         let plan = LogicalPlan::Projection(Projection {
             expr,
             input: Arc::new(input.clone()),
-            schema: input.schema().clone(),
+            schema: input.relation_desc().clone(),
         });
 
         Ok(Self { plan: Some(plan) })

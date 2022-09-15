@@ -2,7 +2,7 @@ use crate::expr::PhysicalExpr;
 use common::error::{FloppyError, Result};
 use common::row::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::Schema;
+use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -55,7 +55,7 @@ impl fmt::Display for TryCastExpr {
 
 pub fn try_cast(
     expr: Arc<PhysicalExpr>,
-    input_schema: &Schema,
+    input_schema: &RelationDesc,
     cast_type: ScalarType,
 ) -> Result<Arc<PhysicalExpr>> {
     let expr_type = expr.data_type(input_schema)?;

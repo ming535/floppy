@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
 common = {path = "../common"}
 logical_expr = {path = "../logical_expr"}
 logical_plan = {path = "../logical_plan"}

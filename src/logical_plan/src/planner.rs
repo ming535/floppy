@@ -1,11 +1,10 @@
 use crate::builder::LogicalPlanBuilder;
-use crate::expr_rewriter::normalize_col;
 use crate::plan::LogicalPlan;
 use common::error::{field_not_found, FloppyError, Result};
 use common::operator::Operator;
+use common::row::ColumnRef;
 use common::scalar::Datum;
-use common::schema::Column;
-use common::schema::Schema;
+use common::schema::{RelationDesc, RelationDescRef};
 use logical_expr::expr::LogicalExpr;
 use logical_expr::expr_visitor::{
     ExprVisitable, ExpressionVisitor, Recursion,
@@ -117,7 +116,7 @@ impl LogicalPlanner {
                     table_name.as_str(),
                     Arc::new(
                         self.catalog_store
-                            .fetch_schema(&table_name)?,
+                            .fetch_rel(&table_name)?,
                     ),
                     vec![],
                 )
@@ -138,11 +137,7 @@ impl LogicalPlanner {
             Some(predicate_expr) => {
                 let filter_expr = self.sql_to_rex(
                     predicate_expr,
-                    builder.plan()?.schema(),
-                )?;
-                let filter_expr = normalize_col(
-                    filter_expr,
-                    builder.plan()?,
+                    builder.plan()?.relation_desc(),
                 )?;
                 builder.filter(filter_expr)
             }
@@ -179,72 +174,74 @@ impl LogicalPlanner {
         builder.project(projection_exprs)
     }
 
-    /// Validate the schema provides all of the columns referenced in the expressions.
-    pub fn validate_schema_satisfies_exprs(
-        &self,
-        schema: &Schema,
-        exprs: &[LogicalExpr],
-    ) -> Result<()> {
-        find_column_exprs(exprs).iter().try_for_each(
-            |col| match col {
-                LogicalExpr::Column(col) => match &col
-                    .relation
-                {
-                    Some(r) => {
-                        schema.field_with_qualified_name(
-                            r, &col.name,
-                        )?;
-                        Ok(())
-                    }
-                    None => {
-                        if !schema
-                            .fields_with_unqualified_name(
-                                &col.name,
-                            )
-                            .is_empty()
-                        {
-                            Ok(())
-                        } else {
-                            Err(field_not_found(
-                                None,
-                                col.name.as_str(),
-                                schema,
-                            ))
-                        }
-                    }
-                }
-                .map_err(|_: FloppyError| {
-                    field_not_found(
-                        col.relation
-                            .as_ref()
-                            .map(|s| s.to_owned()),
-                        col.name.as_str(),
-                        schema,
-                    )
-                }),
-                _ => Err(FloppyError::Internal(
-                    "Not a column".to_string(),
-                )),
-            },
-        )
-    }
+    //// Validate the schema provides all of the columns referenced in the expressions.
+    // pub fn validate_schema_satisfies_exprs(
+    //     &self,
+    //     rel: &RelationDesc,
+    //     exprs: &[LogicalExpr],
+    // ) -> Result<()> {
+    //     find_column_exprs(exprs).iter().try_for_each(
+    //         |col| match col {
+    //             LogicalExpr::Column(col) => match &col
+    //                 .relation
+    //             {
+    //                 Some(r) => {
+    //                     rel.field_with_qualified_name(
+    //                         r, &col.name,
+    //                     )?;
+    //                     Ok(())
+    //                 }
+    //                 None => {
+    //                     if !rel
+    //                         .fields_with_unqualified_name(
+    //                             &col.name,
+    //                         )
+    //                         .is_empty()
+    //                     {
+    //                         Ok(())
+    //                     } else {
+    //                         Err(field_not_found(
+    //                             None,
+    //                             col.name.as_str(),
+    //                             rel,
+    //                         ))
+    //                     }
+    //                 }
+    //             }
+    //             .map_err(|_: FloppyError| {
+    //                 field_not_found(
+    //                     col.relation
+    //                         .as_ref()
+    //                         .map(|s| s.to_owned()),
+    //                     col.name.as_str(),
+    //                     rel,
+    //                 )
+    //             }),
+    //             _ => Err(FloppyError::Internal(
+    //                 "Not a column".to_string(),
+    //             )),
+    //         },
+    //     )
+    // }
 
     pub fn sql_to_rex(
         &self,
         sql: SQLExpr,
-        schema: &Schema,
+        rel: &RelationDesc,
     ) -> Result<LogicalExpr> {
-        let expr = self.sql_expr_to_logical_expr(sql)?;
-        self.validate_schema_satisfies_exprs(
-            schema,
-            &[expr.clone()],
-        )?;
+        let expr =
+            self.sql_expr_to_logical_expr(sql, rel)?;
+        // self.validate_schema_satisfies_exprs(
+        //     schema,
+        //     &[expr.clone()],
+        // )?;
         Ok(expr)
     }
 
     fn sql_expr_to_logical_expr(
         &self,
         sql: SQLExpr,
+        rel: &RelationDesc,
     ) -> Result<LogicalExpr> {
         match sql {
             SQLExpr::Value(SQLValue::Number(n, _)) => {
@@ -263,15 +260,14 @@ impl LogicalPlanner {
                 if identifier.value.starts_with('@') {
                     return Err(FloppyError::NotImplemented("Unsupported identifier starts with @".to_string()));
                 }
-                let col = Column {
-                    relation: None,
-                    name: normalize_ident(&identifier),
-                };
-                Ok(LogicalExpr::Column(col))
+                let idx =
+                    rel.column_idx(&identifier.value)?;
+                Ok(LogicalExpr::Column(ColumnRef { idx }))
             }
-            SQLExpr::BinaryOp { left, op, right } => {
-                self.parse_sql_binary_op(*left, op, *right)
-            }
+            SQLExpr::BinaryOp { left, op, right } => self
+                .parse_sql_binary_op(
+                    *left, op, *right, rel,
+                ),
             _ => Err(FloppyError::NotImplemented(format!(
                 "Unsupported expression {:?}",
                 sql
@@ -287,8 +283,8 @@ impl LogicalPlanner {
     ) -> Result<Vec<LogicalExpr>> {
         match project {
             SelectItem::UnnamedExpr(expr) => {
-                let expr = self.sql_to_rex(expr, plan.schema())?;
-                Ok(vec![normalize_col(expr, plan)?])
+                let expr = self.sql_to_rex(expr, plan.relation_desc())?;
+                Ok(vec![expr])
             }
             SelectItem::ExprWithAlias { expr: _, alias: _ } => {
                 Err(FloppyError::NotImplemented("Alias is not supported".to_string()))
@@ -297,7 +293,7 @@ impl LogicalPlanner {
                 if input_is_empty {
                     return Err(FloppyError::Plan("SELECT * with no tables specified is not valid".to_string()));
                 }
-                expand_wildcard(plan.schema(), plan)
+                expand_wildcard(plan.relation_desc(), plan)
             }
             SelectItem::QualifiedWildcard(ref _object_name) => {
                 Err(FloppyError::NotImplemented("alias.* or schema.table.* is not supported".to_string()))
@@ -310,6 +306,7 @@ impl LogicalPlanner {
         left: SQLExpr,
         op: BinaryOperator,
         right: SQLExpr,
+        rel: &RelationDesc,
     ) -> Result<LogicalExpr> {
         let operator = match op {
             BinaryOperator::Plus => Ok(Operator::Plus),
@@ -330,11 +327,11 @@ impl LogicalPlanner {
 
         Ok(LogicalExpr::BinaryExpr {
             left: Box::new(
-                self.sql_expr_to_logical_expr(left)?,
+                self.sql_expr_to_logical_expr(left, rel)?,
             ),
             op: operator,
             right: Box::new(
-                self.sql_expr_to_logical_expr(right)?,
+                self.sql_expr_to_logical_expr(right, rel)?,
             ),
         })
     }
@@ -358,15 +355,15 @@ fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
 }
 
 pub fn expand_wildcard(
-    schema: &Schema,
+    rel: &RelationDesc,
     _plan: &LogicalPlan,
 ) -> Result<Vec<LogicalExpr>> {
-    Ok(schema
-        .fields()
+    Ok(rel
+        .column_types()
         .iter()
-        .map(|f| {
-            let col = f.qualified_column();
-            LogicalExpr::Column(col)
+        .enumerate()
+        .map(|(idx, _)| {
+            LogicalExpr::Column(ColumnRef { idx })
         })
         .collect::<Vec<LogicalExpr>>())
 }
@@ -386,7 +383,7 @@ pub fn find_column_exprs(
 /// Recursively find all columns referenced by an expression
 #[derive(Debug, Default)]
 struct ColumnCollector {
-    exprs: Vec<Column>,
+    exprs: Vec<ColumnRef>,
 }
 
 impl ExpressionVisitor for ColumnCollector {
@@ -406,7 +403,7 @@ impl ExpressionVisitor for ColumnCollector {
 
 pub fn find_columns_referenced_by_expr(
     e: &LogicalExpr,
-) -> Vec<Column> {
+) -> Vec<ColumnRef> {
     let collector = e
         .accept(ColumnCollector::default())
         .expect("Unexpected error");
@@ -416,22 +413,20 @@ pub fn find_columns_referenced_by_expr(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::memory::MemoryEngine;
     use common::error::SchemaError;
     use common::scalar::ScalarType;
-    use common::schema::Field;
+    use common::schema::ColumnType;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
+    use storage::memory::MemoryEngine;
 
     fn logical_plan(sql: &str) -> Result<LogicalPlan> {
         let mut mem_engine = MemoryEngine::default();
-        let test_schema = Schema::new(vec![Field::new(
-            Some("test"),
-            "id",
-            ScalarType::Int32,
-            false,
-        )]);
-        mem_engine.insert_schema("test", &test_schema)?;
+        let test_schema = RelationDesc::new(
+            vec![ColumnType::new(ScalarType::Int32, false)],
+            vec!["id".to_string()],
+        );
+        mem_engine.insert_rel("test", &test_schema)?;
 
         let planner =
             LogicalPlanner::new(Arc::new(mem_engine));
@@ -441,9 +436,7 @@ mod tests {
             Ok(ast) => {
                 planner.statement_to_plan(ast[0].clone())
             }
-            Err(e) => {
-                Err(FloppyError::ParseError(e.to_string()))
-            }
+            Err(e) => Err(FloppyError::ParserError(e)),
         }
     }
 
