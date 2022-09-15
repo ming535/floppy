@@ -1,4 +1,5 @@
 use crate::error::{field_not_found, FloppyError, Result};
+use crate::row::Row;
 use crate::scalar::ScalarType;
 use std::fmt;
 use std::fmt::Formatter;
@@ -11,10 +12,7 @@ pub struct ColumnType {
 }
 
 impl ColumnType {
-    pub fn new(
-        scalar_type: ScalarType,
-        nullable: bool,
-    ) -> Self {
+    pub fn new(scalar_type: ScalarType, nullable: bool) -> Self {
         ColumnType {
             scalar_type,
             nullable,
@@ -255,10 +253,7 @@ pub struct RelationDesc {
 }
 
 impl RelationDesc {
-    pub fn new(
-        column_types: Vec<ColumnType>,
-        column_names: Vec<String>,
-    ) -> Self {
+    pub fn new(column_types: Vec<ColumnType>, column_names: Vec<String>) -> Self {
         Self {
             rel_type: RelationType::new(column_types),
             column_names,
@@ -276,13 +271,14 @@ impl RelationDesc {
         self.rel_type.column_types()
     }
 
-    pub fn column_type(
-        &self,
-        idx: usize,
-    ) -> Result<&ColumnType> {
+    pub fn column_type(&self, idx: usize) -> Result<&ColumnType> {
         let typs = self.rel_type.column_types();
         if idx >= typs.len() {
-            Err(FloppyError::Internal(format!("column index out of range, idx = {}, length = {}", idx, typs.len())))
+            Err(FloppyError::Internal(format!(
+                "column index out of range, idx = {}, length = {}",
+                idx,
+                typs.len()
+            )))
         } else {
             Ok(&typs[idx])
         }
@@ -292,10 +288,7 @@ impl RelationDesc {
         &self.column_names
     }
 
-    pub fn column_idx(
-        &self,
-        column_name: &str,
-    ) -> Result<usize> {
+    pub fn column_idx(&self, column_name: &str) -> Result<usize> {
         let mut matches = self
             .column_names
             .iter()
@@ -303,22 +296,33 @@ impl RelationDesc {
             .filter(|(i, name)| column_name == *name)
             .map(|(idx, _)| idx);
         match matches.next() {
-            None => Err(field_not_found(
-                None,
-                column_name,
-                self,
-            )),
+            None => Err(field_not_found(None, column_name, self)),
             Some(idx) => match matches.next() {
                 None => Ok(idx),
-                Some(_) => {
-                    Err(FloppyError::Internal(format!(
-                        "duplicated column name: {}",
-                        column_name
-                    )))
-                }
+                Some(_) => Err(FloppyError::Internal(format!(
+                    "duplicated column name: {}",
+                    column_name
+                ))),
             },
         }
     }
 }
 
 pub type RelationDescRef = Arc<RelationDesc>;
+
+/// Describe the output of a SQL statement.
+#[derive(Debug, Clone)]
+pub struct StatementDesc {
+    /// The shape of the rows produced by the statement, if the statement
+    /// produces rows.
+    pub rel_desc: Option<RelationDesc>,
+    /// The determined types of the parameters in the statement, if any.
+    pub param_types: Vec<ScalarType>,
+}
+
+/// A vector of values to which parameter references should be bound.
+#[derive(Debug, Clone)]
+pub struct Params {
+    pub datums: Row,
+    pub types: Vec<ScalarType>,
+}

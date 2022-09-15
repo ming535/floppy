@@ -593,6 +593,7 @@ name = "session"
 version = "0.1.0"
 dependencies = [
  "common",
+ "pgrepr",
  "sqlparser",
  "txn_mgr",
 ]
