@@ -1,6 +1,5 @@
 use common::error::Result;
-use common::row::{Row, RowId};
-use common::schema::RelationDesc;
+use common::relation::{RelationDesc, Row};
 
 pub mod memory;
 
@@ -18,40 +17,22 @@ pub mod memory;
 pub trait CatalogStore {
     /// Insert a schema into catalog. `table_name` is a qualified name
     /// like "database_name.table_name".
-    fn insert_rel(
-        &self,
-        table_name: &str,
-        rel: &RelationDesc,
-    ) -> Result<()>;
+    fn insert_rel(&self, table_name: &str, rel: &RelationDesc) -> Result<()>;
 
     /// Fetch schema for this table.
-    fn fetch_rel(
-        &self,
-        table_name: &str,
-    ) -> Result<RelationDesc>;
+    fn fetch_rel(&self, table_name: &str) -> Result<RelationDesc>;
 }
 
 pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
 
 pub trait HeapStore {
     /// Returns a `TupleIter` to scan a table's heap
-    fn scan_heap(
-        &self,
-        table_name: &str,
-    ) -> Result<RowIter>;
+    fn scan_heap(&self, table_name: &str) -> Result<RowIter>;
     /// Fetch a tuple from heap using tuple_id
-    fn fetch_tuple(
-        &self,
-        table_name: &str,
-        tuple_id: &RowId,
-    ) -> Result<Row>;
+    fn fetch_tuple(&self, table_name: &str) -> Result<Row>;
 
     /// Insert a tuple into heap
-    fn insert_to_heap(
-        &self,
-        table_name: &str,
-        tuple: &Row,
-    ) -> Result<()>;
+    fn insert_to_heap(&self, table_name: &str, tuple: &Row) -> Result<()>;
 }
 
 pub trait Store: CatalogStore + HeapStore {}

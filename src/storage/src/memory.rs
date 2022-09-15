@@ -1,7 +1,6 @@
 use crate::{CatalogStore, HeapStore, IndexStore, RowIter};
 use common::error::{table_not_found, FloppyError, Result};
-use common::row::{Row, RowId};
-use common::schema::RelationDesc;
+use common::relation::{RelationDesc, Row};
 use std::cell::RefCell;
 
 use std::collections::HashMap;
@@ -19,11 +18,7 @@ pub struct MemoryEngine {
 }
 
 impl CatalogStore for MemoryEngine {
-    fn insert_rel(
-        &self,
-        table_name: &str,
-        rel: &RelationDesc,
-    ) -> Result<()> {
+    fn insert_rel(&self, table_name: &str, rel: &RelationDesc) -> Result<()> {
         self.schemas
             .borrow_mut()
             .insert(table_name.to_string(), rel.clone());
@@ -33,10 +28,7 @@ impl CatalogStore for MemoryEngine {
         Ok(())
     }
 
-    fn fetch_rel(
-        &self,
-        table_name: &str,
-    ) -> Result<RelationDesc> {
+    fn fetch_rel(&self, table_name: &str) -> Result<RelationDesc> {
         let schemas = self.schemas.borrow();
         let schema = schemas.get(table_name);
         match schema {
@@ -47,13 +39,8 @@ impl CatalogStore for MemoryEngine {
 }
 
 impl HeapStore for MemoryEngine {
-    fn scan_heap(
-        &self,
-        table_name: &str,
-    ) -> Result<RowIter> {
-        if let Some(rows) =
-            self.heaps.borrow().get(table_name)
-        {
+    fn scan_heap(&self, table_name: &str) -> Result<RowIter> {
+        if let Some(rows) = self.heaps.borrow().get(table_name) {
             Ok(Box::new(MemIter::new(rows.clone())))
         } else {
             Err(FloppyError::Internal(format!(
@@ -63,19 +50,11 @@ impl HeapStore for MemoryEngine {
         }
     }
 
-    fn fetch_tuple(
-        &self,
-        _table_name: &str,
-        _tuple_id: &RowId,
-    ) -> Result<Row> {
+    fn fetch_tuple(&self, _table_name: &str) -> Result<Row> {
         todo!()
     }
 
-    fn insert_to_heap(
-        &self,
-        table_name: &str,
-        row: &Row,
-    ) -> Result<()> {
+    fn insert_to_heap(&self, table_name: &str, row: &Row) -> Result<()> {
         self.validate_schema_exists(table_name)?;
         self.heaps
             .borrow_mut()
@@ -86,10 +65,7 @@ impl HeapStore for MemoryEngine {
 }
 
 impl MemoryEngine {
-    fn validate_schema_exists(
-        &self,
-        table_name: &str,
-    ) -> Result<()> {
+    fn validate_schema_exists(&self, table_name: &str) -> Result<()> {
         if self.schemas.borrow().get(table_name).is_none()
             || self.heaps.borrow().get(table_name).is_none()
         {

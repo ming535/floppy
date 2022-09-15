@@ -1,7 +1,7 @@
 use common::error::Result;
-use common::row::Row;
+use common::relation::Row;
+use common::relation::{ColumnType, RelationDesc};
 use common::scalar::{Datum, ScalarType};
-use common::schema::{ColumnType, RelationDesc};
 use std::sync::Arc;
 use storage::{memory::MemoryEngine, CatalogStore};
 use tokio::net::TcpListener;
@@ -25,19 +25,13 @@ async fn main() -> Result<()> {
     );
 
     let data: Vec<Row> = (0..100)
-        .map(|n| {
-            Row::new(vec![
-                Datum::Int32(Some(n)),
-                Datum::Int32(Some(n * 2)),
-            ])
-        })
+        .map(|n| Row::new(vec![Datum::Int32(Some(n)), Datum::Int32(Some(n * 2))]))
         .collect();
     mem_engine.insert_rel(table_name, &rel);
     mem_engine.seed(table_name, data.iter());
 
     let shutdown = signal::ctrl_c();
-    let listener =
-        TcpListener::bind("127.0.0.1:6432").await?;
+    let listener = TcpListener::bind("127.0.0.1:6432").await?;
     pgwire::server::run(listener, shutdown).await;
     Ok(())
 }

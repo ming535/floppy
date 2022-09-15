@@ -4,11 +4,9 @@ use crate::heap_scan::HeapScanExec;
 use crate::plan::PhysicalPlan;
 use crate::projection::ProjectionExec;
 use common::error::Result;
-use common::schema::RelationDesc;
+use common::relation::RelationDesc;
 use logical_expr::expr::LogicalExpr;
-use logical_plan::plan::{
-    Filter, LogicalPlan, Projection, TableScan,
-};
+use logical_plan::plan::{Filter, LogicalPlan, Projection, TableScan};
 use physical_expr::binary_expr::binary;
 use physical_expr::column::Column;
 use physical_expr::expr::PhysicalExpr;
@@ -32,17 +30,11 @@ impl PhysicalPlanner {
         rel: &RelationDesc,
     ) -> Result<Arc<PhysicalExpr>> {
         match expr {
-            LogicalExpr::Column(c) => Ok(Arc::new(
-                PhysicalExpr::Column(c.clone()),
-            )),
-            LogicalExpr::Literal(v) => Ok(Arc::new(
-                PhysicalExpr::Literal(v.clone()),
-            )),
+            LogicalExpr::Column(c) => Ok(Arc::new(PhysicalExpr::Column(c.clone()))),
+            LogicalExpr::Literal(v) => Ok(Arc::new(PhysicalExpr::Literal(v.clone()))),
             LogicalExpr::BinaryExpr { left, op, right } => {
-                let lhs =
-                    self.create_physical_expr(left, rel)?;
-                let rhs =
-                    self.create_physical_expr(right, rel)?;
+                let lhs = self.create_physical_expr(left, rel)?;
+                let rhs = self.create_physical_expr(right, rel)?;
                 binary(lhs, *op, rhs, rel)
             }
         }
@@ -53,9 +45,9 @@ impl PhysicalPlanner {
         logical_plan: &LogicalPlan,
     ) -> Result<PhysicalPlan> {
         match logical_plan {
-            LogicalPlan::EmptyRelation(_empty) => Ok(
-                PhysicalPlan::EmptyExec(EmptyExec::new()),
-            ),
+            LogicalPlan::EmptyRelation(_empty) => {
+                Ok(PhysicalPlan::EmptyExec(EmptyExec::new()))
+            }
             LogicalPlan::TableScan(TableScan {
                 table_name,
                 projected_schema,
@@ -63,21 +55,14 @@ impl PhysicalPlanner {
             }) => {
                 let physical_filters = filters
                     .iter()
-                    .map(|e| {
-                        self.create_physical_expr(
-                            e,
-                            projected_schema,
-                        )
-                    })
+                    .map(|e| self.create_physical_expr(e, projected_schema))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(PhysicalPlan::HeapScanExec(
-                    HeapScanExec::try_new(
-                        self.heap_store.clone(),
-                        table_name.clone(),
-                        projected_schema.clone(),
-                        physical_filters,
-                    )?,
-                ))
+                Ok(PhysicalPlan::HeapScanExec(HeapScanExec::try_new(
+                    self.heap_store.clone(),
+                    table_name.clone(),
+                    projected_schema.clone(),
+                    physical_filters,
+                )?))
             }
             LogicalPlan::Projection(Projection {
                 expr,
@@ -86,30 +71,18 @@ impl PhysicalPlanner {
             }) => {
                 let exprs = expr
                     .iter()
-                    .map(|e| {
-                        self.create_physical_expr(e, schema)
-                    })
+                    .map(|e| self.create_physical_expr(e, schema))
                     .collect::<Result<Vec<_>>>()?;
-                let input =
-                    self.create_physical_plan(input)?;
-                Ok(PhysicalPlan::ProjectionExec(
-                    ProjectionExec {
-                        expr: exprs,
-                        input: Box::new(input),
-                        rel: schema.clone(),
-                    },
-                ))
+                let input = self.create_physical_plan(input)?;
+                Ok(PhysicalPlan::ProjectionExec(ProjectionExec {
+                    expr: exprs,
+                    input: Box::new(input),
+                    rel: schema.clone(),
+                }))
             }
-            LogicalPlan::Filter(Filter {
-                predicate,
-                input,
-            }) => {
-                let expr = self.create_physical_expr(
-                    predicate,
-                    input.relation_desc(),
-                )?;
-                let input =
-                    self.create_physical_plan(input)?;
+            LogicalPlan::Filter(Filter { predicate, input }) => {
+                let expr = self.create_physical_expr(predicate, input.relation_desc())?;
+                let input = self.create_physical_plan(input)?;
                 Ok(PhysicalPlan::FilterExec(FilterExec {
                     predicate: expr,
                     input: Box::new(input),
@@ -123,10 +96,10 @@ impl PhysicalPlanner {
 mod tests {
     use super::*;
     use common::operator::Operator;
-    use common::row::ColumnRef;
-    use common::row::Row;
+    use common::relation::ColumnRef;
+    use common::relation::ColumnType;
+    use common::relation::Row;
     use common::scalar::{Datum, ScalarType};
-    use common::schema::ColumnType;
     use logical_expr::literal::lit;
     use logical_plan::builder::LogicalPlanBuilder;
     use storage::memory::MemoryEngine;
@@ -145,26 +118,22 @@ mod tests {
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {
         let builder = LogicalPlanBuilder::empty_relation();
-        let builder =
-            builder.project(vec![lit(1), lit(2)])?;
+        let builder = builder.project(vec![lit(1), lit(2)])?;
         let logical_plan = builder.build()?;
 
         let mem_engine = MemoryEngine::default();
-        let planner =
-            PhysicalPlanner::new(Arc::new(mem_engine));
-        let mut physical_plan =
-            planner.create_physical_plan(&logical_plan)?;
-        assert_eq!(format!("{}", physical_plan), 
-                   "ProjectionExec: Literal(Int64(1)), Literal(Int64(2))\
-                  \n  EmptyExec");
+        let planner = PhysicalPlanner::new(Arc::new(mem_engine));
+        let mut physical_plan = planner.create_physical_plan(&logical_plan)?;
+        assert_eq!(
+            format!("{}", physical_plan),
+            "ProjectionExec: Literal(Int64(1)), Literal(Int64(2))\
+                  \n  EmptyExec"
+        );
         let row = physical_plan.next()?;
         assert_eq!(row.is_some(), true);
         assert_eq!(
             row.unwrap(),
-            Row::new(vec![
-                Datum::Int64(Some(1)),
-                Datum::Int64(Some(2))
-            ])
+            Row::new(vec![Datum::Int64(Some(1)), Datum::Int64(Some(2))])
         );
 
         let row = physical_plan.next()?;
@@ -179,48 +148,28 @@ mod tests {
             vec![ColumnType::new(ScalarType::Int32, false)],
             vec!["id".to_string()],
         );
-        let data =
-            vec![Row::new(vec![Datum::Int32(Some(1))])];
+        let data = vec![Row::new(vec![Datum::Int32(Some(1))])];
 
         let mut mem_engine = MemoryEngine::default();
-        seed_mem_engine(
-            &mut mem_engine,
+        seed_mem_engine(&mut mem_engine, test_table_name, &test_schema, &data);
+
+        let logical_plan_builder = LogicalPlanBuilder::scan(
             test_table_name,
-            &test_schema,
-            &data,
-        );
+            Arc::new(mem_engine.fetch_rel(test_table_name).unwrap()),
+            vec![],
+        )?;
 
-        let logical_plan_builder =
-            LogicalPlanBuilder::scan(
-                test_table_name,
-                Arc::new(
-                    mem_engine
-                        .fetch_rel(test_table_name)
-                        .unwrap(),
-                ),
-                vec![],
-            )?;
+        let planner = PhysicalPlanner::new(Arc::new(mem_engine));
+        let mut physical_plan =
+            planner.create_physical_plan(&logical_plan_builder.build()?)?;
 
-        let planner =
-            PhysicalPlanner::new(Arc::new(mem_engine));
-        let mut physical_plan = planner
-            .create_physical_plan(
-                &logical_plan_builder.build()?,
-            )?;
-
-        assert_eq!(
-            format!("{}", physical_plan),
-            "HeapScanExec: test"
-        );
+        assert_eq!(format!("{}", physical_plan), "HeapScanExec: test");
 
         let r = physical_plan.next()?;
         assert_eq!(r.is_some(), true);
 
         let r = r.unwrap();
-        assert_eq!(
-            r,
-            Row::new(vec![Datum::Int32(Some(1))])
-        );
+        assert_eq!(r, Row::new(vec![Datum::Int32(Some(1))]));
         Ok(())
     }
 
@@ -231,51 +180,34 @@ mod tests {
             vec![ColumnType::new(ScalarType::Int32, false)],
             vec!["id".to_string()],
         );
-        let data =
-            vec![Row::new(vec![Datum::Int32(Some(1))])];
+        let data = vec![Row::new(vec![Datum::Int32(Some(1))])];
 
         let data: Vec<Row> = (0..100)
             .map(|n| Row::new(vec![Datum::Int32(Some(n))]))
             .collect();
 
         let mut mem_engine = MemoryEngine::default();
-        seed_mem_engine(
-            &mut mem_engine,
-            test_table_name,
-            &test_schema,
-            &data,
-        );
+        seed_mem_engine(&mut mem_engine, test_table_name, &test_schema, &data);
 
         let builder = LogicalPlanBuilder::scan(
             test_table_name,
-            Arc::new(
-                mem_engine
-                    .fetch_rel(test_table_name)
-                    .unwrap(),
-            ),
+            Arc::new(mem_engine.fetch_rel(test_table_name).unwrap()),
             vec![],
         )?
         .filter(LogicalExpr::BinaryExpr {
-            left: Box::new(LogicalExpr::Column(
-                ColumnRef {
-                    idx: 0,
-                    name: "id".to_string(),
-                },
-            )),
+            left: Box::new(LogicalExpr::Column(ColumnRef {
+                idx: 0,
+                name: "id".to_string(),
+            })),
             op: Operator::Eq,
             right: Box::new(lit(50)),
         })?;
 
-        let planner =
-            PhysicalPlanner::new(Arc::new(mem_engine));
-        let mut physical_plan = planner
-            .create_physical_plan(&builder.build()?)?;
+        let planner = PhysicalPlanner::new(Arc::new(mem_engine));
+        let mut physical_plan = planner.create_physical_plan(&builder.build()?)?;
 
         let r = physical_plan.next()?;
-        assert_eq!(
-            r,
-            Some(Row::new(vec![Datum::Int32(Some(50))]))
-        );
+        assert_eq!(r, Some(Row::new(vec![Datum::Int32(Some(50))])));
 
         let r = physical_plan.next()?;
         assert_eq!(r, None);

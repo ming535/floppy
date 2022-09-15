@@ -1,7 +1,7 @@
 use crate::plan::PhysicalPlan;
 use common::error::FloppyError;
 use common::error::Result;
-use common::row::Row;
+use common::relation::Row;
 use common::scalar::Datum;
 use physical_expr::expr::PhysicalExpr;
 use std::sync::Arc;
@@ -19,7 +19,12 @@ impl FilterExec {
                 match v {
                     Datum::Boolean(Some(true)) => break Ok(Some(r)),
                     Datum::Boolean(Some(false)) => continue,
-                    other => break Err(FloppyError::Internal(format!("predicate evaluate error: {:?}", other))),
+                    other => {
+                        break Err(FloppyError::Internal(format!(
+                            "predicate evaluate error: {:?}",
+                            other
+                        )))
+                    }
                 }
             } else {
                 break Ok(None);

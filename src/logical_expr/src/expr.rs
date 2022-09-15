@@ -1,7 +1,7 @@
 use common::operator::Operator;
 use common::scalar::Datum;
 // use common::schema::Column;
-use common::row::ColumnRef;
+use common::relation::ColumnRef;
 use std::fmt;
 use std::fmt::Formatter;
 

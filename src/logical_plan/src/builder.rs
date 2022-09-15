@@ -1,10 +1,7 @@
-use crate::plan::{
-    EmptyRelation, Filter, LogicalPlan, Projection,
-    TableScan,
-};
+use crate::plan::{EmptyRelation, Filter, LogicalPlan, Projection, TableScan};
 use common::error::FloppyError;
 use common::error::Result;
-use common::schema::{RelationDesc, RelationDescRef};
+use common::relation::{RelationDesc, RelationDescRef};
 use logical_expr::expr::LogicalExpr;
 use std::sync::Arc;
 
@@ -24,11 +21,9 @@ impl LogicalPlanBuilder {
 
     /// Create an empty relation
     pub fn empty_relation() -> Self {
-        Self::from(LogicalPlan::EmptyRelation(
-            EmptyRelation {
-                rel: Arc::new(RelationDesc::empty()),
-            },
-        ))
+        Self::from(LogicalPlan::EmptyRelation(EmptyRelation {
+            rel: Arc::new(RelationDesc::empty()),
+        }))
     }
 
     /// Scan from a relation
@@ -46,32 +41,26 @@ impl LogicalPlanBuilder {
     }
 
     pub fn plan(&self) -> Result<&LogicalPlan> {
-        let plan = self.plan.as_ref().ok_or(
-            FloppyError::Internal(
-                "plan is none".to_string(),
-            ),
-        )?;
+        let plan = self
+            .plan
+            .as_ref()
+            .ok_or(FloppyError::Internal("plan is none".to_string()))?;
         Ok(plan)
     }
 
     pub fn build(&self) -> Result<LogicalPlan> {
-        let plan = self.plan.as_ref().ok_or(
-            FloppyError::Internal(
-                "plan is none".to_string(),
-            ),
-        )?;
+        let plan = self
+            .plan
+            .as_ref()
+            .ok_or(FloppyError::Internal("plan is none".to_string()))?;
         Ok(plan.clone())
     }
 
-    pub fn project(
-        &self,
-        expr: Vec<LogicalExpr>,
-    ) -> Result<Self> {
-        let input = self.plan.as_ref().ok_or(
-            FloppyError::Internal(
-                "plan is none".to_string(),
-            ),
-        )?;
+    pub fn project(&self, expr: Vec<LogicalExpr>) -> Result<Self> {
+        let input = self
+            .plan
+            .as_ref()
+            .ok_or(FloppyError::Internal("plan is none".to_string()))?;
 
         let plan = LogicalPlan::Projection(Projection {
             expr,
@@ -82,15 +71,11 @@ impl LogicalPlanBuilder {
         Ok(Self { plan: Some(plan) })
     }
 
-    pub fn filter(
-        &self,
-        expr: LogicalExpr,
-    ) -> Result<Self> {
-        let input = self.plan.as_ref().ok_or(
-            FloppyError::Internal(
-                "plan is none".to_string(),
-            ),
-        )?;
+    pub fn filter(&self, expr: LogicalExpr) -> Result<Self> {
+        let input = self
+            .plan
+            .as_ref()
+            .ok_or(FloppyError::Internal("plan is none".to_string()))?;
 
         let plan = LogicalPlan::Filter(Filter {
             predicate: expr,

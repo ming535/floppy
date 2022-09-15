@@ -2,7 +2,7 @@ use crate::expr::LogicalExpr;
 use common::error::FloppyError;
 use common::error::Result;
 
-use common::schema::RelationDesc;
+use common::relation::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;

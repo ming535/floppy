@@ -1,6 +1,5 @@
 use crate::error::{field_not_found, FloppyError, Result};
-use crate::row::Row;
-use crate::scalar::ScalarType;
+use crate::scalar::{Datum, ScalarType};
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -325,4 +324,41 @@ pub struct StatementDesc {
 pub struct Params {
     pub datums: Row,
     pub types: Vec<ScalarType>,
+}
+
+/// A `Row` represents a tuple in memory.
+/// It has contains schema and data.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Row {
+    values: Vec<Datum>,
+}
+
+impl Row {
+    pub fn new(values: Vec<Datum>) -> Self {
+        Self { values }
+    }
+
+    pub fn value(&self, index: usize) -> Result<Datum> {
+        if index > self.values.len() {
+            return Err(FloppyError::Internal(format!(
+                "column index out of range, column index = {:}, column len = {:}",
+                index,
+                self.values.len()
+            )));
+        }
+        Ok(self.values[index].clone())
+    }
+}
+
+/// A column reference in a [`Row`], used by expressions.
+#[derive(Debug, Clone)]
+pub struct ColumnRef {
+    pub idx: usize,
+    pub name: String,
+}
+
+impl fmt::Display for ColumnRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "#{}", self.name)
+    }
 }

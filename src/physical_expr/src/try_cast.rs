@@ -1,8 +1,8 @@
 use crate::expr::PhysicalExpr;
 use common::error::{FloppyError, Result};
-use common::row::Row;
+use common::relation::RelationDesc;
+use common::relation::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -18,10 +18,7 @@ pub struct TryCastExpr {
 }
 
 impl TryCastExpr {
-    pub fn new(
-        expr: Arc<PhysicalExpr>,
-        cast_type: ScalarType,
-    ) -> Self {
+    pub fn new(expr: Arc<PhysicalExpr>, cast_type: ScalarType) -> Self {
         Self { expr, cast_type }
     }
 
@@ -45,11 +42,7 @@ impl TryCastExpr {
 
 impl fmt::Display for TryCastExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "CAST({} AS {:?})",
-            self.expr, self.cast_type
-        )
+        write!(f, "CAST({} AS {:?})", self.expr, self.cast_type)
     }
 }
 
@@ -62,8 +55,9 @@ pub fn try_cast(
     if expr_type == cast_type {
         Ok(expr)
     } else {
-        Ok(Arc::new(PhysicalExpr::TryCastExpr(
-            TryCastExpr { expr, cast_type },
-        )))
+        Ok(Arc::new(PhysicalExpr::TryCastExpr(TryCastExpr {
+            expr,
+            cast_type,
+        })))
     }
 }

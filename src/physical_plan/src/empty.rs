@@ -1,5 +1,5 @@
 use common::error::Result;
-use common::row::Row;
+use common::relation::Row;
 
 use common::scalar::Datum;
 

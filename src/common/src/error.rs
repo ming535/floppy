@@ -1,4 +1,4 @@
-use crate::schema::RelationDesc;
+use crate::relation::RelationDesc;
 use sqlparser::parser::ParserError;
 use std::fmt::Formatter;
 use std::{fmt, result};
@@ -7,8 +7,7 @@ use std::{fmt, result};
 pub type Result<T> = result::Result<T, FloppyError>;
 
 /// Error type for generic operations that could result in FloppyError::External
-pub type GenericError =
-    Box<dyn std::error::Error + Send + Sync>;
+pub type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
 pub enum FloppyError {
@@ -53,9 +52,10 @@ pub fn field_not_found(
 
 /// Create a "table not found" Floppy::SchemaError
 pub fn table_not_found(table_name: &str) -> FloppyError {
-    FloppyError::SchemaError(SchemaError::TableNotFound(
-        format!("table not found: {}", table_name),
-    ))
+    FloppyError::SchemaError(SchemaError::TableNotFound(format!(
+        "table not found: {}",
+        table_name
+    )))
 }
 
 impl fmt::Display for SchemaError {
@@ -81,10 +81,7 @@ impl fmt::Display for SchemaError {
                         ". Valid fields are {}",
                         field_names
                             .iter()
-                            .map(|name| format!(
-                                "'{}'",
-                                name
-                            ))
+                            .map(|name| format!("'{}'", name))
                             .collect::<Vec<String>>()
                             .join(", ")
                     )?;
@@ -117,14 +114,14 @@ impl fmt::Display for FloppyError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             FloppyError::NotImplemented(desc) => {
-                write!(
-                    f,
-                    "This feature is not implemented: {}",
-                    desc
-                )
+                write!(f, "This feature is not implemented: {}", desc)
             }
             FloppyError::Internal(desc) => {
-                write!(f, "Internal error: {}. This was likely caused by a bug", desc)
+                write!(
+                    f,
+                    "Internal error: {}. This was likely caused by a bug",
+                    desc
+                )
             }
             FloppyError::Plan(desc) => {
                 write!(f, "Planner error: {}", desc)

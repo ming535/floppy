@@ -1,5 +1,5 @@
 use crate::display::IndentVisitor;
-use common::schema::RelationDescRef;
+use common::relation::RelationDescRef;
 use logical_expr::expr::LogicalExpr;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -22,20 +22,13 @@ impl LogicalPlan {
     /// Get a reference to the logical plan's schema
     pub fn relation_desc(&self) -> &RelationDescRef {
         match self {
-            Self::Projection(Projection {
-                schema, ..
-            }) => schema,
+            Self::Projection(Projection { schema, .. }) => schema,
             Self::TableScan(TableScan {
                 projected_schema: schema,
                 ..
             }) => schema,
-            Self::Filter(Filter { input, .. }) => {
-                input.relation_desc()
-            }
-            Self::EmptyRelation(EmptyRelation {
-                rel: schema,
-                ..
-            }) => schema,
+            Self::Filter(Filter { input, .. }) => input.relation_desc(),
+            Self::EmptyRelation(EmptyRelation { rel: schema, .. }) => schema,
         }
     }
 
@@ -43,25 +36,15 @@ impl LogicalPlan {
     pub fn all_schemas(&self) -> Vec<&RelationDescRef> {
         match self {
             Self::TableScan(TableScan {
-                projected_schema,
-                ..
+                projected_schema, ..
             }) => vec![projected_schema],
-            Self::Projection(Projection {
-                input,
-                schema,
-                ..
-            }) => {
+            Self::Projection(Projection { input, schema, .. }) => {
                 let mut schemas = input.all_schemas();
                 schemas.insert(0, schema);
                 schemas
             }
-            Self::Filter(Filter { input, .. }) => {
-                input.all_schemas()
-            }
-            Self::EmptyRelation(EmptyRelation {
-                rel: schema,
-                ..
-            }) => vec![schema],
+            Self::Filter(Filter { input, .. }) => input.all_schemas(),
+            Self::EmptyRelation(EmptyRelation { rel: schema, .. }) => vec![schema],
         }
     }
 }
@@ -79,28 +62,19 @@ pub trait PlanVisitor {
     /// visited. If Ok(true) is returned, the recursion continues. If
     /// Err(..) or Ok(false) are returned, the recursion stops
     /// immediately and the error, if any, is returned to `accept`
-    fn pre_visit(
-        &mut self,
-        plan: &LogicalPlan,
-    ) -> Result<bool, Self::Error>;
+    fn pre_visit(&mut self, plan: &LogicalPlan) -> Result<bool, Self::Error>;
 
     /// Invoked on a logical plan after all of its child inputs have
     /// been visited. The return value is handled the same as the
     /// return value of `pre_visit`. The provided default implementation
     /// returns `Ok(true)`.
-    fn post_visit(
-        &mut self,
-        _plan: &LogicalPlan,
-    ) -> Result<bool, Self::Error> {
+    fn post_visit(&mut self, _plan: &LogicalPlan) -> Result<bool, Self::Error> {
         Ok(true)
     }
 }
 
 impl LogicalPlan {
-    pub fn accept<V>(
-        &self,
-        visitor: &mut V,
-    ) -> Result<bool, V::Error>
+    pub fn accept<V>(&self, visitor: &mut V) -> Result<bool, V::Error>
     where
         V: PlanVisitor,
     {
@@ -109,16 +83,10 @@ impl LogicalPlan {
         }
 
         let recurse = match self {
-            LogicalPlan::Projection(Projection {
-                input,
-                ..
-            }) => input.accept(visitor)?,
-            LogicalPlan::Filter(Filter {
-                input, ..
-            }) => input.accept(visitor)?,
+            LogicalPlan::Projection(Projection { input, .. }) => input.accept(visitor)?,
+            LogicalPlan::Filter(Filter { input, .. }) => input.accept(visitor)?,
             // plans without inputs
-            LogicalPlan::TableScan { .. }
-            | LogicalPlan::EmptyRelation(_) => true,
+            LogicalPlan::TableScan { .. } | LogicalPlan::EmptyRelation(_) => true,
         };
 
         if !recurse {
@@ -145,10 +113,7 @@ impl LogicalPlan {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
         struct Wrapper<'a>(&'a LogicalPlan);
         impl<'a> fmt::Display for Wrapper<'a> {
-            fn fmt(
-                &self,
-                f: &mut Formatter<'_>,
-            ) -> fmt::Result {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 let mut visitor = IndentVisitor::new(f);
                 self.0.accept(&mut visitor).unwrap();
                 Ok(())
@@ -169,29 +134,15 @@ impl LogicalPlan {
         // that that can be formatted
         struct Wrapper<'a>(&'a LogicalPlan);
         impl<'a> fmt::Display for Wrapper<'a> {
-            fn fmt(
-                &self,
-                f: &mut Formatter<'_>,
-            ) -> fmt::Result {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 match self.0 {
-                    LogicalPlan::TableScan(TableScan {
-                        ref table_name,
-                        ..
-                    }) => {
-                        write!(
-                            f,
-                            "TableScan: {}",
-                            table_name
-                        )?;
+                    LogicalPlan::TableScan(TableScan { ref table_name, .. }) => {
+                        write!(f, "TableScan: {}", table_name)?;
                         Ok(())
                     }
-                    LogicalPlan::Projection(
-                        Projection { ref expr, .. },
-                    ) => {
+                    LogicalPlan::Projection(Projection { ref expr, .. }) => {
                         write!(f, "Projection: ")?;
-                        for (i, expr_item) in
-                            expr.iter().enumerate()
-                        {
+                        for (i, expr_item) in expr.iter().enumerate() {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
@@ -199,15 +150,10 @@ impl LogicalPlan {
                         }
                         Ok(())
                     }
-                    LogicalPlan::Filter(Filter {
-                        ref predicate,
-                        ..
-                    }) => {
+                    LogicalPlan::Filter(Filter { ref predicate, .. }) => {
                         write!(f, "Filter: {:?}", predicate)
                     }
-                    LogicalPlan::EmptyRelation(
-                        _EmptyRelation_,
-                    ) => {
+                    LogicalPlan::EmptyRelation(_EmptyRelation_) => {
                         write!(f, "EmptyRelation")
                     }
                 }

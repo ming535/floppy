@@ -1,6 +1,6 @@
 use common::error::Result;
+use common::relation::{Params, StatementDesc};
 use common::scalar::ScalarType;
-use common::schema::{Params, StatementDesc};
 use pgrepr;
 use sqlparser::ast::Statement;
 use std::collections::HashMap;

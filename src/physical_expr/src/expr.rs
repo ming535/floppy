@@ -3,10 +3,10 @@ use common::error::{FloppyError, Result};
 use crate::binary_expr::BinaryExpr;
 use crate::column::Column;
 use crate::try_cast::TryCastExpr;
-use common::row::ColumnRef;
-use common::row::Row;
+use common::relation::ColumnRef;
+use common::relation::RelationDesc;
+use common::relation::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -21,15 +21,9 @@ pub enum PhysicalExpr {
 }
 
 impl PhysicalExpr {
-    pub fn data_type(
-        &self,
-        input_rel: &RelationDesc,
-    ) -> Result<ScalarType> {
+    pub fn data_type(&self, input_rel: &RelationDesc) -> Result<ScalarType> {
         match self {
-            Self::Column(c) => Ok(input_rel
-                .column_type(c.idx)?
-                .scalar_type()
-                .clone()),
+            Self::Column(c) => Ok(input_rel.column_type(c.idx)?.scalar_type().clone()),
             Self::Literal(v) => Ok(v.data_type()),
             Self::BinaryExpr(b) => b.data_type(input_rel),
             Self::TryCastExpr(t) => t.data_type(),

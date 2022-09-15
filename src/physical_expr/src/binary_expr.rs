@@ -2,9 +2,9 @@ use crate::expr::PhysicalExpr;
 use crate::try_cast::try_cast;
 use common::error::{FloppyError, Result};
 use common::operator::Operator;
-use common::row::Row;
+use common::relation::RelationDesc;
+use common::relation::Row;
 use common::scalar::{Datum, ScalarType};
-use common::schema::RelationDesc;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -17,18 +17,11 @@ pub struct BinaryExpr {
 }
 
 impl BinaryExpr {
-    pub fn new(
-        left: Arc<PhysicalExpr>,
-        op: Operator,
-        right: Arc<PhysicalExpr>,
-    ) -> Self {
+    pub fn new(left: Arc<PhysicalExpr>, op: Operator, right: Arc<PhysicalExpr>) -> Self {
         Self { left, op, right }
     }
 
-    pub fn data_type(
-        &self,
-        input_schema: &RelationDesc,
-    ) -> Result<ScalarType> {
+    pub fn data_type(&self, input_schema: &RelationDesc) -> Result<ScalarType> {
         binary_operator_data_type(
             &self.left.data_type(input_schema)?,
             &self.op,
@@ -51,43 +44,23 @@ impl BinaryExpr {
         }
 
         match self.op {
-            Operator::Eq => Ok(Datum::Boolean(Some(
-                left_value == right_value,
-            ))),
-            Operator::NotEq => Ok(Datum::Boolean(Some(
-                left_value != right_value,
-            ))),
-            Operator::Lt => Ok(Datum::Boolean(Some(
-                left_value < right_value,
-            ))),
-            Operator::LtEq => Ok(Datum::Boolean(Some(
-                left_value <= right_value,
-            ))),
-            Operator::Gt => Ok(Datum::Boolean(Some(
-                left_value > right_value,
-            ))),
-            Operator::GtEq => Ok(Datum::Boolean(Some(
-                left_value >= right_value,
-            ))),
+            Operator::Eq => Ok(Datum::Boolean(Some(left_value == right_value))),
+            Operator::NotEq => Ok(Datum::Boolean(Some(left_value != right_value))),
+            Operator::Lt => Ok(Datum::Boolean(Some(left_value < right_value))),
+            Operator::LtEq => Ok(Datum::Boolean(Some(left_value <= right_value))),
+            Operator::Gt => Ok(Datum::Boolean(Some(left_value > right_value))),
+            Operator::GtEq => Ok(Datum::Boolean(Some(left_value >= right_value))),
             Operator::Plus => left_value + right_value,
             Operator::Minus => left_value - right_value,
-            Operator::And => {
-                left_value.logical_and(&right_value)
-            }
-            Operator::Or => {
-                left_value.logical_or(&right_value)
-            }
+            Operator::And => left_value.logical_and(&right_value),
+            Operator::Or => left_value.logical_or(&right_value),
         }
     }
 }
 
 impl fmt::Display for BinaryExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} {} {}",
-            self.left, self.op, self.right
-        )
+        write!(f, "{} {} {}", self.left, self.op, self.right)
     }
 }
 
@@ -147,28 +120,16 @@ fn coerce_types(
     rhs_type: &ScalarType,
 ) -> Result<ScalarType> {
     let result = match op {
-        Operator::And | Operator::Or => {
-            match (lhs_type, rhs_type) {
-                (
-                    ScalarType::Boolean,
-                    ScalarType::Boolean,
-                ) => Some(ScalarType::Boolean),
-                _ => None,
-            }
-        }
-        Operator::Eq | Operator::NotEq => {
-            comparison_eq_coercion(lhs_type, rhs_type)
-        }
-        Operator::Lt
-        | Operator::Gt
-        | Operator::GtEq
-        | Operator::LtEq => {
+        Operator::And | Operator::Or => match (lhs_type, rhs_type) {
+            (ScalarType::Boolean, ScalarType::Boolean) => Some(ScalarType::Boolean),
+            _ => None,
+        },
+        Operator::Eq | Operator::NotEq => comparison_eq_coercion(lhs_type, rhs_type),
+        Operator::Lt | Operator::Gt | Operator::GtEq | Operator::LtEq => {
             comparison_order_coercion(lhs_type, rhs_type)
         }
         Operator::Plus | Operator::Minus => {
-            mathematics_numerical_coercion(
-                op, lhs_type, rhs_type,
-            )
+            mathematics_numerical_coercion(op, lhs_type, rhs_type)
         }
     };
 
@@ -187,9 +148,7 @@ fn comparison_eq_coercion(
     }
 
     comparison_binary_numeric_coercion(lhs_type, rhs_type)
-        .or_else(|| {
-            string_numeric_coercion(lhs_type, rhs_type)
-        })
+        .or_else(|| string_numeric_coercion(lhs_type, rhs_type))
 }
 
 fn comparison_order_coercion(
@@ -210,8 +169,7 @@ fn mathematics_numerical_coercion(
 ) -> Option<ScalarType> {
     use common::scalar::ScalarType::*;
 
-    if !both_numeric_or_null_and_numeric(lhs_type, rhs_type)
-    {
+    if !both_numeric_or_null_and_numeric(lhs_type, rhs_type) {
         return None;
     }
 

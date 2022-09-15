@@ -1,5 +1,5 @@
 use common::error::{FloppyError, Result};
-use common::row::Row;
+use common::relation::Row;
 
 use crate::display::IndentVisitor;
 use crate::empty::EmptyExec;
@@ -23,8 +23,7 @@ impl PhysicalPlan {
             Self::ProjectionExec(p) => p.next(),
             Self::FilterExec(p) => p.next(),
             _ => Err(FloppyError::NotImplemented(
-                "physical expression not supported"
-                    .to_owned(),
+                "physical expression not supported".to_owned(),
             )),
         }
     }
@@ -40,10 +39,8 @@ pub trait PlanVisitor {
     /// visited. If Ok(true) is returned, the recursion continues. If
     /// Err(..) or Ok(false) are returned, the recursion stops
     /// immediately and the error, if any, is returned to `accept`
-    fn pre_visit(
-        &mut self,
-        plan: &PhysicalPlan,
-    ) -> std::result::Result<bool, fmt::Error>;
+    fn pre_visit(&mut self, plan: &PhysicalPlan)
+        -> std::result::Result<bool, fmt::Error>;
 
     /// Invoked on a logical plan after all of its child inputs have
     /// been visited. The return value is handled the same as the
@@ -58,10 +55,7 @@ pub trait PlanVisitor {
 }
 
 impl PhysicalPlan {
-    pub fn accept<V>(
-        &self,
-        visitor: &mut V,
-    ) -> std::result::Result<bool, fmt::Error>
+    pub fn accept<V>(&self, visitor: &mut V) -> std::result::Result<bool, fmt::Error>
     where
         V: PlanVisitor,
     {
@@ -70,17 +64,16 @@ impl PhysicalPlan {
         }
 
         let recurse = match self {
-            PhysicalPlan::ProjectionExec(
-                ProjectionExec { input, .. },
-            ) => input.accept(visitor)?,
+            PhysicalPlan::ProjectionExec(ProjectionExec { input, .. }) => {
+                input.accept(visitor)?
+            }
             PhysicalPlan::FilterExec(FilterExec {
                 predicate: _,
                 input,
                 ..
             }) => input.accept(visitor)?,
             // plans without inputs
-            PhysicalPlan::HeapScanExec { .. }
-            | PhysicalPlan::EmptyExec(_) => true,
+            PhysicalPlan::HeapScanExec { .. } | PhysicalPlan::EmptyExec(_) => true,
         };
 
         if !recurse {
@@ -107,10 +100,7 @@ impl PhysicalPlan {
     pub fn display_indent(&self) -> impl fmt::Display + '_ {
         struct Wrapper<'a>(&'a PhysicalPlan);
         impl<'a> fmt::Display for Wrapper<'a> {
-            fn fmt(
-                &self,
-                f: &mut Formatter<'_>,
-            ) -> fmt::Result {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 let mut visitor = IndentVisitor::new(f);
                 self.0.accept(&mut visitor).unwrap();
                 Ok(())
@@ -131,27 +121,14 @@ impl PhysicalPlan {
         // that that can be formatted
         struct Wrapper<'a>(&'a PhysicalPlan);
         impl<'a> fmt::Display for Wrapper<'a> {
-            fn fmt(
-                &self,
-                f: &mut Formatter<'_>,
-            ) -> fmt::Result {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 match self.0 {
-                    PhysicalPlan::HeapScanExec(
-                        HeapScanExec { table_name, .. },
-                    ) => {
-                        write!(
-                            f,
-                            "HeapScanExec: {}",
-                            table_name
-                        )
+                    PhysicalPlan::HeapScanExec(HeapScanExec { table_name, .. }) => {
+                        write!(f, "HeapScanExec: {}", table_name)
                     }
-                    PhysicalPlan::ProjectionExec(
-                        ProjectionExec { ref expr, .. },
-                    ) => {
+                    PhysicalPlan::ProjectionExec(ProjectionExec { ref expr, .. }) => {
                         write!(f, "ProjectionExec: ")?;
-                        for (i, expr_item) in
-                            expr.iter().enumerate()
-                        {
+                        for (i, expr_item) in expr.iter().enumerate() {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
@@ -159,19 +136,11 @@ impl PhysicalPlan {
                         }
                         Ok(())
                     }
-                    PhysicalPlan::FilterExec(
-                        FilterExec { predicate, .. },
-                    ) => {
-                        write!(
-                            f,
-                            "FilterExec: {:?}",
-                            predicate
-                        );
+                    PhysicalPlan::FilterExec(FilterExec { predicate, .. }) => {
+                        write!(f, "FilterExec: {:?}", predicate);
                         Ok(())
                     }
-                    PhysicalPlan::EmptyExec(
-                        _EmptyRelation_,
-                    ) => {
+                    PhysicalPlan::EmptyExec(_EmptyRelation_) => {
                         write!(f, "EmptyExec")
                     }
                 }

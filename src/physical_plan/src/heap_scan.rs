@@ -1,6 +1,6 @@
 use common::error::Result;
-use common::row::Row;
-use common::schema::{RelationDesc, RelationDescRef};
+use common::relation::Row;
+use common::relation::{RelationDesc, RelationDescRef};
 use physical_expr::expr::PhysicalExpr;
 
 use storage::{HeapStore, RowIter};
@@ -48,8 +48,7 @@ impl HeapScanExec {
             table_name: table_name.clone(),
             projected_rel,
             filters,
-            iter: heap_store
-                .scan_heap(table_name.as_str())?,
+            iter: heap_store.scan_heap(table_name.as_str())?,
         })
     }
 }
