@@ -257,7 +257,10 @@ mod tests {
         )?
         .filter(LogicalExpr::BinaryExpr {
             left: Box::new(LogicalExpr::Column(
-                ColumnRef { idx: 0 },
+                ColumnRef {
+                    idx: 0,
+                    name: "id".to_string(),
+                },
             )),
             op: Operator::Eq,
             right: Box::new(lit(50)),

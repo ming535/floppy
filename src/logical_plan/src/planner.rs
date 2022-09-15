@@ -262,7 +262,10 @@ impl LogicalPlanner {
                 }
                 let idx =
                     rel.column_idx(&identifier.value)?;
-                Ok(LogicalExpr::Column(ColumnRef { idx }))
+                Ok(LogicalExpr::Column(ColumnRef {
+                    idx,
+                    name: identifier.value,
+                }))
             }
             SQLExpr::BinaryOp { left, op, right } => self
                 .parse_sql_binary_op(
@@ -359,11 +362,14 @@ pub fn expand_wildcard(
     _plan: &LogicalPlan,
 ) -> Result<Vec<LogicalExpr>> {
     Ok(rel
-        .column_types()
+        .column_names()
         .iter()
         .enumerate()
-        .map(|(idx, _)| {
-            LogicalExpr::Column(ColumnRef { idx })
+        .map(|(idx, n)| {
+            LogicalExpr::Column(ColumnRef {
+                idx,
+                name: n.clone(),
+            })
         })
         .collect::<Vec<LogicalExpr>>())
 }
@@ -508,14 +514,14 @@ mod tests {
         let sql = "SELECT * FROM test";
         quick_test(
             sql,
-            "Projection: #test.id\
+            "Projection: #id\
                    \n  TableScan: test",
         );
 
         let sql = "SELECT id FROM test";
         quick_test(
             sql,
-            "Projection: #test.id\
+            "Projection: #id\
                \n  TableScan: test",
         )
     }
@@ -525,8 +531,8 @@ mod tests {
         let sql = "SELECT * FROM test WHERE id = 100";
         quick_test(
             sql,
-            "Projection: #test.id\
-                   \n  Filter: #test.id = Int64(100)\
+            "Projection: #id\
+                   \n  Filter: #id = Int64(100)\
                    \n    TableScan: test",
         )
     }

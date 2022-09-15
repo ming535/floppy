@@ -39,6 +39,7 @@ impl Row {
 #[derive(Debug, Clone)]
 pub struct ColumnRef {
     pub idx: usize,
+    pub name: String,
 }
 
 impl fmt::Display for ColumnRef {
@@ -46,6 +47,6 @@ impl fmt::Display for ColumnRef {
         &self,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        write!(f, "{}", self.idx)
+        write!(f, "#{}", self.name)
     }
 }
