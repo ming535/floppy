@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct MemoryEngine {
     // `heaps` is a HashMap contains all table's row.
     // The key of the HashMap is table name, while the value is

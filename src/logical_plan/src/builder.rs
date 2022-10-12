@@ -2,7 +2,7 @@ use crate::plan::{EmptyRelation, Filter, LogicalPlan, Projection, TableScan};
 use common::error::FloppyError;
 use common::error::Result;
 use common::relation::{RelationDesc, RelationDescRef};
-use logical_expr::expr::LogicalExpr;
+use plan::expr::ScalarExpr;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -29,12 +29,12 @@ impl LogicalPlanBuilder {
     /// Scan from a relation
     pub fn scan(
         table_name: &str,
-        schema: RelationDescRef,
-        filters: Vec<LogicalExpr>,
+        rel: RelationDescRef,
+        filters: Vec<ScalarExpr>,
     ) -> Result<Self> {
         let plan = LogicalPlan::TableScan(TableScan {
             table_name: table_name.to_string(),
-            projected_schema: schema,
+            projected_rel: rel,
             filters,
         });
         Ok(Self { plan: Some(plan) })
@@ -56,7 +56,7 @@ impl LogicalPlanBuilder {
         Ok(plan.clone())
     }
 
-    pub fn project(&self, expr: Vec<LogicalExpr>) -> Result<Self> {
+    pub fn project(&self, expr: Vec<ScalarExpr>) -> Result<Self> {
         let input = self
             .plan
             .as_ref()
@@ -65,13 +65,13 @@ impl LogicalPlanBuilder {
         let plan = LogicalPlan::Projection(Projection {
             expr,
             input: Arc::new(input.clone()),
-            schema: input.relation_desc().clone(),
+            rel: input.relation_desc().clone(),
         });
 
         Ok(Self { plan: Some(plan) })
     }
 
-    pub fn filter(&self, expr: LogicalExpr) -> Result<Self> {
+    pub fn filter(&self, expr: ScalarExpr) -> Result<Self> {
         let input = self
             .plan
             .as_ref()

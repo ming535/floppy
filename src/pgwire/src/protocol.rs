@@ -1,4 +1,5 @@
 use crate::codec::FramedConn;
+use crate::message;
 use crate::message::{BackendMessage, ErrorResponse, FrontendMessage};
 use common::error::Result;
 use postgres::error::SqlState;
@@ -6,7 +7,6 @@ use session::{Session, TransactionState};
 use sqlparser::ast::Statement;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
-
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, instrument, warn};
@@ -169,6 +169,22 @@ where
             .map(|portal| portal.desc.clone())
             .expect("unnamed portal should be present");
 
+        if !stmt_desc.param_types.is_empty() {
+            return self
+                .error(ErrorResponse::error(
+                    SqlState::UNDEFINED_PARAMETER,
+                    "simple query do not allow parameter",
+                ))
+                .await;
+        }
+
+        // Maybe send row description
+        if let Some(rel_desc) = &stmt_desc.rel_desc {
+            let formats = vec![pgrepr::Format::Text; stmt_desc.arity()];
+            self.send(BackendMessage::RowDescription(
+                message::encode_row_description(rel_desc, &formats),
+            ))
+        }
         todo!()
     }
 

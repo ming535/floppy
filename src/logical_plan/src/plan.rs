@@ -1,6 +1,6 @@
 use crate::display::IndentVisitor;
 use common::relation::RelationDescRef;
-use logical_expr::expr::LogicalExpr;
+use plan::expr::ScalarExpr;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
@@ -22,28 +22,27 @@ impl LogicalPlan {
     /// Get a reference to the logical plan's schema
     pub fn relation_desc(&self) -> &RelationDescRef {
         match self {
-            Self::Projection(Projection { schema, .. }) => schema,
+            Self::Projection(Projection { rel, .. }) => rel,
             Self::TableScan(TableScan {
-                projected_schema: schema,
-                ..
-            }) => schema,
+                projected_rel: rel, ..
+            }) => rel,
             Self::Filter(Filter { input, .. }) => input.relation_desc(),
-            Self::EmptyRelation(EmptyRelation { rel: schema, .. }) => schema,
+            Self::EmptyRelation(EmptyRelation { rel, .. }) => rel,
         }
     }
 
-    /// Get a vector of reference to all schemas in every node of the logical plan
-    pub fn all_schemas(&self) -> Vec<&RelationDescRef> {
+    /// Get a vector of reference to all relation descriptions in every node of the logical plan
+    pub fn all_rel_descs(&self) -> Vec<&RelationDescRef> {
         match self {
             Self::TableScan(TableScan {
-                projected_schema, ..
-            }) => vec![projected_schema],
-            Self::Projection(Projection { input, schema, .. }) => {
-                let mut schemas = input.all_schemas();
-                schemas.insert(0, schema);
-                schemas
+                projected_rel: rel, ..
+            }) => vec![rel],
+            Self::Projection(Projection { input, rel, .. }) => {
+                let mut rel_descs = input.all_rel_descs();
+                rel_descs.insert(0, schema);
+                rel_descs
             }
-            Self::Filter(Filter { input, .. }) => input.all_schemas(),
+            Self::Filter(Filter { input, .. }) => input.all_rel_descs(),
             Self::EmptyRelation(EmptyRelation { rel: schema, .. }) => vec![schema],
         }
     }
@@ -178,11 +177,11 @@ impl Display for LogicalPlan {
 #[derive(Clone)]
 pub struct Projection {
     /// The list of expressions
-    pub expr: Vec<LogicalExpr>,
+    pub expr: Vec<ScalarExpr>,
     /// The incoming logical plan
     pub input: Arc<LogicalPlan>,
-    /// The schema description of the output
-    pub schema: RelationDescRef,
+    /// The relation description of the output
+    pub rel: RelationDescRef,
 }
 
 #[derive(Clone)]
@@ -191,15 +190,15 @@ pub struct TableScan {
     pub table_name: String,
 
     /// The schema description of the output
-    pub projected_schema: RelationDescRef,
+    pub projected_rel: RelationDescRef,
 
     /// Optional expressions to be used as filters
-    pub filters: Vec<LogicalExpr>,
+    pub filters: Vec<ScalarExpr>,
 }
 
 #[derive(Clone)]
 pub struct Filter {
-    pub predicate: LogicalExpr,
+    pub predicate: ScalarExpr,
     pub input: Arc<LogicalPlan>,
 }
 

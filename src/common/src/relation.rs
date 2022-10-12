@@ -1,27 +1,22 @@
 use crate::error::{field_not_found, FloppyError, Result};
 use crate::scalar::{Datum, ScalarType};
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{write, Formatter};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct ColumnType {
-    scalar_type: ScalarType,
-    nullable: bool,
+    pub scalar_type: ScalarType,
+    pub nullable: bool,
 }
 
 impl ColumnType {
     pub fn new(scalar_type: ScalarType, nullable: bool) -> Self {
-        ColumnType {
+        Self {
             scalar_type,
             nullable,
         }
     }
-
-    pub fn scalar_type(&self) -> &ScalarType {
-        &self.scalar_type
-    }
-
     // /// Builds a qualified column based on self
     // pub fn qualified_column(&self) -> Column {
     //     Column {
@@ -241,6 +236,8 @@ impl RelationType {
     // }
 }
 
+pub type ColumnName = String;
+
 /// A description of the shape of a relation.
 ///
 /// It bundles a [`RelationType`] with the name of each column in the raltion.
@@ -248,7 +245,7 @@ impl RelationType {
 #[derive(Debug, Clone)]
 pub struct RelationDesc {
     rel_type: RelationType,
-    column_names: Vec<String>,
+    column_names: Vec<ColumnName>,
 }
 
 impl RelationDesc {
@@ -264,6 +261,10 @@ impl RelationDesc {
             rel_type: RelationType::empty(),
             column_names: vec![],
         }
+    }
+
+    pub fn rel_type(&self) -> &RelationType {
+        &self.rel_type
     }
 
     pub fn column_types(&self) -> &Vec<ColumnType> {
@@ -292,7 +293,7 @@ impl RelationDesc {
             .column_names
             .iter()
             .enumerate()
-            .filter(|(i, name)| column_name == *name)
+            .filter(|(_, name)| column_name == *name)
             .map(|(idx, _)| idx);
         match matches.next() {
             None => Err(field_not_found(None, column_name, self)),
@@ -304,6 +305,22 @@ impl RelationDesc {
                 ))),
             },
         }
+    }
+
+    pub fn column_name(&self, idx: usize) -> &str {
+        self.column_names[idx].as_str()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&ColumnName, &ColumnType)> {
+        self.iter_names().zip(self.iter_types())
+    }
+
+    pub fn iter_types(&self) -> impl Iterator<Item = &ColumnType> {
+        self.rel_type.column_types.iter()
+    }
+
+    pub fn iter_names(&self) -> impl Iterator<Item = &ColumnName> {
+        self.column_names.iter()
     }
 }
 
@@ -317,6 +334,17 @@ pub struct StatementDesc {
     pub rel_desc: Option<RelationDesc>,
     /// The determined types of the parameters in the statement, if any.
     pub param_types: Vec<ScalarType>,
+}
+
+impl StatementDesc {
+    /// Reports the number of columns in the statement's result set, or zero
+    /// if the statement does not return rows.
+    pub fn arity(&self) -> usize {
+        self.rel_desc
+            .as_ref()
+            .map(|desc| desc.column_types().len())
+            .unwrap_or(0)
+    }
 }
 
 /// A vector of values to which parameter references should be bound.
@@ -353,12 +381,23 @@ impl Row {
 /// A column reference in a [`Row`], used by expressions.
 #[derive(Debug, Clone)]
 pub struct ColumnRef {
-    pub idx: usize,
-    pub name: String,
+    /// column identifier
+    pub id: usize,
+    pub name: ColumnName,
 }
 
-impl fmt::Display for ColumnRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "#{}", self.name)
-    }
-}
+/// Unique id in the system.
+/// Every table, index, database, schema has a unique id.
+pub type GlobalId = u64;
+
+// #[derive(Debug, Clone, Serialize)]
+// pub struct Table {
+//     pub create_sql: String,
+//     pub desc: RelationDesc,
+// }
+//
+// pub struct Index {
+//     pub create_sql: String,
+//     pub on: GlobalId,
+//     pub keys: Vec<ScalarExpr>,
+// }

@@ -1,4 +1,5 @@
 use crate::relation::RelationDesc;
+use rust_decimal;
 use sqlparser::parser::ParserError;
 use std::fmt::Formatter;
 use std::{fmt, result};
@@ -19,18 +20,18 @@ pub enum FloppyError {
     /// is not verified during execution.
     Internal(String),
     Plan(String),
-    SchemaError(SchemaError),
-    ParserError(ParserError),
-    IoError(std::io::Error),
+    Catalog(CatalogError),
+    Parser(ParserError),
+    Io(std::io::Error),
     /// Errors originating from outside Floppy's codebase.
-    External(GenericError),
+    External(String),
 }
 
 #[derive(Debug)]
-pub enum SchemaError {
+pub enum CatalogError {
     TableNotFound(String),
     /// No field with this name
-    FieldNotFound {
+    ColumnNotFound {
         qualifier: Option<String>,
         name: String,
         valid_fields: Option<Vec<String>>,
@@ -43,7 +44,7 @@ pub fn field_not_found(
     name: &str,
     rel_desc: &RelationDesc,
 ) -> FloppyError {
-    FloppyError::SchemaError(SchemaError::FieldNotFound {
+    FloppyError::Catalog(CatalogError::ColumnNotFound {
         qualifier,
         name: name.to_string(),
         valid_fields: Some(rel_desc.column_names().clone()),
@@ -52,19 +53,19 @@ pub fn field_not_found(
 
 /// Create a "table not found" Floppy::SchemaError
 pub fn table_not_found(table_name: &str) -> FloppyError {
-    FloppyError::SchemaError(SchemaError::TableNotFound(format!(
+    FloppyError::Catalog(CatalogError::TableNotFound(format!(
         "table not found: {}",
         table_name
     )))
 }
 
-impl fmt::Display for SchemaError {
+impl fmt::Display for CatalogError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::TableNotFound(desc) => {
                 write!(f, "{}", desc)
             }
-            Self::FieldNotFound {
+            Self::ColumnNotFound {
                 qualifier,
                 name,
                 valid_fields,
@@ -94,21 +95,34 @@ impl fmt::Display for SchemaError {
 
 impl From<ParserError> for FloppyError {
     fn from(e: ParserError) -> Self {
-        FloppyError::ParserError(e)
+        FloppyError::Parser(e)
     }
 }
 
 impl From<std::io::Error> for FloppyError {
     fn from(e: std::io::Error) -> Self {
-        FloppyError::IoError(e)
+        FloppyError::Io(e)
     }
 }
 
-impl From<GenericError> for FloppyError {
-    fn from(e: GenericError) -> Self {
-        FloppyError::External(e)
+//
+// impl From<GenericError> for FloppyError {
+//     fn from(e: GenericError) -> Self {
+//         FloppyError::External(e)
+//     }
+// }
+
+impl From<rust_decimal::Error> for FloppyError {
+    fn from(e: rust_decimal::Error) -> Self {
+        FloppyError::External(e.to_string())
     }
 }
+
+// impl From<Infallible> for FloppyError {
+//     fn from(e: Infallible) -> Self {
+//         e.into()
+//     }
+// }
 
 impl fmt::Display for FloppyError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -126,13 +140,13 @@ impl fmt::Display for FloppyError {
             FloppyError::Plan(desc) => {
                 write!(f, "Planner error: {}", desc)
             }
-            FloppyError::SchemaError(e) => {
+            FloppyError::Catalog(e) => {
                 write!(f, "Schema error: {}", e)
             }
-            FloppyError::ParserError(e) => {
+            FloppyError::Parser(e) => {
                 write!(f, "Parser error: {}", e)
             }
-            FloppyError::IoError(e) => {
+            FloppyError::Io(e) => {
                 write!(f, "Io error: {}", e)
             }
             FloppyError::External(e) => {

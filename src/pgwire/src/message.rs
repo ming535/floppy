@@ -11,6 +11,7 @@
 // connections. These pseudo-versions were constructed to avoid ever matching
 // a true protocol version.
 
+use itertools::Itertools;
 use std::collections::HashMap;
 
 pub const VERSION_1: i32 = 0x10000;
@@ -28,6 +29,7 @@ pub const VERSIONS: &[i32] = &[
     VERSION_SSL,
     VERSION_GSSENC,
 ];
+use common::relation::RelationDesc;
 use postgres::error::SqlState;
 use session::TransactionState;
 
@@ -77,7 +79,40 @@ pub enum BackendMessage {
     AuthenticationOk,
     EmptyQueryResponse,
     ReadyForQuery(TransactionStatus),
+    RowDescription(Vec<FieldDescription>),
     ErrorResponse(ErrorResponse),
+}
+
+#[derive(Debug)]
+pub struct FieldDescription {
+    pub name: String,
+    pub table_id: u32,
+    pub column_id: u16,
+    pub type_oid: u32,
+    pub type_len: i16,
+    pub type_mod: i32,
+    pub format: pgrepr::Format,
+}
+
+pub fn encode_row_description(
+    desc: &RelationDesc,
+    formats: &[pgrepr::Format],
+) -> Vec<FieldDescription> {
+    desc.iter()
+        .zip_eq(formats)
+        .map(|((name, typ), format)| {
+            let pg_type = pgrepr::Type::from(&typ.scalar_type)?;
+            FieldDescription {
+                name: name.clone(),
+                table_id: 0,
+                column_id: 0,
+                type_oid: pg_type.oid(),
+                type_len: pg_type.typlen(),
+                type_mod: pg_type.typmod(),
+                format: *format,
+            }
+        })
+        .collect()
 }
 
 pub enum TransactionStatus {
@@ -93,15 +128,9 @@ impl From<&TransactionState> for TransactionStatus {
     fn from(state: &TransactionState) -> Self {
         match state {
             TransactionState::Default => Self::Idle,
-            TransactionState::Started(_) => {
-                Self::InTransaction
-            }
-            TransactionState::InTransaction(_) => {
-                Self::InTransaction
-            }
-            TransactionState::InTransactionImplicit(_) => {
-                Self::InTransaction
-            }
+            TransactionState::Started(_) => Self::InTransaction,
+            TransactionState::InTransaction(_) => Self::InTransaction,
+            TransactionState::InTransactionImplicit(_) => Self::InTransaction,
             TransactionState::Failed(_) => Self::Failed,
         }
     }
@@ -118,21 +147,14 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    pub fn error<S>(
-        code: SqlState,
-        message: S,
-    ) -> ErrorResponse
+    pub fn error<S>(code: SqlState, message: S) -> ErrorResponse
     where
         S: Into<String>,
     {
         ErrorResponse::new(Severity::Error, code, message)
     }
 
-    fn new<S>(
-        severity: Severity,
-        code: SqlState,
-        message: S,
-    ) -> ErrorResponse
+    fn new<S>(severity: Severity, code: SqlState, message: S) -> ErrorResponse
     where
         S: Into<String>,
     {
@@ -161,12 +183,7 @@ pub enum Severity {
 
 impl Severity {
     pub fn is_error(&self) -> bool {
-        matches!(
-            self,
-            Severity::Panic
-                | Severity::Fatal
-                | Severity::Error
-        )
+        matches!(self, Severity::Panic | Severity::Fatal | Severity::Error)
     }
 
     pub fn is_fatal(&self) -> bool {

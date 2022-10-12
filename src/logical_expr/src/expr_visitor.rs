@@ -14,9 +14,7 @@ pub enum Recursion<V: ExpressionVisitor> {
 /// `Expr::accept`, `ExpressionVisitor::visit` is invoked
 /// recursively on all nodes of an expression tree. See the comments
 /// on `Expr::accept` for details on its use
-pub trait ExpressionVisitor<E: ExprVisitable = LogicalExpr>:
-    Sized
-{
+pub trait ExpressionVisitor<E: ExprVisitable = LogicalExpr>: Sized {
     /// Invoked before any children of `expr` are visisted.
     fn pre_visit(self, expr: &E) -> Result<Recursion<Self>>
     where
@@ -32,10 +30,7 @@ pub trait ExpressionVisitor<E: ExprVisitable = LogicalExpr>:
 /// trait for types that can be visited by [`ExpressionVisitor`]
 pub trait ExprVisitable: Sized {
     /// accept a visitor, calling `visit` on all children of this
-    fn accept<V: ExpressionVisitor<Self>>(
-        &self,
-        visitor: V,
-    ) -> Result<V>;
+    fn accept<V: ExpressionVisitor<Self>>(&self, visitor: V) -> Result<V>;
 }
 
 impl ExprVisitable for LogicalExpr {
@@ -71,10 +66,7 @@ impl ExprVisitable for LogicalExpr {
     /// children of that expression are visited, nor is post_visit
     /// called on that expression
     ///
-    fn accept<V: ExpressionVisitor>(
-        &self,
-        visitor: V,
-    ) -> Result<V> {
+    fn accept<V: ExpressionVisitor>(&self, visitor: V) -> Result<V> {
         let visitor = match visitor.pre_visit(self)? {
             Recursion::Continue(visitor) => visitor,
             // If the recursion should stop, do not visit children
@@ -83,11 +75,8 @@ impl ExprVisitable for LogicalExpr {
 
         // recurse (and cover all expression types)
         let visitor = match self {
-            LogicalExpr::Column(_)
-            | LogicalExpr::Literal(_) => Ok(visitor),
-            LogicalExpr::BinaryExpr {
-                left, right, ..
-            } => {
+            LogicalExpr::Column(_) | LogicalExpr::Literal(_, _) => Ok(visitor),
+            LogicalExpr::BinaryExpr { left, right, .. } => {
                 let visitor = left.accept(visitor)?;
                 right.accept(visitor)
             }

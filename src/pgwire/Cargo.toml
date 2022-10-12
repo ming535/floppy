@@ -19,3 +19,4 @@ tracing = "0.1.36"
 tracing-subscriber = "0.3.15"
 sqlparser = {version = "0.18.0", features = ["serde"]}
 postgres = "0.19.4"
+itertools = "0.10.4"

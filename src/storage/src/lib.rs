@@ -1,5 +1,6 @@
 use common::error::Result;
 use common::relation::{RelationDesc, Row};
+use std::fmt;
 
 pub mod memory;
 
@@ -14,7 +15,7 @@ pub mod memory;
 ///
 /// Note that traits that modify store is defined as immutable method, so
 /// implementations of trait should enforce the borrow rule at runtime.
-pub trait CatalogStore {
+pub trait CatalogStore: fmt::Debug {
     /// Insert a schema into catalog. `table_name` is a qualified name
     /// like "database_name.table_name".
     fn insert_rel(&self, table_name: &str, rel: &RelationDesc) -> Result<()>;
@@ -30,7 +31,6 @@ pub trait HeapStore {
     fn scan_heap(&self, table_name: &str) -> Result<RowIter>;
     /// Fetch a tuple from heap using tuple_id
     fn fetch_tuple(&self, table_name: &str) -> Result<Row>;
-
     /// Insert a tuple into heap
     fn insert_to_heap(&self, table_name: &str, tuple: &Row) -> Result<()>;
 }

@@ -50,7 +50,7 @@ impl PhysicalPlanner {
             }
             LogicalPlan::TableScan(TableScan {
                 table_name,
-                projected_schema,
+                projected_rel: projected_schema,
                 filters,
             }) => {
                 let physical_filters = filters

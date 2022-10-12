@@ -2,6 +2,8 @@
 members = [
     "src/common",
     "src/storage",
+    "src/plan",
+    "src/catalog",
     "src/logical_expr",
     "src/logical_plan",
     "src/physical_expr",

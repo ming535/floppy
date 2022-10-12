@@ -2,16 +2,15 @@ use crate::builder::LogicalPlanBuilder;
 use crate::plan::LogicalPlan;
 use common::error::{field_not_found, FloppyError, Result};
 use common::operator::Operator;
-use common::relation::ColumnRef;
+use common::relation::{ColumnRef, Params};
 use common::relation::{RelationDesc, RelationDescRef};
-use common::scalar::Datum;
-use logical_expr::expr::LogicalExpr;
-use logical_expr::expr_visitor::{ExprVisitable, ExpressionVisitor, Recursion};
-use logical_expr::literal::lit;
+use common::scalar::{Datum, ScalarType};
+use plan::expr::{CoercibleScalarExpr, ScalarExpr, StatementContext};
 use sqlparser::ast::{
     BinaryOperator, Expr as SQLExpr, Ident, Query, Select, SelectItem, SetExpr,
     Statement, TableFactor, TableWithJoins, Value as SQLValue,
 };
+use std::cell::RefCell;
 use std::sync::Arc;
 use storage::CatalogStore;
 
@@ -28,9 +27,21 @@ impl LogicalPlanner {
         }
     }
 
-    pub fn statement_to_plan(&self, statement: Statement) -> Result<LogicalPlan> {
+    pub fn plan(&self, statement: Statement, params: &Params) -> Result<LogicalPlan> {
+        let param_types = params
+            .types
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| (i + 1, ty.clone()))
+            .collect();
+
+        let scx = &mut StatementContext {
+            catalog: catalog_store,
+            param_types: RefCell::new(param_types),
+        };
+
         match statement {
-            Statement::Query(query) => self.query_to_plan(*query),
+            Statement::Query(query) => self.plan_query(*query),
             _ => Err(FloppyError::NotImplemented(format!(
                 "Unsupported SQL statement: {:?}",
                 statement
@@ -38,15 +49,15 @@ impl LogicalPlanner {
         }
     }
 
-    pub fn query_to_plan(&self, query: Query) -> Result<LogicalPlan> {
+    pub fn plan_query(&self, query: Query) -> Result<LogicalPlan> {
         // SELECT or UNION / EXCEPT / INTERSECT
         let set_expr = query.body;
-        self.set_expr_to_plan(set_expr)
+        self.plan_set_expr(set_expr)
     }
 
-    pub fn set_expr_to_plan(&self, set_expr: SetExpr) -> Result<LogicalPlan> {
+    pub fn plan_set_expr(&self, set_expr: SetExpr) -> Result<LogicalPlan> {
         match set_expr {
-            SetExpr::Select(select) => self.select_to_plan(*select),
+            SetExpr::Select(select) => self.plan_select(*select),
             _ => Err(FloppyError::NotImplemented(format!(
                 "Query {} not implemented yet",
                 set_expr
@@ -54,7 +65,7 @@ impl LogicalPlanner {
         }
     }
 
-    pub fn select_to_plan(&self, select: Select) -> Result<LogicalPlan> {
+    pub fn plan_select(&self, select: Select) -> Result<LogicalPlan> {
         // process `from` clause
         // todo! a vec of LogicalPlan ?
         let builder = self.plan_from_tables(select.from)?;
@@ -62,7 +73,7 @@ impl LogicalPlanner {
         // process `where` clause
         let builder = self.plan_filter(select.selection, builder)?;
 
-        let builder = self.plan_projection(select.projection, builder)?;
+        let builder = self.plan_tion(select.projection, builder)?;
 
         builder.build()
     }
@@ -110,24 +121,59 @@ impl LogicalPlanner {
         match selection {
             Some(predicate_expr) => {
                 let filter_expr =
-                    self.sql_to_rex(predicate_expr, builder.plan()?.relation_desc())?;
+                    self.plan_expr(predicate_expr, builder.plan()?.relation_desc())?;
                 builder.filter(filter_expr)
             }
             None => Ok(builder),
         }
     }
 
-    pub fn plan_projection(
+    pub fn plan_expr(
         &self,
+        sql: SQLExpr,
+        rel: &RelationDesc,
+    ) -> Result<CoercibleScalarExpr> {
+        match sql {
+            SQLExpr::Value(SQLValue::Number(n, _)) => parse_sql_number(&n),
+            SQLExpr::Value(SQLValue::SingleQuotedString(ref s)) => Ok(
+                ScalarExpr::Literal(Datum::String(s.clone()), ScalarType::String).into(),
+            ),
+            SQLExpr::Value(SQLValue::Boolean(n)) => {
+                Ok(ScalarExpr::Literal(Datum::Boolean(n), ScalarType::Boolean).into())
+            }
+            SQLExpr::Value(SQLValue::Null) => Ok(CoercibleScalarExpr::LiteralNull),
+            SQLExpr::Identifier(identifier) => {
+                if identifier.value.starts_with('@') {
+                    return Err(FloppyError::NotImplemented(
+                        "Unsupported identifier starts with @".to_string(),
+                    ));
+                }
+                let idx = rel.column_idx(&identifier.value)?;
+                Ok(ScalarExpr::Column(ColumnRef {
+                    idx,
+                    name: identifier.value,
+                })
+                .into())
+            }
+            SQLExpr::BinaryOp { left, op, right } => {
+                self.plan_binary_expr(*left, op, *right, rel)
+            }
+            _ => Err(FloppyError::NotImplemented(format!(
+                "Unsupported expression {:?}",
+                sql
+            ))),
+        }
+    }
+
+    pub fn plan_projection(
+        &self,projec
         projection: Vec<SelectItem>,
         builder: LogicalPlanBuilder,
     ) -> Result<LogicalPlanBuilder> {
         let input_is_empty = matches!(builder.plan()?, LogicalPlan::EmptyRelation(_));
         let projection_exprs = projection
             .into_iter()
-            .map(|expr| {
-                self.sql_project_to_logical_expr(expr, builder.plan()?, input_is_empty)
-            })
+            .map(|expr| self.plan_projection_expr(expr, builder.plan()?, input_is_empty))
             .flat_map(|result| match result {
                 Ok(vec) => vec.into_iter().map(Ok).collect(),
                 Err(err) => vec![Err(err)],
@@ -137,98 +183,7 @@ impl LogicalPlanner {
         builder.project(projection_exprs)
     }
 
-    //// Validate the schema provides all of the columns referenced in the expressions.
-    // pub fn validate_schema_satisfies_exprs(
-    //     &self,
-    //     rel: &RelationDesc,
-    //     exprs: &[LogicalExpr],
-    // ) -> Result<()> {
-    //     find_column_exprs(exprs).iter().try_for_each(
-    //         |col| match col {
-    //             LogicalExpr::Column(col) => match &col
-    //                 .relation
-    //             {
-    //                 Some(r) => {
-    //                     rel.field_with_qualified_name(
-    //                         r, &col.name,
-    //                     )?;
-    //                     Ok(())
-    //                 }
-    //                 None => {
-    //                     if !rel
-    //                         .fields_with_unqualified_name(
-    //                             &col.name,
-    //                         )
-    //                         .is_empty()
-    //                     {
-    //                         Ok(())
-    //                     } else {
-    //                         Err(field_not_found(
-    //                             None,
-    //                             col.name.as_str(),
-    //                             rel,
-    //                         ))
-    //                     }
-    //                 }
-    //             }
-    //             .map_err(|_: FloppyError| {
-    //                 field_not_found(
-    //                     col.relation
-    //                         .as_ref()
-    //                         .map(|s| s.to_owned()),
-    //                     col.name.as_str(),
-    //                     rel,
-    //                 )
-    //             }),
-    //             _ => Err(FloppyError::Internal(
-    //                 "Not a column".to_string(),
-    //             )),
-    //         },
-    //     )
-    // }
-
-    pub fn sql_to_rex(&self, sql: SQLExpr, rel: &RelationDesc) -> Result<LogicalExpr> {
-        let expr = self.sql_expr_to_logical_expr(sql, rel)?;
-        // self.validate_schema_satisfies_exprs(
-        //     schema,
-        //     &[expr.clone()],
-        // )?;
-        Ok(expr)
-    }
-
-    fn sql_expr_to_logical_expr(
-        &self,
-        sql: SQLExpr,
-        rel: &RelationDesc,
-    ) -> Result<LogicalExpr> {
-        match sql {
-            SQLExpr::Value(SQLValue::Number(n, _)) => parse_sql_number(&n),
-            SQLExpr::Value(SQLValue::SingleQuotedString(ref s)) => Ok(lit(s.clone())),
-            SQLExpr::Value(SQLValue::Boolean(n)) => Ok(lit(n)),
-            SQLExpr::Value(SQLValue::Null) => Ok(LogicalExpr::Literal(Datum::Null)),
-            SQLExpr::Identifier(identifier) => {
-                if identifier.value.starts_with('@') {
-                    return Err(FloppyError::NotImplemented(
-                        "Unsupported identifier starts with @".to_string(),
-                    ));
-                }
-                let idx = rel.column_idx(&identifier.value)?;
-                Ok(LogicalExpr::Column(ColumnRef {
-                    idx,
-                    name: identifier.value,
-                }))
-            }
-            SQLExpr::BinaryOp { left, op, right } => {
-                self.parse_sql_binary_op(*left, op, *right, rel)
-            }
-            _ => Err(FloppyError::NotImplemented(format!(
-                "Unsupported expression {:?}",
-                sql
-            ))),
-        }
-    }
-
-    pub fn sql_project_to_logical_expr(
+    pub fn plan_projection_expr(
         &self,
         project: SelectItem,
         plan: &LogicalPlan,
@@ -236,7 +191,7 @@ impl LogicalPlanner {
     ) -> Result<Vec<LogicalExpr>> {
         match project {
             SelectItem::UnnamedExpr(expr) => {
-                let expr = self.sql_to_rex(expr, plan.relation_desc())?;
+                let expr = self.plan_expr(expr, plan.relation_desc())?;
                 Ok(vec![expr])
             }
             SelectItem::ExprWithAlias { expr: _, alias: _ } => Err(
@@ -258,35 +213,19 @@ impl LogicalPlanner {
         }
     }
 
-    fn parse_sql_binary_op(
+    fn plan_binary_expr(
         &self,
         left: SQLExpr,
         op: BinaryOperator,
         right: SQLExpr,
         rel: &RelationDesc,
-    ) -> Result<LogicalExpr> {
-        let operator = match op {
-            BinaryOperator::Plus => Ok(Operator::Plus),
-            BinaryOperator::Minus => Ok(Operator::Minus),
-            BinaryOperator::Eq => Ok(Operator::Eq),
-            BinaryOperator::NotEq => Ok(Operator::NotEq),
-            BinaryOperator::Lt => Ok(Operator::Lt),
-            BinaryOperator::LtEq => Ok(Operator::LtEq),
-            BinaryOperator::Gt => Ok(Operator::Gt),
-            BinaryOperator::GtEq => Ok(Operator::GtEq),
-            BinaryOperator::And => Ok(Operator::And),
-            BinaryOperator::Or => Ok(Operator::Or),
-            _ => Err(FloppyError::NotImplemented(format!(
-                "Unsupported binary operator {:?}",
-                op
-            ))),
-        }?;
+    ) -> Result<CoercibleScalarExpr> {
 
-        Ok(LogicalExpr::BinaryExpr {
-            left: Box::new(self.sql_expr_to_logical_expr(left, rel)?),
-            op: operator,
-            right: Box::new(self.sql_expr_to_logical_expr(right, rel)?),
-        })
+        // Ok(ScalarExpr::CallBinary {
+        //     expr1: Box::new(self.sql_expr_to_logical_expr(left, rel)?),
+        //     op: operator,
+        //     expr2: Box::new(self.sql_expr_to_logical_expr(right, rel)?),
+        // })
     }
 }
 
@@ -298,9 +237,9 @@ pub fn normalize_ident(ident: &Ident) -> String {
 }
 
 // Parse number in sql string, convert it to Expr::Literal
-fn parse_sql_number(n: &str) -> Result<LogicalExpr> {
+fn parse_sql_number(n: &str) -> Result<CoercibleScalarExpr> {
     match n.parse::<i64>() {
-        Ok(n) => Ok(lit(n)),
+        Ok(n) => Ok(ScalarExpr::Literal(Datum::Int64(n), ScalarType::Int64).into()),
         _ => Err(FloppyError::Internal(
             "unknown parser_sql_number error".to_string(),
         )),
@@ -362,7 +301,7 @@ pub fn find_columns_referenced_by_expr(e: &LogicalExpr) -> Vec<ColumnRef> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::error::SchemaError;
+    use common::error::CatalogError;
     use common::relation::ColumnType;
     use common::scalar::ScalarType;
     use sqlparser::dialect::GenericDialect;
@@ -381,8 +320,8 @@ mod tests {
         let dialect = GenericDialect {};
         let ast = Parser::parse_sql(&dialect, sql);
         match ast {
-            Ok(ast) => planner.statement_to_plan(ast[0].clone()),
-            Err(e) => Err(FloppyError::ParserError(e)),
+            Ok(ast) => planner.plan(ast[0].clone()),
+            Err(e) => Err(FloppyError::Parser(e)),
         }
     }
 
@@ -424,7 +363,7 @@ mod tests {
         let sql = "SELECT * FROM faketable";
         let err = logical_plan(sql).expect_err("query should have failed");
         match err {
-            FloppyError::SchemaError(SchemaError::TableNotFound(_)) => (),
+            FloppyError::Catalog(CatalogError::TableNotFound(_)) => (),
             _ => assert!(false, "err not match: {:?}", err),
         }
     }
@@ -434,7 +373,7 @@ mod tests {
         let sql = "SELECT fakecolumn FROM test";
         let err = logical_plan(sql).expect_err("query should have failed");
         match err {
-            FloppyError::SchemaError(SchemaError::FieldNotFound {
+            FloppyError::Catalog(CatalogError::ColumnNotFound {
                 qualifier: _,
                 name: _,
                 valid_fields: _,
