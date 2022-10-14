@@ -1,9 +1,9 @@
 use crate::context::ExprContext;
-use crate::prim::expr::Expr;
+use crate::primitive::expr::Expr;
 use common::error::FloppyError;
 use common::error::Result;
-use common::relation::ColumnType;
-use common::scalar::ScalarType;
+use common::relation::{ColumnType, Row};
+use common::scalar::{Datum, ScalarType};
 use std::fmt;
 use std::fmt::Formatter;
 #[derive(Debug, Clone)]
@@ -39,6 +39,10 @@ impl BinaryExpr {
             scalar_type,
             nullable: false,
         }
+    }
+
+    pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
+        todo!()
     }
 }
 
@@ -149,6 +153,10 @@ impl VariadicExpr {
             scalar_type: ScalarType::Boolean,
             nullable: false,
         }
+    }
+
+    pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
+        todo!()
     }
 }
 

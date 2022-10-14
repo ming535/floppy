@@ -32,7 +32,7 @@ impl PhysicalExpr {
 
     pub fn evaluate(&self, row: &Row) -> Result<Datum> {
         match self {
-            Self::Column(c) => row.value(c.idx),
+            Self::Column(c) => row.column_value(c.idx),
             Self::Literal(v) => Ok(v.clone()),
             Self::TryCastExpr(t) => t.evaluate(row),
             Self::BinaryExpr(e) => e.evaluate(row),

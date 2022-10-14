@@ -15,7 +15,7 @@ pub enum PhysicalPlan {
     FilterExec(FilterExec),
 }
 
-impl PhysicalPlan {
+impl Physicallan {
     pub fn next(&mut self) -> Result<Option<Row>> {
         match self {
             Self::EmptyExec(p) => p.next(),

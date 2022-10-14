@@ -1,7 +1,7 @@
 use crate::context::{ExprContext, StatementContext};
-use crate::prim::expr;
-use crate::prim::expr::{CoercibleExpr, Expr};
-use crate::prim::func::{add, gt};
+use crate::primitive::expr;
+use crate::primitive::expr::{CoercibleExpr, Expr};
+use crate::primitive::func::{add, gt};
 use crate::LogicalPlan;
 use catalog::names::{FullObjectName, PartialObjectName};
 use common::error::{FloppyError, Result};

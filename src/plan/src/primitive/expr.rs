@@ -1,7 +1,7 @@
 use crate::context::ExprContext;
-use crate::prim::func::{BinaryExpr, VariadicExpr};
+use crate::primitive::func::{BinaryExpr, VariadicExpr};
 use common::error::{FloppyError, Result};
-use common::relation::{ColumnRef, ColumnType};
+use common::relation::{ColumnRef, ColumnType, Row};
 use common::scalar::{Datum, ScalarType};
 use rust_decimal::Decimal;
 use std::fmt;
@@ -58,6 +58,19 @@ impl Expr {
             }
             _ => Err(FloppyError::NotImplemented(format!(
                 "only support implicit cast from string to numeric, explicit cast also not supported. err from {} to {}", self, ty
+            ))),
+        }
+    }
+
+    pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
+        match self {
+            Self::Column(ColumnRef { id, .. }) => row.column_value(*id),
+            Self::Literal(Literal { datum, .. }) => Ok(datum.clone()),
+            Self::CallBinary(e) => e.evaluate(ecx, row),
+            Self::CallVariadic(e) => e.evaluate(ecx, row),
+            _ => Err(FloppyError::NotImplemented(format!(
+                "not implemented expr evaluate: {:?}",
+                self
             ))),
         }
     }

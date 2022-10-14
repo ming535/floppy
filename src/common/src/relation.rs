@@ -1,7 +1,5 @@
 use crate::error::{field_not_found, FloppyError, Result};
 use crate::scalar::{Datum, ScalarType};
-use std::fmt;
-use std::fmt::{write, Formatter};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -366,7 +364,7 @@ impl Row {
         Self { values }
     }
 
-    pub fn value(&self, index: usize) -> Result<Datum> {
+    pub fn column_value(&self, index: usize) -> Result<Datum> {
         if index > self.values.len() {
             return Err(FloppyError::Internal(format!(
                 "column index out of range, column index = {:}, column len = {:}",

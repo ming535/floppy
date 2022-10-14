@@ -1,4 +1,4 @@
-use crate::LogicalPlan;
+use crate::logical_plan::LogicalPlan;
 use std::fmt;
 
 /// Trait that implements the [Visitor
