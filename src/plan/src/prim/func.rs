@@ -1,5 +1,5 @@
-use crate::context::ScalarExprContext;
-use crate::expr::ScalarExpr;
+use crate::context::ExprContext;
+use crate::prim::expr::Expr;
 use common::error::FloppyError;
 use common::error::Result;
 use common::relation::ColumnType;
@@ -9,8 +9,8 @@ use std::fmt::Formatter;
 #[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub func: BinaryFunc,
-    pub expr1: Box<ScalarExpr>,
-    pub expr2: Box<ScalarExpr>,
+    pub expr1: Box<Expr>,
+    pub expr2: Box<Expr>,
 }
 
 impl fmt::Display for BinaryExpr {
@@ -73,11 +73,7 @@ impl fmt::Display for BinaryFunc {
     }
 }
 
-pub fn add(
-    ecx: &ScalarExprContext,
-    expr1: &ScalarExpr,
-    expr2: &ScalarExpr,
-) -> Result<ScalarExpr> {
+pub fn add(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
     let ty1 = expr1.typ(ecx).scalar_type;
     let ty2 = expr2.typ(ecx).scalar_type;
 
@@ -100,18 +96,14 @@ pub fn add(
         }
     };
 
-    Ok(ScalarExpr::CallBinary(BinaryExpr {
+    Ok(Expr::CallBinary(BinaryExpr {
         func: f,
         expr1: Box::new(expr1.clone()),
         expr2: Box::new(expr2.clone()),
     }))
 }
 
-pub fn gt(
-    ecx: &ScalarExprContext,
-    expr1: &ScalarExpr,
-    expr2: &ScalarExpr,
-) -> Result<ScalarExpr> {
+pub fn gt(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
     let ty1 = expr1.typ(ecx).scalar_type;
     let ty2 = expr2.typ(ecx).scalar_type;
 
@@ -122,7 +114,7 @@ pub fn gt(
         )));
     }
 
-    Ok(ScalarExpr::CallBinary(BinaryExpr {
+    Ok(Expr::CallBinary(BinaryExpr {
         func: BinaryFunc::Gt,
         expr1: Box::new(expr1.clone()),
         expr2: Box::new(expr2.clone()),
@@ -132,7 +124,7 @@ pub fn gt(
 #[derive(Debug, Clone)]
 pub struct VariadicExpr {
     func: VariadicFunc,
-    exprs: Vec<ScalarExpr>,
+    exprs: Vec<Expr>,
 }
 
 impl fmt::Display for VariadicExpr {

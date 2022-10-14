@@ -1,4 +1,4 @@
-use crate::expr::RelationExpr;
+use crate::LogicalPlan;
 use std::fmt;
 
 /// Trait that implements the [Visitor
@@ -38,10 +38,10 @@ impl<'a, 'b> IndentVisitor<'a, 'b> {
     }
 }
 
-impl<'a, 'b> ExprVisitor<RelationExpr> for IndentVisitor<'a, 'b> {
+impl<'a, 'b> ExprVisitor<LogicalPlan> for IndentVisitor<'a, 'b> {
     type Error = fmt::Error;
 
-    fn pre_visit(&mut self, node: &RelationExpr) -> Result<bool, Self::Error> {
+    fn pre_visit(&mut self, node: &LogicalPlan) -> Result<bool, Self::Error> {
         if self.indent > 0 {
             writeln!(self.f)?;
         }
@@ -51,7 +51,7 @@ impl<'a, 'b> ExprVisitor<RelationExpr> for IndentVisitor<'a, 'b> {
         Ok(true)
     }
 
-    fn post_visit(&mut self, _: &RelationExpr) -> Result<bool, Self::Error> {
+    fn post_visit(&mut self, _: &LogicalPlan) -> Result<bool, Self::Error> {
         self.indent -= 1;
         Ok(true)
     }

@@ -1,7 +1,8 @@
-use crate::context::{ScalarExprContext, StatementContext};
-use crate::expr;
-use crate::expr::{CoercibleScalarExpr, RelationExpr, ScalarExpr};
-use crate::func::{add, gt, BinaryExpr, BinaryFunc};
+use crate::context::{ExprContext, StatementContext};
+use crate::prim::expr;
+use crate::prim::expr::{CoercibleExpr, Expr};
+use crate::prim::func::{add, gt};
+use crate::LogicalPlan;
 use catalog::names::{FullObjectName, PartialObjectName};
 use common::error::{FloppyError, Result};
 use common::relation::{ColumnName, ColumnRef, ColumnType, RelationDesc};
@@ -12,14 +13,14 @@ use sqlparser::ast::{
 };
 
 /// plan_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
-/// which contains [`RelationExpr`] and [`RelationDesc`].
-pub fn plan_query(scx: &StatementContext, query: &SqlQuery) -> Result<RelationExpr> {
+/// which contains [`LogicalPlan`] and [`RelationDesc`].
+pub fn plan_query(scx: &StatementContext, query: &SqlQuery) -> Result<LogicalPlan> {
     let set_expr = &query.body;
     plan_set_expr(scx, set_expr)
     // todo! order_by, limit, offset, fetch
 }
 
-fn plan_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<RelationExpr> {
+fn plan_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<LogicalPlan> {
     match set_expr {
         SetExpr::Select(select) => plan_select(scx, select),
         _ => Err(FloppyError::NotImplemented(format!(
@@ -29,7 +30,7 @@ fn plan_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<RelationE
     }
 }
 
-fn plan_select(scx: &StatementContext, select: &Select) -> Result<RelationExpr> {
+fn plan_select(scx: &StatementContext, select: &Select) -> Result<LogicalPlan> {
     let planned_query = plan_table_with_joins(scx, &select.from)?;
     let planned_query = plan_filter(scx, planned_query, &select.selection)?;
     plan_projection(scx, planned_query, &select.projection)
@@ -38,9 +39,9 @@ fn plan_select(scx: &StatementContext, select: &Select) -> Result<RelationExpr> 
 fn plan_table_with_joins(
     scx: &StatementContext,
     from: &Vec<TableWithJoins>,
-) -> Result<RelationExpr> {
+) -> Result<LogicalPlan> {
     if from.is_empty() {
-        return Ok(RelationExpr::Empty);
+        return Ok(LogicalPlan::Empty);
     }
 
     // we only consider single table without Join for now.
@@ -65,7 +66,7 @@ fn plan_table_with_joins(
             let partial_object_name: PartialObjectName = name.try_into()?;
             let table = scx.catalog.resolve_item(&partial_object_name)?;
             let full_name: FullObjectName = partial_object_name.into();
-            Ok(RelationExpr::Table {
+            Ok(LogicalPlan::Table {
                 table_id: table.id(),
                 rel_desc: table.desc(&full_name)?.into_owned(),
                 name: full_name,
@@ -80,18 +81,18 @@ fn plan_table_with_joins(
 
 fn plan_filter(
     scx: &StatementContext,
-    input: RelationExpr,
+    input: LogicalPlan,
     filter: &Option<SqlExpr>,
-) -> Result<RelationExpr> {
+) -> Result<LogicalPlan> {
     match filter {
         Some(filter) => {
-            let ecx = ScalarExprContext {
+            let ecx = ExprContext {
                 scx,
                 rel_desc: &input.rel_desc(),
             };
             let expr = plan_expr(&ecx, filter)?;
             let expr = expr.type_as(&ecx, &ScalarType::Boolean)?;
-            Ok(RelationExpr::Filter {
+            Ok(LogicalPlan::Filter {
                 input: Box::new(input),
                 predicate: expr,
             })
@@ -101,17 +102,17 @@ fn plan_filter(
 }
 
 struct ProjectionCtx {
-    expr: ScalarExpr,
+    expr: Expr,
     column_name: ColumnName,
     typ: ColumnType,
 }
 
 fn plan_projection(
     scx: &StatementContext,
-    input: RelationExpr,
+    input: LogicalPlan,
     projection: &Vec<SelectItem>,
-) -> Result<RelationExpr> {
-    let ecx = ScalarExprContext {
+) -> Result<LogicalPlan> {
+    let ecx = ExprContext {
         scx,
         rel_desc: &input.rel_desc(),
     };
@@ -120,7 +121,7 @@ fn plan_projection(
         .map(|e| {
             let expr = plan_select_item(&ecx, e)?.type_as_any(&ecx)?;
             let column_name = match &expr {
-                ScalarExpr::Column(ColumnRef { name, .. }) => name.clone(),
+                Expr::Column(ColumnRef { name, .. }) => name.clone(),
                 _ => "?column?".to_string(),
             };
             let typ = expr.typ(&ecx);
@@ -142,21 +143,15 @@ fn plan_projection(
         .collect::<Vec<ColumnName>>();
 
     let rel_desc = RelationDesc::new(column_types, column_names);
-    let exprs = ctxs
-        .iter()
-        .map(|c| c.expr.clone())
-        .collect::<Vec<ScalarExpr>>();
-    Ok(RelationExpr::Projection {
+    let exprs = ctxs.iter().map(|c| c.expr.clone()).collect::<Vec<Expr>>();
+    Ok(LogicalPlan::Projection {
         exprs,
         input: Box::new(input),
         rel_desc,
     })
 }
 
-fn plan_select_item(
-    ecx: &ScalarExprContext,
-    item: &SelectItem,
-) -> Result<CoercibleScalarExpr> {
+fn plan_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<CoercibleExpr> {
     match item {
         SelectItem::UnnamedExpr(expr) => plan_expr(ecx, expr),
         _ => Err(FloppyError::NotImplemented(format!(
@@ -166,10 +161,7 @@ fn plan_select_item(
     }
 }
 
-pub fn plan_expr(
-    ecx: &ScalarExprContext,
-    sql_expr: &SqlExpr,
-) -> Result<CoercibleScalarExpr> {
+pub fn plan_expr(ecx: &ExprContext, sql_expr: &SqlExpr) -> Result<CoercibleExpr> {
     match sql_expr {
         SqlExpr::Value(v) => plan_literal(ecx, v),
         SqlExpr::Identifier(name) => plan_identifier(ecx, name),
@@ -181,22 +173,19 @@ pub fn plan_expr(
     }
 }
 
-fn plan_literal(
-    ecx: &ScalarExprContext,
-    literal: &SqlValue,
-) -> Result<CoercibleScalarExpr> {
+fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> {
     match literal {
         SqlValue::Number(n, _) => expr::parse_sql_number(&n).map(|e| e.into()),
         SqlValue::SingleQuotedString(s) => {
-            Ok(CoercibleScalarExpr::LiteralString(s.to_string()))
+            Ok(CoercibleExpr::LiteralString(s.to_string()))
         }
         SqlValue::DoubleQuotedString(s) => {
-            Ok(CoercibleScalarExpr::LiteralString(s.to_string()))
+            Ok(CoercibleExpr::LiteralString(s.to_string()))
         }
         SqlValue::Boolean(b) => {
             Ok(expr::literal(Datum::Boolean(b.clone()), ScalarType::Boolean).into())
         }
-        SqlValue::Null => Ok(CoercibleScalarExpr::LiteralNull),
+        SqlValue::Null => Ok(CoercibleExpr::LiteralNull),
         SqlValue::Placeholder(p) => plan_parameter(ecx, p.to_string()),
         _ => Err(FloppyError::NotImplemented(format!(
             "literal not supported: {}",
@@ -205,22 +194,19 @@ fn plan_literal(
     }
 }
 
-fn plan_identifier(
-    ecx: &ScalarExprContext,
-    name: &SqlIdent,
-) -> Result<CoercibleScalarExpr> {
+fn plan_identifier(ecx: &ExprContext, name: &SqlIdent) -> Result<CoercibleExpr> {
     let rel_desc = ecx.rel_desc;
     let id = rel_desc.column_idx(&name.value)?;
     let name = rel_desc.column_name(id).to_string();
-    Ok(ScalarExpr::Column(ColumnRef { id, name }).into())
+    Ok(Expr::Column(ColumnRef { id, name }).into())
 }
 
 fn plan_binary_op(
-    ecx: &ScalarExprContext,
+    ecx: &ExprContext,
     left: &SqlExpr,
     op: &BinaryOperator,
     right: &SqlExpr,
-) -> Result<CoercibleScalarExpr> {
+) -> Result<CoercibleExpr> {
     let rel_desc = ecx.rel_desc;
     let left = plan_expr(ecx, left)?;
     let right = plan_expr(ecx, right)?;
@@ -242,7 +228,7 @@ fn plan_binary_op(
     }
 }
 
-fn plan_parameter(ecx: &ScalarExprContext, p: String) -> Result<CoercibleScalarExpr> {
+fn plan_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
     let param = p.strip_prefix("$");
     if param.is_none() {
         return Err(FloppyError::Plan(format!("invalid parameter: {}", p)));
@@ -255,9 +241,9 @@ fn plan_parameter(ecx: &ScalarExprContext, p: String) -> Result<CoercibleScalarE
         as usize;
 
     if ecx.param_types().borrow().contains_key(&n) {
-        Ok(ScalarExpr::Parameter(n).into())
+        Ok(Expr::Parameter(n).into())
     } else {
-        Ok(CoercibleScalarExpr::Parameter(n))
+        Ok(CoercibleExpr::Parameter(n))
     }
 }
 
@@ -275,10 +261,10 @@ fn plan_parameter(ecx: &ScalarExprContext, p: String) -> Result<CoercibleScalarE
 ///
 ///  At least one of the expression is a numeric type.
 fn plan_bop_plus(
-    ecx: &ScalarExprContext,
-    cexpr1: CoercibleScalarExpr,
-    cexpr2: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    cexpr1: CoercibleExpr,
+    cexpr2: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     let expr1 = cexpr1.type_as_any(ecx)?;
     let expr2 = cexpr2.type_as_any(ecx)?;
 
@@ -287,18 +273,18 @@ fn plan_bop_plus(
 }
 
 fn plan_bop_minus(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_gt(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     let expr1 = left.type_as_any(ecx)?;
     let expr2 = right.type_as_any(ecx)?;
 
@@ -307,66 +293,62 @@ fn plan_bop_gt(
 }
 
 fn plan_bop_lt(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_gte(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_lte(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_eq(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_neq(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_and(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn plan_bop_or(
-    ecx: &ScalarExprContext,
-    left: CoercibleScalarExpr,
-    right: CoercibleScalarExpr,
-) -> Result<CoercibleScalarExpr> {
+    ecx: &ExprContext,
+    left: CoercibleExpr,
+    right: CoercibleExpr,
+) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
-fn numeric_op_cast(
-    ecx: &ScalarExprContext,
-    expr1: ScalarExpr,
-    expr2: ScalarExpr,
-) -> Result<(ScalarExpr, ScalarExpr)> {
+fn numeric_op_cast(ecx: &ExprContext, expr1: Expr, expr2: Expr) -> Result<(Expr, Expr)> {
     let c1_type = expr1.typ(ecx);
     let c2_type = expr2.typ(ecx);
     let is_c1_numeric = c1_type.scalar_type.is_numeric();
@@ -425,7 +407,7 @@ mod tests {
         catalog.insert_table("test", 1, desc)
     }
 
-    fn logical_plan(scx: &StatementContext, sql: &str) -> Result<RelationExpr> {
+    fn logical_plan(scx: &StatementContext, sql: &str) -> Result<LogicalPlan> {
         let dialect = PostgreSqlDialect {};
         let ast = &Parser::parse_sql(&dialect, sql)?[0];
         match ast {
