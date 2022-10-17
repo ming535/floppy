@@ -42,7 +42,29 @@ impl BinaryExpr {
     }
 
     pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
-        todo!()
+        let datum1 = self.expr1.evaluate(ecx, row)?;
+        let datum2 = self.expr2.evaluate(ecx, row)?;
+
+        if self.expr1.typ(ecx) != self.expr2.typ(ecx) {
+            return Err(FloppyError::Internal(format!(
+                "expression should have the same type for binary function"
+            )));
+        }
+
+        match self.func {
+            BinaryFunc::AddInt16 | BinaryFunc::AddInt32 | BinaryFunc::AddInt64 => {
+                datum1 + datum2
+            }
+            BinaryFunc::SubInt16 | BinaryFunc::SubInt32 | BinaryFunc::SubInt64 => {
+                datum1 - datum2
+            }
+            BinaryFunc::Eq => Ok(Datum::Boolean(datum1 == datum2)),
+            BinaryFunc::NotEq => Ok(Datum::Boolean(datum1 != datum2)),
+            BinaryFunc::Lt => Ok(Datum::Boolean(datum1 < datum2)),
+            BinaryFunc::Lte => Ok(Datum::Boolean(datum1 <= datum2)),
+            BinaryFunc::Gt => Ok(Datum::Boolean(datum1 > datum2)),
+            BinaryFunc::Gte => Ok(Datum::Boolean(datum1 >= datum2)),
+        }
     }
 }
 
@@ -156,7 +178,27 @@ impl VariadicExpr {
     }
 
     pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
-        todo!()
+        let datums = self
+            .exprs
+            .iter()
+            .map(|e| e.evaluate(ecx, row))
+            .collect::<Result<Vec<Datum>>>()?;
+
+        if datums.len() < 2 {
+            return Err(FloppyError::EvalExpr(format!(
+                "at least two expression is required"
+            )));
+        }
+
+        // since we only support "AND", "OR", let's simplify the logic here.
+        match self.func {
+            VariadicFunc::And => datums
+                .iter()
+                .try_fold(Datum::Boolean(true), |acc, item| acc.logical_and(item)),
+            VariadicFunc::Or => datums
+                .iter()
+                .try_fold(Datum::Boolean(false), |acc, item| acc.logical_or(item)),
+        }
     }
 }
 

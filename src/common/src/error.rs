@@ -20,6 +20,8 @@ pub enum FloppyError {
     /// is not verified during execution.
     Internal(String),
     Plan(String),
+    /// Expression evaluation error
+    EvalExpr(String),
     Catalog(CatalogError),
     Parser(ParserError),
     Io(std::io::Error),
@@ -139,6 +141,9 @@ impl fmt::Display for FloppyError {
             }
             FloppyError::Plan(desc) => {
                 write!(f, "Planner error: {}", desc)
+            }
+            FloppyError::EvalExpr(desc) => {
+                write!(f, "Expression evaluation error: {}", desc)
             }
             FloppyError::Catalog(e) => {
                 write!(f, "Schema error: {}", e)

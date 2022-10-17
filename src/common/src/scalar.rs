@@ -1,14 +1,16 @@
 use crate::adt::char::CharLength;
 use crate::adt::varchar::VarCharMaxLength;
+use crate::error::{FloppyError, Result};
 use crate::relation::ColumnType;
-use std::fmt;
+use std::cmp::Ordering;
 use std::fmt::Formatter;
+use std::{fmt, ops};
 
 /// A single value.
 ///
 /// Note that `Datum` must always derive [`Eq`] to enforce equality with
 /// `repr::Row`.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Debug, Hash)]
 pub enum Datum {
     Boolean(bool),
     /// A 16-bit signed integer.
@@ -35,209 +37,81 @@ impl Datum {
     }
 }
 
-// impl PartialEq for Datum {
-//     fn eq(&self, other: &Self) -> bool {
-//         use Datum::*;
-//         match (self, other) {
-//             (Null, _) => false,
-//             (Boolean(v1), Boolean(v2)) => v1.eq(v2),
-//             (Boolean(_), _) => false,
-//             (Int16(v1), Int16(v2)) => v1.eq(v2),
-//             (Int16(_), _) => false,
-//             (Int32(v1), Int32(v2)) => v1.eq(v2),
-//             (Int32(_), _) => false,
-//             (Int64(v1), Int64(v2)) => v1.eq(v2),
-//             (Int64(_), _) => false,
-//             (UInt32(v1), UInt32(v2)) => v1.eq(v2),
-//             (UInt32(_), _) => false,
-//         }
-//     }
-// }
+impl ops::Add for Datum {
+    type Output = Result<Datum>;
 
-// impl PartialOrd for Datum {
-//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-//         use Datum::*;
-//
-//         match (self, other) {
-//             (Null, _) => None,
-//             (Boolean(v1), Boolean(v2)) => v1.partial_cmp(v2),
-//             (Boolean(_), _) => None,
-//             (Int8(v1), Int8(v2)) => v1.partial_cmp(v2),
-//             (Int8(_), _) => None,
-//             (Int16(v1), Int16(v2)) => v1.partial_cmp(v2),
-//             (Int16(_), _) => None,
-//             (Int32(v1), Int32(v2)) => v1.partial_cmp(v2),
-//             (Int32(_), _) => None,
-//             (Int64(v1), Int64(v2)) => v1.partial_cmp(v2),
-//             (Int64(_v_), _) => None,
-//             (UInt8(v1), UInt8(v2)) => v1.partial_cmp(v2),
-//             (UInt8(_), _) => None,
-//             (UInt16(v1), UInt16(v2)) => v1.partial_cmp(v2),
-//             (UInt16(_), _) => None,
-//             (UInt32(v1), UInt32(v2)) => v1.partial_cmp(v2),
-//             (UInt32(_), _) => None,
-//             (UInt64(v1), UInt64(v2)) => v1.partial_cmp(v2),
-//             (UInt64(_), _) => None,
-//             (Utf8(v1), Utf8(v2)) => v1.partial_cmp(v2),
-//             (Utf8(_), _) => None,
-//         }
-//     }
-// }
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Int16(d1), Self::Int16(d2)) => d1.checked_add(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int16(v)),
+            ),
+            (Self::Int32(d1), Self::Int32(d2)) => d1.checked_add(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int32(v)),
+            ),
+            (Self::Int64(d1), Self::Int64(d2)) => d1.checked_add(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int64(v)),
+            ),
+            _ => Err(FloppyError::Internal(format!(
+                "mismatched type for addition"
+            ))),
+        }
+    }
+}
 
-// impl Eq for Datum {}
+impl ops::Sub for Datum {
+    type Output = Result<Datum>;
 
-// impl ops::Add<Datum> for Datum {
-//     type Output = Result<Datum>;
-//
-//     fn add(self, rhs: Datum) -> Self::Output {
-//         let left_data_type = self.data_type();
-//         let right_data_type = rhs.data_type();
-//         if left_data_type != right_data_type {
-//             return Err(FloppyError::Internal(format!(
-//                 "left and right should be the same type left: {:?}, right: {:?}",
-//                 left_data_type, right_data_type
-//             )));
-//         }
-//
-//         if !left_data_type.is_numeric() || !right_data_type.is_numeric() {
-//             return Err(FloppyError::Internal(format!(
-//                 "'add' is only supported for numeric types, but we got left: {:?}, right: {:?}",
-//                 left_data_type,
-//                 right_data_type
-//             )));
-//         }
-//         match (self, rhs) {
-//             (Self::Int8(Some(left)), Self::Int8(Some(right))) => {
-//                 Ok(Self::Int8(Some(left + right)))
-//             }
-//             (Self::Int16(Some(left)), Self::Int16(Some(right))) => {
-//                 Ok(Self::Int16(Some(left + right)))
-//             }
-//             (Self::Int32(Some(left)), Self::Int32(Some(right))) => {
-//                 Ok(Self::Int32(Some(left + right)))
-//             }
-//             (Self::Int64(Some(left)), Self::Int64(Some(right))) => {
-//                 Ok(Self::Int64(Some(left + right)))
-//             }
-//             (Self::UInt8(Some(left)), Self::UInt8(Some(right))) => {
-//                 Ok(Self::UInt8(Some(left + right)))
-//             }
-//             (Self::UInt16(Some(left)), Self::UInt16(Some(right))) => {
-//                 Ok(Self::UInt16(Some(left + right)))
-//             }
-//             (Self::UInt32(Some(left)), Self::UInt32(Some(right))) => {
-//                 Ok(Self::UInt32(Some(left + right)))
-//             }
-//             (Self::UInt64(Some(left)), Self::UInt64(Some(right))) => {
-//                 Ok(Self::UInt64(Some(left + right)))
-//             }
-//             _ => {
-//                 return Err(FloppyError::Internal(format!(
-//                     "'add' is only supported for numeric types, but we got left: {:?}, right: {:?}",
-//                     left_data_type,
-//                     right_data_type
-//                 )));
-//             }
-//         }
-//     }
-// }
-//
-// impl ops::Sub<Datum> for Datum {
-//     type Output = Result<Datum>;
-//
-//     fn sub(self, rhs: Datum) -> Self::Output {
-//         let left_data_type = self.data_type();
-//         let right_data_type = rhs.data_type();
-//
-//         if !left_data_type.is_numeric() || !right_data_type.is_numeric() {
-//             return Err(FloppyError::Internal(format!(
-//                 "'sub' is only supported for numeric types, but we got left: {:?}, right: {:?}",
-//                 left_data_type,
-//                 right_data_type
-//             )));
-//         }
-//
-//         if left_data_type != right_data_type {
-//             return Err(FloppyError::Internal(format!(
-//                 "left and right should be the same type left: {:?}, right: {:?}",
-//                 left_data_type, right_data_type
-//             )));
-//         }
-//
-//         match (self, rhs) {
-//             (Self::Int8(Some(left)), Self::Int8(Some(right))) => {
-//                 Ok(Self::Int8(Some(left - right)))
-//             }
-//             (Self::Int16(Some(left)), Self::Int16(Some(right))) => {
-//                 Ok(Self::Int16(Some(left - right)))
-//             }
-//             (Self::Int32(Some(left)), Self::Int32(Some(right))) => {
-//                 Ok(Self::Int32(Some(left - right)))
-//             }
-//             (Self::Int64(Some(left)), Self::Int64(Some(right))) => {
-//                 Ok(Self::Int64(Some(left - right)))
-//             }
-//             (Self::UInt8(Some(left)), Self::UInt8(Some(right))) => {
-//                 Ok(Self::UInt8(Some(left - right)))
-//             }
-//             (Self::UInt16(Some(left)), Self::UInt16(Some(right))) => {
-//                 Ok(Self::UInt16(Some(left - right)))
-//             }
-//             (Self::UInt32(Some(left)), Self::UInt32(Some(right))) => {
-//                 Ok(Self::UInt32(Some(left - right)))
-//             }
-//             (Self::UInt64(Some(left)), Self::UInt64(Some(right))) => {
-//                 Ok(Self::UInt64(Some(left - right)))
-//             }
-//             _ => {
-//                 return Err(FloppyError::Internal(format!(
-//                     "'sub' is only supported for numeric types, but we got left: {:?}, right: {:?}",
-//                     left_data_type,
-//                     right_data_type
-//                 )));
-//             }
-//         }
-//     }
-// }
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Int16(d1), Self::Int16(d2)) => d1.checked_sub(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int16(v)),
+            ),
+            (Self::Int32(d1), Self::Int32(d2)) => d1.checked_sub(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int32(v)),
+            ),
+            (Self::Int64(d1), Self::Int64(d2)) => d1.checked_sub(d2).map_or_else(
+                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                |v| Ok(Datum::Int64(v)),
+            ),
+            _ => Err(FloppyError::Internal(format!(
+                "mismatched type for addition"
+            ))),
+        }
+    }
+}
 
-// impl Datum {
-//     pub fn logical_and(&self, rhs: &Datum) -> Result<Datum> {
-//         match (self, rhs) {
-//             (Self::Boolean(Some(first)), Self::Boolean(Some(second))) => {
-//                 if *first && *second {
-//                     Ok(Self::Boolean(Some(true)))
-//                 } else {
-//                     Ok(Self::Boolean(Some(false)))
-//                 }
-//             }
-//             _ => {
-//                 Err(FloppyError::Internal(format!(
-//                     "'AND' is only supported for boolean type, but we got first {:?}, second: {:?}",
-//                     self,
-//                     rhs
-//                 )))
-//             }
-//         }
-//     }
-//
-//     pub fn logical_or(&self, rhs: &Datum) -> Result<Datum> {
-//         match (self, rhs) {
-//             (Self::Boolean(Some(first)), Self::Boolean(Some(second))) => {
-//                 if *first {
-//                     Ok(Self::Boolean(Some(true)))
-//                 } else {
-//                     Ok(Self::Boolean(Some(*second)))
-//                 }
-//             },
-//             _ => {
-//                 Err(FloppyError::Internal(format!(
-//                     "'OR' is only supported for boolean type, but we got first {:?}, second {:?}",
-//                     self, rhs
-//                 )))
-//             }
-//         }
-//     }
-// }
+impl PartialEq for Datum {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Boolean(d1), Self::Boolean(d2)) => d1 == d2,
+            (Self::Int16(d1), Self::Int16(d2)) => d1 == d2,
+            (Self::Int32(d1), Self::Int32(d2)) => d1 == d2,
+            (Self::UInt32(d1), Self::UInt32(d2)) => d1 == d2,
+            (Self::String(d1), Self::String(d2)) => d1 == d2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Datum {}
+
+impl PartialOrd for Datum {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::Int16(d1), Self::Int16(d2)) => d1.partial_cmp(d2),
+            (Self::Int32(d1), Self::Int32(d2)) => d1.partial_cmp(d2),
+            (Self::Int64(d1), Self::Int64(d2)) => d1.partial_cmp(d2),
+            (Self::UInt32(d1), Self::UInt32(d2)) => d1.partial_cmp(d2),
+            (Self::String(d1), Self::String(d2)) => d1.partial_cmp(d2),
+            _ => None,
+        }
+    }
+}
 
 impl fmt::Display for Datum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -254,38 +128,27 @@ impl fmt::Display for Datum {
     }
 }
 
-// impl fmt::Debug for Datum {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::Null => write!(f, "NULL"),
-//             Self::Boolean(_) => {
-//                 write!(f, "Boolean({})", self)
-//             }
-//             Self::Int8(_) => write!(f, "Int8({})", self),
-//             Self::Int16(_) => write!(f, "Int16({})", self),
-//             Self::Int32(_) => write!(f, "Int32({})", self),
-//             Self::Int64(_) => write!(f, "Int64({})", self),
-//             Self::UInt8(_) => write!(f, "UInt8({})", self),
-//             Self::UInt16(_) => write!(f, "UInt8({})", self),
-//             Self::UInt32(_) => {
-//                 write!(f, "UInt32({})", self)
-//             }
-//             Self::UInt64(_) => {
-//                 write!(f, "UInt64({})", self)
-//             }
-//             Self::Utf8(None) => write!(f, "Utf8({})", self),
-//             Self::Utf8(Some(_)) => {
-//                 write!(f, "Utf8(\"{}\")", self)
-//             }
-//         }
-//     }
-// }
+impl Datum {
+    pub fn logical_and(&self, other: &Datum) -> Result<Datum> {
+        match (self, other) {
+            (Self::Boolean(d1), Self::Boolean(d2)) => Ok(Datum::Boolean(*d1 && *d2)),
+            _ => Err(FloppyError::Internal(format!("AND type error"))),
+        }
+    }
+
+    pub fn logical_or(&self, other: &Datum) -> Result<Datum> {
+        match (self, other) {
+            (Self::Boolean(d1), Self::Boolean(d2)) => Ok(Datum::Boolean(*d1 || *d2)),
+            _ => Err(FloppyError::Internal(format!("OR type error"))),
+        }
+    }
+}
 
 /// The type of a [`Datum`].
 ///
 /// There is a direct correspondence between `Datum` variants and `ScalarType`
 /// variants.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScalarType {
     /// The type of [`Datum::Boolean`]
     Boolean,

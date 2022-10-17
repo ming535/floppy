@@ -58,6 +58,16 @@ pub struct PartialObjectName {
     pub item: String,
 }
 
+impl From<&str> for PartialObjectName {
+    fn from(item: &str) -> Self {
+        Self {
+            database: Some(FLOPPY_DB_NAME.to_string()),
+            schema: Some(FLOPPY_SCHEMA_NAME.to_string()),
+            item: item.to_string(),
+        }
+    }
+}
+
 impl TryFrom<&SqlObjectName> for PartialObjectName {
     type Error = FloppyError;
 

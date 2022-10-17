@@ -435,6 +435,7 @@ mod tests {
         let scx = StatementContext {
             catalog: &catalog::memory::MemCatalog::default(),
             param_types: RefCell::default(),
+            param_values: RefCell::default(),
         };
 
         quick_test_eq(
@@ -505,11 +506,7 @@ mod tests {
     fn select_table_not_exists() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext {
-            catalog: &catalog,
-            param_types: RefCell::default(),
-        };
-
+        let scx = StatementContext::new(&catalog);
         let err =
             logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
         assert!(matches!(
@@ -522,10 +519,7 @@ mod tests {
     fn select_column_not_exists() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext {
-            catalog: &catalog,
-            param_types: RefCell::default(),
-        };
+        let scx = StatementContext::new(&catalog);
 
         let err =
             logical_plan(&scx, "SELECT fake FROM test").expect_err("query is invalid");
@@ -540,10 +534,7 @@ mod tests {
     fn select_column() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext {
-            catalog: &catalog,
-            param_types: RefCell::default(),
-        };
+        let scx = StatementContext::new(&catalog);
 
         quick_test_eq(
             &scx,
@@ -564,10 +555,7 @@ mod tests {
     fn select_filter() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext {
-            catalog: &catalog,
-            param_types: RefCell::default(),
-        };
+        let scx = StatementContext::new(&catalog);
 
         quick_test_eq(
             &scx,

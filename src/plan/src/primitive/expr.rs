@@ -65,13 +65,10 @@ impl Expr {
     pub fn evaluate(&self, ecx: &ExprContext, row: &Row) -> Result<Datum> {
         match self {
             Self::Column(ColumnRef { id, .. }) => row.column_value(*id),
+            Self::Parameter(n) => Ok(ecx.param_values().borrow()[n].clone()),
             Self::Literal(Literal { datum, .. }) => Ok(datum.clone()),
             Self::CallBinary(e) => e.evaluate(ecx, row),
             Self::CallVariadic(e) => e.evaluate(ecx, row),
-            _ => Err(FloppyError::NotImplemented(format!(
-                "not implemented expr evaluate: {:?}",
-                self
-            ))),
         }
     }
 }
@@ -248,5 +245,52 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
             "cast not implemented from datum: {} typ: {}, to : {}",
             datum, scalar_type, to
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::StatementContext;
+    use crate::primitive::func::add;
+    use catalog::names::{FullObjectName, PartialObjectName};
+    use catalog::CatalogStore;
+    use common::relation::RelationDesc;
+    use sqlparser::ast::Statement;
+
+    fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
+        let desc = RelationDesc::new(
+            vec![
+                ColumnType::new(ScalarType::Int32, false),
+                ColumnType::new(ScalarType::Int32, false),
+            ],
+            vec!["c1".to_string(), "c2".to_string()],
+        );
+        catalog.insert_table("test", 1, desc)
+    }
+
+    #[test]
+    fn simple_add() -> Result<()> {
+        let mut catalog = catalog::memory::MemCatalog::default();
+        seed_catalog(&mut catalog);
+        let partial_obj_name: PartialObjectName = "test".into();
+        let full_obj_name: FullObjectName = "test".into();
+        let rel_desc = catalog
+            .resolve_item(&partial_obj_name)?
+            .desc(&full_obj_name)?;
+
+        let exc = ExprContext {
+            scx: &StatementContext::new(&catalog),
+            rel_desc: &rel_desc,
+        };
+
+        let l1 = literal(Datum::Int32(1), ScalarType::Int32);
+        let l2 = l1.clone();
+
+        let l3 = add(&exc, &l1, &l2)?;
+        assert_eq!(format!("{}", l3), "Int32(1) + Int32(1)");
+        let d = l3.evaluate(&exc, &Row::empty())?;
+        assert_eq!(format!("{}", d), "2");
+        Ok(())
     }
 }

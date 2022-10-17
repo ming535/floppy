@@ -2,7 +2,7 @@ use crate::error::{field_not_found, FloppyError, Result};
 use crate::scalar::{Datum, ScalarType};
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ColumnType {
     pub scalar_type: ScalarType,
     pub nullable: bool,
@@ -15,96 +15,7 @@ impl ColumnType {
             nullable,
         }
     }
-    // /// Builds a qualified column based on self
-    // pub fn qualified_column(&self) -> Column {
-    //     Column {
-    //         relation: self.qualifier.clone(),
-    //         name: self.name.clone(),
-    //     }
-    // }
-    //
-    // pub fn qualified_name(&self) -> String {
-    //     if let Some(qualifier) = &self.qualifier {
-    //         format!("{}.{}", qualifier, self.name)
-    //     } else {
-    //         self.name.clone()
-    //     }
-    // }
-    //
-    // pub fn name(&self) -> String {
-    //     self.name.clone()
-    // }
 }
-
-//// A named reference to a qualified field in a schema.
-// #[derive(Debug, Clone)]
-// pub struct Column {
-//     /// relation/table name.
-//     pub relation: Option<String>,
-//     /// field/column name.
-//     pub name: String,
-// }
-//
-// impl fmt::Display for Column {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self.relation {
-//             Some(ref r) => {
-//                 write!(f, "#{}.{}", r, self.name)
-//             }
-//             None => write!(f, "#{}", self.name),
-//         }
-//     }
-// }
-//
-// impl Column {
-//     pub fn normalize_with_schema(
-//         self,
-//         schema: &Schema,
-//     ) -> Result<Self> {
-//         if self.relation.is_some() {
-//             return Ok(self);
-//         }
-//
-//         let fields =
-//             schema.fields_with_unqualified_name(&self.name);
-//         match fields.len() {
-//             1 => Ok(fields[0].qualified_column()),
-//             _ => Err(FloppyError::Internal(
-//                 "failed to normalize column".to_string(),
-//             )),
-//         }
-//     }
-//
-//     pub fn normalize_with_schemas(
-//         self,
-//         schemas: &[&Arc<Schema>],
-//     ) -> Result<Self> {
-//         if self.relation.is_some() {
-//             return Ok(self);
-//         }
-//
-//         for schema in schemas {
-//             let fields = schema
-//                 .fields_with_unqualified_name(&self.name);
-//             match fields.len() {
-//                 0 => continue,
-//                 1 => {
-//                     return Ok(fields[0].qualified_column());
-//                 }
-//                 _ => {
-//                     return Err(FloppyError::Internal(
-//                         "failed to normalize column"
-//                             .to_string(),
-//                     ));
-//                 }
-//             }
-//         }
-//
-//         Err(FloppyError::Internal(
-//             "failed to normalize column".to_string(),
-//         ))
-//     }
-// }
 
 #[derive(Debug, Clone)]
 pub struct RelationType {
@@ -362,6 +273,10 @@ pub struct Row {
 impl Row {
     pub fn new(values: Vec<Datum>) -> Self {
         Self { values }
+    }
+
+    pub fn empty() -> Self {
+        Row::new(vec![])
     }
 
     pub fn column_value(&self, index: usize) -> Result<Datum> {
