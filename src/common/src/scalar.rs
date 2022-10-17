@@ -116,15 +116,20 @@ impl PartialOrd for Datum {
 impl fmt::Display for Datum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Boolean(e) => write!(f, "{}", e)?,
-            Self::Int16(e) => write!(f, "{}", e)?,
-            Self::Int32(e) => write!(f, "{}", e)?,
-            Self::Int64(e) => write!(f, "{}", e)?,
-            Self::UInt32(e) => write!(f, "{}", e)?,
-            Self::String(e) => write!(f, "{}", e)?,
-            Self::Null => write!(f, "NULL")?,
+            Self::Boolean(e) => {
+                if *e {
+                    write!(f, "TRUE")
+                } else {
+                    write!(f, "FALSE")
+                }
+            }
+            Self::Int16(e) => write!(f, "{}", e),
+            Self::Int32(e) => write!(f, "{}", e),
+            Self::Int64(e) => write!(f, "{}", e),
+            Self::UInt32(e) => write!(f, "{}", e),
+            Self::String(e) => write!(f, "{}", e),
+            Self::Null => write!(f, "NULL"),
         }
-        Ok(())
     }
 }
 

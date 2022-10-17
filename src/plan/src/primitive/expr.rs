@@ -46,10 +46,10 @@ impl Expr {
             Self::Literal(Literal { datum: Datum::String(s), scalar_type }) => {
                 match ty {
                     ScalarType::Int32 => {
-                        Ok(literal(Datum::Int32(Decimal::from_str_exact(s)?.try_into()?), ScalarType::Int32))
+                        Ok(literal_i32(Decimal::from_str_exact(s)?.try_into()?))
                     }
                     ScalarType::Int64 => {
-                        Ok(literal(Datum::Int32(Decimal::from_str_exact(s)?.try_into()?), ScalarType::Int64))
+                        Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?))
                     }
                     _ => Err(FloppyError::NotImplemented(format!(
                         "only support implicit cast from string to numeric, explicit cast also not supported. err from {} to {}", self, ty
@@ -97,8 +97,60 @@ impl fmt::Display for Literal {
     }
 }
 
-pub fn literal(datum: Datum, scalar_type: ScalarType) -> Expr {
-    Expr::Literal(Literal { datum, scalar_type })
+pub fn literal_true() -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Boolean(true),
+        scalar_type: ScalarType::Boolean,
+    })
+}
+
+pub fn literal_false() -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Boolean(false),
+        scalar_type: ScalarType::Boolean,
+    })
+}
+
+pub fn literal_boolean(b: bool) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Boolean(b),
+        scalar_type: ScalarType::Boolean,
+    })
+}
+
+pub fn literal_i16(i: i16) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Int16(i),
+        scalar_type: ScalarType::Int16,
+    })
+}
+
+pub fn literal_i32(i: i32) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Int32(i),
+        scalar_type: ScalarType::Int32,
+    })
+}
+
+pub fn literal_i64(i: i64) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Int64(i),
+        scalar_type: ScalarType::Int64,
+    })
+}
+
+pub fn literal_string(s: &str) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::String(s.to_string()),
+        scalar_type: ScalarType::String,
+    })
+}
+
+pub fn literal_null(ty: ScalarType) -> Expr {
+    Expr::Literal(Literal {
+        datum: Datum::Null,
+        scalar_type: ty,
+    })
 }
 
 /// A `CoercibleExpr` is a [`Expr`] whose type is not fully
@@ -180,7 +232,7 @@ impl CoercibleExpr {
     fn coerce_type(&self, ecx: &ExprContext, ty: &ScalarType) -> Result<Expr> {
         let expr = match self {
             Self::Coerced(e) => e.clone(),
-            Self::LiteralNull => literal(Datum::Null, ty.clone()),
+            Self::LiteralNull => literal_null(ty.clone()),
             Self::LiteralString(s) => {
                 cast(&Datum::String(s.clone()), &ScalarType::String, ty)?
             }
@@ -203,9 +255,9 @@ impl From<Expr> for CoercibleExpr {
 pub fn parse_sql_number(n: &str) -> Result<Expr> {
     let d = Decimal::from_str_exact(n)?;
     if let Ok(n) = d.try_into() {
-        Ok(literal(Datum::Int32(n), ScalarType::Int32).into())
+        Ok(literal_i32(n).into())
     } else if let Ok(n) = d.try_into() {
-        Ok(literal(Datum::Int64(n), ScalarType::Int64).into())
+        Ok(literal_i64(n).into())
     } else {
         Err(FloppyError::NotImplemented(format!(
             "sql number not supported: {:?}",
@@ -219,7 +271,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
         (Datum::String(s), ScalarType::String, ScalarType::Int32) => {
             let d = Decimal::from_str_exact(s)?;
             if let Ok(n) = d.try_into() {
-                Ok(literal(Datum::Int32(n), ScalarType::Int32))
+                Ok(literal_i32(n))
             } else {
                 Err(FloppyError::Plan(format!(
                     "cannot cast from String to Int32: {}",
@@ -230,7 +282,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
         (Datum::String(s), ScalarType::String, ScalarType::Int64) => {
             let d = Decimal::from_str_exact(s)?;
             if let Ok(n) = d.try_into() {
-                Ok(literal(Datum::Int64(n), ScalarType::Int64))
+                Ok(literal_i64(n))
             } else {
                 Err(FloppyError::Plan(format!(
                     "cannot cast from String to Int64: {}",
@@ -239,7 +291,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
             }
         }
         (Datum::String(s), ScalarType::String, ScalarType::String) => {
-            Ok(literal(Datum::String(s.clone()), ScalarType::String))
+            Ok(literal_string(s))
         }
         _ => Err(FloppyError::NotImplemented(format!(
             "cast not implemented from datum: {} typ: {}, to : {}",
@@ -252,7 +304,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
 mod tests {
     use super::*;
     use crate::context::StatementContext;
-    use crate::primitive::func::add;
+    use crate::primitive::func::{add, and, equal, gt};
     use catalog::names::{FullObjectName, PartialObjectName};
     use catalog::CatalogStore;
     use common::relation::RelationDesc;
@@ -270,27 +322,68 @@ mod tests {
     }
 
     #[test]
-    fn simple_add() -> Result<()> {
+    fn addition() -> Result<()> {
         let mut catalog = catalog::memory::MemCatalog::default();
-        seed_catalog(&mut catalog);
-        let partial_obj_name: PartialObjectName = "test".into();
-        let full_obj_name: FullObjectName = "test".into();
-        let rel_desc = catalog
-            .resolve_item(&partial_obj_name)?
-            .desc(&full_obj_name)?;
+        // seed_catalog(&mut catalog);
+        // let partial_obj_name: PartialObjectName = "test".into();
+        // let full_obj_name: FullObjectName = "test".into();
+        // let rel_desc = catalog
+        //     .resolve_item(&partial_obj_name)?
+        //     .desc(&full_obj_name)?;
 
-        let exc = ExprContext {
+        let ecx = ExprContext {
             scx: &StatementContext::new(&catalog),
-            rel_desc: &rel_desc,
+            rel_desc: &RelationDesc::empty(),
         };
 
-        let l1 = literal(Datum::Int32(1), ScalarType::Int32);
+        let l1 = literal_i32(1);
         let l2 = l1.clone();
 
-        let l3 = add(&exc, &l1, &l2)?;
+        // 1 + 1 = 2
+        let l3 = add(&ecx, &l1, &l2)?;
         assert_eq!(format!("{}", l3), "Int32(1) + Int32(1)");
-        let d = l3.evaluate(&exc, &Row::empty())?;
+        let d = l3.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "2");
+
+        // (1 + 1) + 100 = 102
+        let l4 = literal_i32(100);
+        let l5 = add(&ecx, &l3, &l4)?;
+        let d = l5.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "102");
+
+        Ok(())
+    }
+
+    #[test]
+    fn binary_expr() -> Result<()> {
+        let mut catalog = catalog::memory::MemCatalog::default();
+        let ecx = ExprContext {
+            scx: &StatementContext::new(&catalog),
+            rel_desc: &RelationDesc::empty(),
+        };
+
+        // TRUE == FALSE
+        let l1 = literal_true();
+        let l2 = literal_false();
+        let l3 = equal(&ecx, &l1, &l2)?;
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "FALSE");
+
+        // 2 == 3
+        let l1 = literal_i32(2);
+        let l2 = literal_i32(3);
+
+        let l3 = equal(&ecx, &l1, &l2)?;
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "FALSE");
+
+        // ((1 + 4) == 5) AND (6 > 3)
+        let l1 = add(&ecx, &literal_i32(1), &literal_i32(4))?;
+        let l2 = equal(&ecx, &l1, &literal_i32(5))?;
+        let l3 = gt(&ecx, &literal_i32(6), &literal_i32(3))?;
+        let l4 = and(vec![l2, l3]);
+        let d = l4.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "TRUE");
         Ok(())
     }
 }

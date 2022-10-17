@@ -129,6 +129,24 @@ pub fn add(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
     }))
 }
 
+pub fn equal(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
+    let ty1 = expr1.typ(ecx).scalar_type;
+    let ty2 = expr2.typ(ecx).scalar_type;
+
+    if ty1 != ty2 {
+        return Err(FloppyError::Internal(format!(
+            "compare two different type, expr1: {}, expr2: {}",
+            ty1, ty2
+        )));
+    }
+
+    Ok(Expr::CallBinary(BinaryExpr {
+        func: BinaryFunc::Eq,
+        expr1: Box::new(expr1.clone()),
+        expr2: Box::new(expr2.clone()),
+    }))
+}
+
 pub fn gt(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
     let ty1 = expr1.typ(ecx).scalar_type;
     let ty2 = expr2.typ(ecx).scalar_type;
@@ -215,4 +233,11 @@ impl fmt::Display for VariadicFunc {
             Self::Or => write!(f, "OR"),
         }
     }
+}
+
+pub fn and(exprs: Vec<Expr>) -> Expr {
+    Expr::CallVariadic(VariadicExpr {
+        func: VariadicFunc::And,
+        exprs,
+    })
 }

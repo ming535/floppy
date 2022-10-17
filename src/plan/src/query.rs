@@ -182,9 +182,7 @@ fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> 
         SqlValue::DoubleQuotedString(s) => {
             Ok(CoercibleExpr::LiteralString(s.to_string()))
         }
-        SqlValue::Boolean(b) => {
-            Ok(expr::literal(Datum::Boolean(b.clone()), ScalarType::Boolean).into())
-        }
+        SqlValue::Boolean(b) => Ok(expr::literal_boolean(*b).into()),
         SqlValue::Null => Ok(CoercibleExpr::LiteralNull),
         SqlValue::Placeholder(p) => plan_parameter(ecx, p.to_string()),
         _ => Err(FloppyError::NotImplemented(format!(
