@@ -1,14 +1,15 @@
 use crate::context::ExprContext;
 use crate::{Expr, PhysicalPlan};
 use common::error::Result;
-use common::relation::{RelationDescRef, Row};
+use common::relation::{RelationDesc, Row};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct ProjectionExec {
-    pub expr: Vec<Expr>,
+    pub exprs: Vec<Expr>,
     pub ecx: ExprContext,
     pub input: Box<PhysicalPlan>,
-    pub rel: RelationDescRef,
+    pub rel_desc: Arc<RelationDesc>,
 }
 
 impl ProjectionExec {
@@ -16,7 +17,7 @@ impl ProjectionExec {
         let row = self.input.next()?;
         if let Some(row) = row {
             let values: Result<Vec<_>> = self
-                .expr
+                .exprs
                 .iter()
                 .map(|x| x.evaluate(&self.ecx, &row))
                 .collect();

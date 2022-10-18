@@ -1,10 +1,13 @@
 mod empty;
 mod filter;
-mod planner;
+mod index_scan;
+mod phys_planner;
 mod projection;
-mod scan;
+mod table_scan;
 
+use crate::physical_plan::index_scan::SecondaryIndexScan;
 use crate::physical_plan::projection::ProjectionExec;
+use crate::physical_plan::table_scan::{FullTableScanExec, PrimaryIndexTableScanExec};
 use common::error::{FloppyError, Result};
 use common::relation::Row;
 use empty::EmptyExec;
@@ -13,8 +16,12 @@ use filter::FilterExec;
 #[derive(Debug)]
 pub enum PhysicalPlan {
     Empty(EmptyExec),
-    TableScan,
-    IndexScan,
+    /// Scan from the full table.
+    FullScan(FullTableScanExec),
+    /// Scan the table with primary index range.
+    PrimaryIndexScan(PrimaryIndexTableScanExec),
+    /// Scan the table using secondary index range.
+    SecondaryIndexScan(SecondaryIndexScan),
     Filter(FilterExec),
     Projection(ProjectionExec),
 }

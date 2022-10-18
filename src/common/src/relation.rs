@@ -233,8 +233,6 @@ impl RelationDesc {
     }
 }
 
-pub type RelationDescRef = Arc<RelationDesc>;
-
 /// Describe the output of a SQL statement.
 #[derive(Debug, Clone)]
 pub struct StatementDesc {
