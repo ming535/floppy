@@ -11,6 +11,7 @@ use sqlparser::ast::{
     BinaryOperator, Expr as SqlExpr, Ident as SqlIdent, Query as SqlQuery, Select,
     SelectItem, SetExpr, TableFactor, TableWithJoins, Value as SqlValue,
 };
+use std::sync::Arc;
 
 /// plan_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
 /// which contains [`LogicalPlan`] and [`RelationDesc`].
@@ -87,8 +88,8 @@ fn plan_filter(
     match filter {
         Some(filter) => {
             let ecx = ExprContext {
-                scx,
-                rel_desc: &input.rel_desc(),
+                scx: Arc::new(scx.clone()),
+                rel_desc: Arc::new(input.rel_desc()),
             };
             let expr = plan_expr(&ecx, filter)?;
             let expr = expr.type_as(&ecx, &ScalarType::Boolean)?;
@@ -113,8 +114,8 @@ fn plan_projection(
     projection: &Vec<SelectItem>,
 ) -> Result<LogicalPlan> {
     let ecx = ExprContext {
-        scx,
-        rel_desc: &input.rel_desc(),
+        scx: Arc::new(scx.clone()),
+        rel_desc: Arc::new(input.rel_desc()),
     };
     let ctxs = projection
         .into_iter()
@@ -193,7 +194,7 @@ fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> 
 }
 
 fn plan_identifier(ecx: &ExprContext, name: &SqlIdent) -> Result<CoercibleExpr> {
-    let rel_desc = ecx.rel_desc;
+    let rel_desc = ecx.rel_desc.clone();
     let id = rel_desc.column_idx(&name.value)?;
     let name = rel_desc.column_name(id).to_string();
     Ok(Expr::Column(ColumnRef { id, name }).into())
@@ -205,7 +206,7 @@ fn plan_binary_op(
     op: &BinaryOperator,
     right: &SqlExpr,
 ) -> Result<CoercibleExpr> {
-    let rel_desc = ecx.rel_desc;
+    let rel_desc = ecx.rel_desc.clone();
     let left = plan_expr(ecx, left)?;
     let right = plan_expr(ecx, right)?;
     match op {
@@ -393,6 +394,7 @@ mod tests {
     use sqlparser::dialect::PostgreSqlDialect;
     use sqlparser::parser::Parser;
     use std::cell::RefCell;
+    use std::sync::Arc;
 
     fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
         let desc = RelationDesc::new(
@@ -431,7 +433,7 @@ mod tests {
     #[test]
     fn select_no_relation_single_column() {
         let scx = StatementContext {
-            catalog: &catalog::memory::MemCatalog::default(),
+            catalog: Arc::new(catalog::memory::MemCatalog::default()),
             param_types: RefCell::default(),
             param_values: RefCell::default(),
         };
@@ -504,7 +506,7 @@ mod tests {
     fn select_table_not_exists() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext::new(&catalog);
+        let scx = StatementContext::new(Arc::new(catalog));
         let err =
             logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
         assert!(matches!(
@@ -517,7 +519,7 @@ mod tests {
     fn select_column_not_exists() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext::new(&catalog);
+        let scx = StatementContext::new(Arc::new(catalog));
 
         let err =
             logical_plan(&scx, "SELECT fake FROM test").expect_err("query is invalid");
@@ -532,7 +534,7 @@ mod tests {
     fn select_column() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext::new(&catalog);
+        let scx = StatementContext::new(Arc::new(catalog));
 
         quick_test_eq(
             &scx,
@@ -553,7 +555,7 @@ mod tests {
     fn select_filter() {
         let mut catalog = catalog::memory::MemCatalog::default();
         seed_catalog(&mut catalog);
-        let scx = StatementContext::new(&catalog);
+        let scx = StatementContext::new(Arc::new(catalog));
 
         quick_test_eq(
             &scx,

@@ -3,10 +3,11 @@ use common::relation::RelationDesc;
 use common::scalar::{Datum, ScalarType};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-pub struct StatementContext<'a> {
-    pub catalog: &'a dyn CatalogStore,
+pub struct StatementContext {
+    pub catalog: Arc<dyn CatalogStore>,
     /// The types of the parameters in the query. This is filled in as planning
     /// occurs.
     pub param_types: RefCell<BTreeMap<usize, ScalarType>>,
@@ -15,8 +16,8 @@ pub struct StatementContext<'a> {
     pub param_values: RefCell<BTreeMap<usize, Datum>>,
 }
 
-impl<'a> StatementContext<'a> {
-    pub fn new(catalog: &'a dyn CatalogStore) -> Self {
+impl StatementContext {
+    pub fn new(catalog: Arc<dyn CatalogStore>) -> Self {
         Self {
             catalog,
             param_types: RefCell::default(),
@@ -27,12 +28,12 @@ impl<'a> StatementContext<'a> {
 
 /// A bundle of things that are needed for planning `ScalarExpr`s.
 #[derive(Debug, Clone)]
-pub struct ExprContext<'a> {
-    pub scx: &'a StatementContext<'a>,
-    pub rel_desc: &'a RelationDesc,
+pub struct ExprContext {
+    pub scx: Arc<StatementContext>,
+    pub rel_desc: Arc<RelationDesc>,
 }
 
-impl<'a> ExprContext<'a> {
+impl ExprContext {
     pub fn param_types(&self) -> &RefCell<BTreeMap<usize, ScalarType>> {
         &self.scx.param_types
     }

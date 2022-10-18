@@ -5,17 +5,17 @@ use common::relation::Row;
 use common::scalar::Datum;
 
 #[derive(Debug)]
-pub struct FilterExec<'a, 'b> {
+pub struct FilterExec {
     pub predicate: Expr,
-    pub ecx: &'a ExprContext<'b>,
-    pub input: Box<PhysicalPlan<'a, 'b>>,
+    pub ecx: ExprContext,
+    pub input: Box<PhysicalPlan>,
 }
 
-impl<'a, 'b> FilterExec<'a, 'b> {
+impl FilterExec {
     pub fn next(&mut self) -> Result<Option<Row>> {
         loop {
             if let Some(r) = self.input.next()? {
-                let v = self.predicate.evaluate(self.ecx, &r)?;
+                let v = self.predicate.evaluate(&self.ecx, &r)?;
                 match v {
                     Datum::Boolean(true) => break Ok(Some(r)),
                     Datum::Boolean(false) => continue,

@@ -309,6 +309,7 @@ mod tests {
     use catalog::CatalogStore;
     use common::relation::RelationDesc;
     use sqlparser::ast::Statement;
+    use std::sync::Arc;
 
     fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
         let desc = RelationDesc::new(
@@ -323,7 +324,7 @@ mod tests {
 
     #[test]
     fn addition() -> Result<()> {
-        let mut catalog = catalog::memory::MemCatalog::default();
+        let mut catalog = Arc::new(catalog::memory::MemCatalog::default());
         // seed_catalog(&mut catalog);
         // let partial_obj_name: PartialObjectName = "test".into();
         // let full_obj_name: FullObjectName = "test".into();
@@ -332,8 +333,8 @@ mod tests {
         //     .desc(&full_obj_name)?;
 
         let ecx = ExprContext {
-            scx: &StatementContext::new(&catalog),
-            rel_desc: &RelationDesc::empty(),
+            scx: Arc::new(StatementContext::new(catalog.clone())),
+            rel_desc: Arc::new(RelationDesc::empty()),
         };
 
         let l1 = literal_i32(1);
@@ -356,10 +357,10 @@ mod tests {
 
     #[test]
     fn logical_expr() -> Result<()> {
-        let mut catalog = catalog::memory::MemCatalog::default();
+        let mut catalog = Arc::new(catalog::memory::MemCatalog::default());
         let ecx = ExprContext {
-            scx: &StatementContext::new(&catalog),
-            rel_desc: &RelationDesc::empty(),
+            scx: Arc::new(StatementContext::new(catalog.clone())),
+            rel_desc: Arc::new(RelationDesc::empty()),
         };
 
         // TRUE == FALSE

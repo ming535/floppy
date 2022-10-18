@@ -4,21 +4,21 @@ use common::error::Result;
 use common::relation::{RelationDescRef, Row};
 
 #[derive(Debug)]
-pub struct ProjectionExec<'a, 'b> {
+pub struct ProjectionExec {
     pub expr: Vec<Expr>,
-    pub ecx: &'a ExprContext<'b>,
-    pub input: Box<PhysicalPlan<'a, 'b>>,
+    pub ecx: ExprContext,
+    pub input: Box<PhysicalPlan>,
     pub rel: RelationDescRef,
 }
 
-impl<'a, 'b> ProjectionExec<'a, 'b> {
+impl ProjectionExec {
     pub fn next(&mut self) -> Result<Option<Row>> {
         let row = self.input.next()?;
         if let Some(row) = row {
             let values: Result<Vec<_>> = self
                 .expr
                 .iter()
-                .map(|x| x.evaluate(self.ecx, &row))
+                .map(|x| x.evaluate(&self.ecx, &row))
                 .collect();
             Ok(Some(Row::new(values?)))
         } else {

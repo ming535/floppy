@@ -1,5 +1,6 @@
 mod empty;
 mod filter;
+mod planner;
 mod projection;
 mod scan;
 
@@ -10,15 +11,15 @@ use empty::EmptyExec;
 use filter::FilterExec;
 
 #[derive(Debug)]
-pub enum PhysicalPlan<'a, 'b> {
+pub enum PhysicalPlan {
     Empty(EmptyExec),
     TableScan,
     IndexScan,
-    Filter(FilterExec<'a, 'b>),
-    Projection(ProjectionExec<'a, 'b>),
+    Filter(FilterExec),
+    Projection(ProjectionExec),
 }
 
-impl<'a, 'b> PhysicalPlan<'a, 'b> {
+impl PhysicalPlan {
     pub fn next(&mut self) -> Result<Option<Row>> {
         match self {
             Self::Empty(p) => p.next(),
