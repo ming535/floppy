@@ -6,7 +6,7 @@ use crate::LogicalPlan;
 use catalog::names::{FullObjectName, PartialObjectName};
 use common::error::{FloppyError, Result};
 use common::relation::{ColumnName, ColumnRef, ColumnType, RelationDesc};
-use common::scalar::{Datum, ScalarType};
+use common::scalar::ScalarType;
 use sqlparser::ast::{
     BinaryOperator, Expr as SqlExpr, Ident as SqlIdent, Query as SqlQuery, Select,
     SelectItem, SetExpr, TableFactor, TableWithJoins, Value as SqlValue,

@@ -241,3 +241,10 @@ pub fn and(exprs: Vec<Expr>) -> Expr {
         exprs,
     })
 }
+
+pub fn or(exprs: Vec<Expr>) -> Expr {
+    Expr::CallVariadic(VariadicExpr {
+        func: VariadicFunc::Or,
+        exprs,
+    })
+}

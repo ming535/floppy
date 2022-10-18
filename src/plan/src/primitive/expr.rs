@@ -304,7 +304,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
 mod tests {
     use super::*;
     use crate::context::StatementContext;
-    use crate::primitive::func::{add, and, equal, gt};
+    use crate::primitive::func::{add, and, equal, gt, or};
     use catalog::names::{FullObjectName, PartialObjectName};
     use catalog::CatalogStore;
     use common::relation::RelationDesc;
@@ -355,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn binary_expr() -> Result<()> {
+    fn logical_expr() -> Result<()> {
         let mut catalog = catalog::memory::MemCatalog::default();
         let ecx = ExprContext {
             scx: &StatementContext::new(&catalog),
@@ -366,6 +366,34 @@ mod tests {
         let l1 = literal_true();
         let l2 = literal_false();
         let l3 = equal(&ecx, &l1, &l2)?;
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "FALSE");
+
+        // TRUE AND FALSE
+        let l1 = literal_true();
+        let l2 = literal_false();
+        let l3 = and(vec![l1, l2]);
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "FALSE");
+
+        // TRUE AND TRUE
+        let l1 = literal_true();
+        let l2 = literal_true();
+        let l3 = and(vec![l1, l2]);
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "TRUE");
+
+        // TRUE OR FALSE
+        let l1 = literal_true();
+        let l2 = literal_false();
+        let l3 = or(vec![l1, l2]);
+        let d = l3.evaluate(&ecx, &Row::empty())?;
+        assert_eq!(format!("{}", d), "TRUE");
+
+        // FALSE OR FALSE
+        let l1 = literal_false();
+        let l2 = literal_false();
+        let l3 = or(vec![l1, l2]);
         let d = l3.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "FALSE");
 
@@ -384,6 +412,7 @@ mod tests {
         let l4 = and(vec![l2, l3]);
         let d = l4.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "TRUE");
+
         Ok(())
     }
 }
