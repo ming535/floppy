@@ -75,3 +75,20 @@ fn plan_table(
 ) -> Result<PhysicalPlan> {
     todo!()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_select_no_relation() -> Result<()> {
+        Ok(())
+    }
+
+    fn test_simple_scan() -> Result<()> {
+        Ok(())
+    }
+
+    fn test_filter() -> Result<()> {
+        Ok(())
+    }
+}

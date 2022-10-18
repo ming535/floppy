@@ -1,19 +1,13 @@
 [workspace]
 members = [
     "src/common",
-    "src/storage",
-    "src/plan",
     "src/catalog",
-    "src/logical_expr",
-    "src/logical_plan",
-    "src/physical_expr",
-    "src/physical_plan",
+    "src/storage",
+    "src/kv",
+    "src/plan",
     "src/pgrepr",
     "src/pgwire",
     "src/fp",
     "src/session",
-    "src/txn_mgr",
-    "src/log_mgr",
-
-    "clients"
+    "clients",
 ]

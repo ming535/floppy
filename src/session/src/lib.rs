@@ -4,7 +4,6 @@ use common::scalar::ScalarType;
 use pgrepr;
 use sqlparser::ast::Statement;
 use std::collections::HashMap;
-use txn_mgr::Transaction;
 
 /// A session holds per-connection state.
 #[derive(Debug)]
@@ -138,3 +137,6 @@ impl TransactionState {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Transaction {}

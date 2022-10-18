@@ -1,5 +1,5 @@
 [package]
-name = "log_mgr"
+name = "codec"
 version = "0.1.0"
 edition = "2021"
 
