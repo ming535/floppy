@@ -211,3 +211,28 @@ impl fmt::Display for ScalarType {
         }
     }
 }
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn datum_equal() {
+        let d1 = Datum::Int32(2);
+        let d2 = Datum::Int32(2);
+        let d3 = Datum::Int32(3);
+        let d4 = Datum::Int64(2);
+
+        assert_eq!(d1 == d2, true);
+        assert_eq!(d1 == d3, false);
+        assert_eq!(d1 == d4, false);
+    }
+
+    #[test]
+    fn test_order() {
+        let d1 = Datum::String("abc".to_string());
+        let d2 = Datum::String("b".to_string());
+        let d3 = Datum::String("123456".to_string());
+        assert_eq!(d2 > d1, true);
+        assert_eq!(d1 > d3, true);
+    }
+}

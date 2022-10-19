@@ -1,40 +1,34 @@
+/// The storage layer hides the details of the persistent and query of database objects.
 use common::error::Result;
-use common::relation::{RelationDesc, Row};
+use common::relation::{GlobalId, IndexRange, RelationDesc, Row};
+use common::scalar::Datum;
 use std::fmt;
+use std::ops::{Bound, RangeBounds};
 
 pub mod memory;
 
-/// `CatalogStore`, `HeapStore` and `IndexStore` are basic abstractions
-/// for Floppy's storage engine.
-/// `CatalogStore` is used to manage meta data of Floppy including schema,
-/// statistics.
-/// `HeapStore` is used to manage heap data. Heap data is an unsorted area that
-/// holds a table's tuple.
-/// `IndexStore` is used to manage index data. Index data is a sorted area that
-/// holds a table's index.
-///
-/// Note that traits that modify store is defined as immutable method, so
-/// implementations of trait should enforce the borrow rule at runtime.
-pub trait CatalogStore: fmt::Debug {
-    /// Insert a schema into catalog. `table_name` is a qualified name
-    /// like "database_name.table_name".
-    fn insert_rel(&self, table_name: &str, rel: &RelationDesc) -> Result<()>;
-
-    /// Fetch schema for this table.
-    fn fetch_rel(&self, table_name: &str) -> Result<RelationDesc>;
-}
-
 pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
 
-pub trait HeapStore {
-    /// Returns a `TupleIter` to scan a table's heap
-    fn scan_heap(&self, table_name: &str) -> Result<RowIter>;
-    /// Fetch a tuple from heap using tuple_id
-    fn fetch_tuple(&self, table_name: &str) -> Result<Row>;
-    /// Insert a tuple into heap
-    fn insert_to_heap(&self, table_name: &str, tuple: &Row) -> Result<()>;
+pub trait TableStore {
+    fn primary_index_range(
+        &self,
+        table_id: &GlobalId,
+        rel_desc: &RelationDesc,
+        range: &IndexRange,
+    ) -> Result<RowIter>;
+
+    fn full_scan(&self, table_id: &GlobalId, rel_desc: &RelationDesc) -> Result<RowIter> {
+        self.primary_index_range(
+            table_id,
+            rel_desc,
+            &IndexRange {
+                lo: Bound::Unbounded,
+                hi: Bound::Unbounded,
+            },
+        )
+    }
+
+    fn insert(&self, table_id: GlobalId, row: &Row) -> Result<()>;
+
+    // todo! add secondary_index_scan
 }
-
-pub trait Store: CatalogStore + HeapStore {}
-
-pub trait IndexStore {}

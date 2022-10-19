@@ -1,5 +1,7 @@
 use crate::error::{field_not_found, FloppyError, Result};
 use crate::scalar::{Datum, ScalarType};
+use std::ops;
+use std::ops::Bound;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -17,20 +19,39 @@ impl ColumnType {
     }
 }
 
+/// The type of a relation.
 #[derive(Debug, Clone)]
 pub struct RelationType {
+    /// The type for each column, in order.
     column_types: Vec<ColumnType>,
+    /// Indices that represents a primary key.
+    /// If the user haven't specify a primary key, then a `RowId` is generated
+    /// for this table as a primary key. A table can have only one primary index.
+    prim_key: Vec<usize>,
+    /// Sets of indices that are "secondary keys" for this relation.
+    /// A relation can have multiple secondary indices.
+    secondary_keys: Vec<Vec<usize>>,
 }
 
 impl RelationType {
-    pub fn new(column_types: Vec<ColumnType>) -> Self {
-        Self { column_types }
+    pub fn new(
+        column_types: Vec<ColumnType>,
+        prim_key: Vec<usize>,
+        secondary_keys: Vec<Vec<usize>>,
+    ) -> Self {
+        Self {
+            column_types,
+            prim_key,
+            secondary_keys,
+        }
     }
 
     /// Creates an empty `Schema`
     pub fn empty() -> Self {
         Self {
             column_types: vec![],
+            prim_key: vec![],
+            secondary_keys: vec![],
         }
     }
 
@@ -44,105 +65,6 @@ impl RelationType {
     pub fn column_type(&self, i: usize) -> &ColumnType {
         &self.column_types[i]
     }
-
-    //// Get list of fully-qualified names in this schema
-    // pub fn field_names(&self) -> Vec<String> {
-    //     self.column_types
-    //         .iter()
-    //         .map(|f| f.qualified_name())
-    //         .collect::<Vec<_>>()
-    // }
-
-    //// Find the field with the given name
-    // pub fn field_with_unqualified_name(
-    //     &self,
-    //     name: &str,
-    // ) -> Result<&ColumnType> {
-    //     let fields =
-    //         self.fields_with_unqualified_name(name);
-    //     match fields.len() {
-    //         0 => Err(field_not_found(None, name, self)),
-    //         1 => Ok(fields[0]),
-    //         _ => Err(field_not_found(None, name, self)),
-    //     }
-    // }
-
-    //// Find the field with the given qualified name
-    // pub fn field_with_qualified_name(
-    //     &self,
-    //     qualifier: &str,
-    //     name: &str,
-    // ) -> Result<&ColumnType> {
-    //     let idx = self.index_of_column_by_name(
-    //         Some(qualifier),
-    //         name,
-    //     )?;
-    //     Ok(self.field(idx))
-    // }
-
-    ////    Find all fields match the give name
-    // pub fn fields_with_unqualified_name(
-    //     &self,
-    //     name: &str,
-    // ) -> Vec<&ColumnType> {
-    //     self.column_types
-    //         .iter()
-    //         .filter(|f| f.name() == name)
-    //         .collect()
-    // }
-
-    // pub fn index_of_column(
-    //     &self,
-    //     col: &Column,
-    // ) -> Result<usize> {
-    //     self.index_of_column_by_name(
-    //         col.relation.as_deref(),
-    //         &col.name,
-    //     )
-    // }
-
-    // pub fn index_of_column_by_name(
-    //     &self,
-    //     qualifier: Option<&str>,
-    //     name: &str,
-    // ) -> Result<usize> {
-    //     let mut matches = self
-    //         .column_types
-    //         .iter()
-    //         .enumerate()
-    //         .filter(|(_, field)| {
-    //             match (qualifier, &field.qualifier) {
-    //                 // field to lookup is qualified.
-    //                 // current field is qualified and not shared between relations, compare
-    //                 // both qualifier and name.
-    //                 (Some(q), Some(field_q)) => {
-    //                     q == field_q && field.name == name
-    //                 }
-    //                 // field to lookup is qualified but current field is unqualified.
-    //                 (Some(_), None) => false,
-    //                 // field to lookup is unqualified, no need to compare qualifier
-    //                 (None, Some(_)) | (None, None) => {
-    //                     field.name == name
-    //                 }
-    //             }
-    //         })
-    //         .map(|(idx, _)| idx);
-    //     match matches.next() {
-    //         None => Err(field_not_found(
-    //             qualifier.map(|s| s.to_string()),
-    //             name,
-    //             self,
-    //         )),
-    //         Some(idx) => match matches.next() {
-    //             None => Ok(idx),
-    //             Some(_) => Err(FloppyError::Internal(format!(
-    //                 "Ambiguous reference to qualified field name '{}.{}'",
-    //                 qualifier.unwrap_or("<unqualified>"),
-    //                 name
-    //             ))),
-    //         },
-    //     }
-    // }
 }
 
 pub type ColumnName = String;
@@ -158,9 +80,14 @@ pub struct RelationDesc {
 }
 
 impl RelationDesc {
-    pub fn new(column_types: Vec<ColumnType>, column_names: Vec<String>) -> Self {
+    pub fn new(
+        column_types: Vec<ColumnType>,
+        column_names: Vec<String>,
+        prim_key: Vec<usize>,
+        secondary_keys: Vec<Vec<usize>>,
+    ) -> Self {
         Self {
-            rel_type: RelationType::new(column_types),
+            rel_type: RelationType::new(column_types, prim_key, secondary_keys),
             column_names,
         }
     }
@@ -301,14 +228,27 @@ pub struct ColumnRef {
 /// Every table, index, database, schema has a unique id.
 pub type GlobalId = u64;
 
-// #[derive(Debug, Clone, Serialize)]
-// pub struct Table {
-//     pub create_sql: String,
-//     pub desc: RelationDesc,
-// }
-//
-// pub struct Index {
-//     pub create_sql: String,
-//     pub on: GlobalId,
-//     pub keys: Vec<ScalarExpr>,
-// }
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexKey(Vec<Datum>);
+
+pub struct IndexRange {
+    pub lo: Bound<IndexKey>,
+    pub hi: Bound<IndexKey>,
+}
+
+mod tests {
+    use super::*;
+    use std::ops::Range;
+    #[test]
+    fn key_range() {
+        let key_start = IndexKey(vec![Datum::Int32(1), Datum::Int32(2)]);
+        let key_end = IndexKey(vec![Datum::Int32(1), Datum::Int32(4)]);
+        assert_eq!(
+            (key_start.clone()..key_end.clone()),
+            Range {
+                start: key_start,
+                end: key_end
+            }
+        );
+    }
+}
