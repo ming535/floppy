@@ -1,8 +1,7 @@
 use crate::error::{field_not_found, FloppyError, Result};
 use crate::scalar::{Datum, ScalarType};
-use std::ops;
-use std::ops::Bound;
-use std::sync::Arc;
+use std::cmp::Ordering;
+use std::ops::{Bound, Index, RangeBounds};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ColumnType {
@@ -77,6 +76,12 @@ pub type ColumnName = String;
 pub struct RelationDesc {
     rel_type: RelationType,
     column_names: Vec<ColumnName>,
+}
+
+impl Default for RelationDesc {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl RelationDesc {
@@ -158,6 +163,10 @@ impl RelationDesc {
     pub fn iter_names(&self) -> impl Iterator<Item = &ColumnName> {
         self.column_names.iter()
     }
+
+    pub fn prim_key(&self) -> Vec<usize> {
+        self.rel_type.prim_key.clone()
+    }
 }
 
 /// Describe the output of a SQL statement.
@@ -214,6 +223,24 @@ impl Row {
         }
         Ok(self.values[index].clone())
     }
+
+    pub fn prim_key_datums(&self, rel_desc: &RelationDesc) -> Result<IndexKeyDatums> {
+        let prim_key = rel_desc.prim_key();
+        prim_key
+            .iter()
+            .map(|i| {
+                if *i >= self.values.len() {
+                    Err(FloppyError::Internal(format!(
+                        "primary key index out of range: {:?}",
+                        rel_desc
+                    )))
+                } else {
+                    let datum = self.values[*i].clone();
+                    Ok(datum)
+                }
+            })
+            .collect::<Result<IndexKeyDatums>>()
+    }
 }
 
 /// A column reference in a [`Row`], used by expressions.
@@ -228,12 +255,45 @@ pub struct ColumnRef {
 /// Every table, index, database, schema has a unique id.
 pub type GlobalId = u64;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct IndexKey(Vec<Datum>);
+/// IndexKey is a sorted column datums.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexKeyDatums(Vec<Datum>);
 
+impl FromIterator<Datum> for IndexKeyDatums {
+    fn from_iter<T: IntoIterator<Item = Datum>>(iter: T) -> Self {
+        let datums: Vec<Datum> = Vec::from_iter(iter);
+        Self(datums)
+    }
+}
+
+impl PartialOrd<Self> for IndexKeyDatums {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        todo!()
+    }
+}
+
+impl Ord for IndexKeyDatums {
+    fn cmp(&self, other: &Self) -> Ordering {
+        assert_eq!(self.0.len(), other.0.len());
+        todo!()
+    }
+}
+
+/// IndexRange represent the index's boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexRange {
-    pub lo: Bound<IndexKey>,
-    pub hi: Bound<IndexKey>,
+    pub lo: Bound<IndexKeyDatums>,
+    pub hi: Bound<IndexKeyDatums>,
+}
+
+impl RangeBounds<IndexKeyDatums> for IndexRange {
+    fn start_bound(&self) -> Bound<&IndexKeyDatums> {
+        todo!()
+    }
+
+    fn end_bound(&self) -> Bound<&IndexKeyDatums> {
+        todo!()
+    }
 }
 
 mod tests {
@@ -241,8 +301,8 @@ mod tests {
     use std::ops::Range;
     #[test]
     fn key_range() {
-        let key_start = IndexKey(vec![Datum::Int32(1), Datum::Int32(2)]);
-        let key_end = IndexKey(vec![Datum::Int32(1), Datum::Int32(4)]);
+        let key_start = IndexKeyDatums(vec![Datum::Int32(1), Datum::Int32(2)]);
+        let key_end = IndexKeyDatums(vec![Datum::Int32(1), Datum::Int32(4)]);
         assert_eq!(
             (key_start.clone()..key_end.clone()),
             Range {

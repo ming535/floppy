@@ -143,7 +143,7 @@ fn plan_projection(
         .map(|c| c.column_name.clone())
         .collect::<Vec<ColumnName>>();
 
-    let rel_desc = RelationDesc::new(column_types, column_names);
+    let rel_desc = RelationDesc::new(column_types, column_names, vec![], vec![]);
     let exprs = ctxs.iter().map(|c| c.expr.clone()).collect::<Vec<Expr>>();
     Ok(LogicalPlan::Projection {
         exprs,

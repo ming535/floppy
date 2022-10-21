@@ -19,11 +19,12 @@ pub enum FloppyError {
     /// to check for us. This error is raised when one of those invariants
     /// is not verified during execution.
     Internal(String),
+    Parser(ParserError),
     Plan(String),
+    Catalog(CatalogError),
     /// Expression evaluation error
     EvalExpr(String),
-    Catalog(CatalogError),
-    Parser(ParserError),
+    Storage(String),
     Io(std::io::Error),
     /// Errors originating from outside Floppy's codebase.
     External(String),
@@ -145,6 +146,7 @@ impl fmt::Display for FloppyError {
             FloppyError::EvalExpr(desc) => {
                 write!(f, "Expression evaluation error: {}", desc)
             }
+            FloppyError::Storage(desc) => write!(f, "Storage error: {}", desc),
             FloppyError::Catalog(e) => {
                 write!(f, "Schema error: {}", e)
             }

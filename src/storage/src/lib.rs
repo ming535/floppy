@@ -13,14 +13,12 @@ pub trait TableStore {
     fn primary_index_range(
         &self,
         table_id: &GlobalId,
-        rel_desc: &RelationDesc,
         range: &IndexRange,
     ) -> Result<RowIter>;
 
-    fn full_scan(&self, table_id: &GlobalId, rel_desc: &RelationDesc) -> Result<RowIter> {
+    fn full_scan(&self, table_id: &GlobalId) -> Result<RowIter> {
         self.primary_index_range(
             table_id,
-            rel_desc,
             &IndexRange {
                 lo: Bound::Unbounded,
                 hi: Bound::Unbounded,
@@ -28,7 +26,7 @@ pub trait TableStore {
         )
     }
 
-    fn insert(&self, table_id: GlobalId, row: &Row) -> Result<()>;
+    fn insert(&self, table_id: &GlobalId, row: &Row) -> Result<()>;
 
     // todo! add secondary_index_scan
 }
