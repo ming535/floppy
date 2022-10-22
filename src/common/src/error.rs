@@ -1,4 +1,4 @@
-use crate::relation::RelationDesc;
+use crate::relation::{GlobalId, RelationDesc};
 use rust_decimal;
 use sqlparser::parser::ParserError;
 use std::fmt::Formatter;
@@ -55,11 +55,15 @@ pub fn field_not_found(
 }
 
 /// Create a "table not found" Floppy::SchemaError
-pub fn table_not_found(table_name: &str) -> FloppyError {
+pub fn table_not_found_in_catalog(table_name: &str) -> FloppyError {
     FloppyError::Catalog(CatalogError::TableNotFound(format!(
-        "table not found: {}",
+        "table not found in catalog: {}",
         table_name
     )))
+}
+
+pub fn table_not_found_in_storage(table_id: GlobalId) -> FloppyError {
+    FloppyError::Storage(format!("table not found in storage: {}", table_id))
 }
 
 impl fmt::Display for CatalogError {

@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 /// todo! think about the parameter type of StatementContext
 /// use & or Arc, or any other type?
-pub fn plan(scx: &StatementContext, logical_plan: LogicalPlan) -> Result<PhysicalPlan> {
+pub(crate) fn plan(
+    scx: &StatementContext,
+    logical_plan: LogicalPlan,
+) -> Result<PhysicalPlan> {
     match logical_plan {
         LogicalPlan::Empty => Ok(PhysicalPlan::Empty(EmptyExec::new())),
         LogicalPlan::Filter { input, predicate } => plan_filter(scx, *input, predicate),

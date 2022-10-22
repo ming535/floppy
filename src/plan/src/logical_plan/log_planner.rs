@@ -9,13 +9,27 @@ use common::relation::{ColumnName, ColumnRef, ColumnType, RelationDesc};
 use common::scalar::ScalarType;
 use sqlparser::ast::{
     BinaryOperator, Expr as SqlExpr, Ident as SqlIdent, Query as SqlQuery, Select,
-    SelectItem, SetExpr, TableFactor, TableWithJoins, Value as SqlValue,
+    SelectItem, SetExpr, Statement as SqlStatement, TableFactor, TableWithJoins,
+    Value as SqlValue,
 };
 use std::sync::Arc;
 
+pub fn plan_statement(scx: &StatementContext, s: &SqlStatement) -> Result<LogicalPlan> {
+    match s {
+        SqlStatement::Query(q) => plan_query(scx, &q),
+        _ => Err(FloppyError::NotImplemented(format!(
+            "statement not implemented yet: {}",
+            s
+        ))),
+    }
+}
+
 /// plan_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
 /// which contains [`LogicalPlan`] and [`RelationDesc`].
-pub fn plan_query(scx: &StatementContext, query: &SqlQuery) -> Result<LogicalPlan> {
+pub(crate) fn plan_query(
+    scx: &StatementContext,
+    query: &SqlQuery,
+) -> Result<LogicalPlan> {
     let set_expr = &query.body;
     plan_set_expr(scx, set_expr)
     // todo! order_by, limit, offset, fetch
@@ -403,6 +417,8 @@ mod tests {
                 ColumnType::new(ScalarType::Int32, false),
             ],
             vec!["c1".to_string(), "c2".to_string()],
+            vec![],
+            vec![],
         );
         catalog.insert_table("test", 1, desc)
     }

@@ -318,6 +318,8 @@ mod tests {
                 ColumnType::new(ScalarType::Int32, false),
             ],
             vec!["c1".to_string(), "c2".to_string()],
+            vec![],
+            vec![],
         );
         catalog.insert_table("test", 1, desc)
     }

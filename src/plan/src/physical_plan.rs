@@ -1,7 +1,7 @@
 mod empty;
 mod filter;
 mod index_scan;
-mod phys_planner;
+pub mod phys_planner;
 mod projection;
 mod table_scan;
 

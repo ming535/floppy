@@ -6,8 +6,8 @@ use std::fmt::Formatter;
 
 pub mod log_planner;
 
-/// A `LogicalPlan` computes a table. It is also called a logical plan.
-/// It represents a graph of data flow where each node in the graph
+/// A `LogicalPlan` computes a table.
+/// It represents a tree of data flow where each node in the graph
 /// computes a table from the input of the node.
 /// The `LogicalPlan` is not ready to be executed yet.
 #[derive(Debug)]

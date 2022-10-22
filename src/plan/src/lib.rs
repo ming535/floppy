@@ -4,6 +4,7 @@ mod context;
 mod ddl;
 mod logical_plan;
 pub mod physical_plan;
+mod planner;
 mod primitive;
 mod visitor;
 
