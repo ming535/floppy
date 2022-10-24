@@ -409,20 +409,7 @@ mod tests {
     use sqlparser::parser::Parser;
     use std::cell::RefCell;
     use std::sync::Arc;
-
-    fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
-        let desc = RelationDesc::new(
-            vec![
-                ColumnType::new(ScalarType::Int32, false),
-                ColumnType::new(ScalarType::Int32, false),
-            ],
-            vec!["c1".to_string(), "c2".to_string()],
-            vec![],
-            vec![],
-        );
-        catalog.insert_table("test", 1, desc)
-    }
-
+    use test_util::seed;
     fn logical_plan(scx: &StatementContext, sql: &str) -> Result<LogicalPlan> {
         let dialect = PostgreSqlDialect {};
         let ast = &Parser::parse_sql(&dialect, sql)?[0];
@@ -520,8 +507,7 @@ mod tests {
 
     #[test]
     fn select_table_not_exists() {
-        let mut catalog = catalog::memory::MemCatalog::default();
-        seed_catalog(&mut catalog);
+        let catalog = seed::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
         let err =
             logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
@@ -533,8 +519,7 @@ mod tests {
 
     #[test]
     fn select_column_not_exists() {
-        let mut catalog = catalog::memory::MemCatalog::default();
-        seed_catalog(&mut catalog);
+        let catalog = seed::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
 
         let err =
@@ -548,8 +533,7 @@ mod tests {
 
     #[test]
     fn select_column() {
-        let mut catalog = catalog::memory::MemCatalog::default();
-        seed_catalog(&mut catalog);
+        let catalog = seed::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
 
         quick_test_eq(
@@ -569,8 +553,7 @@ mod tests {
 
     #[test]
     fn select_filter() {
-        let mut catalog = catalog::memory::MemCatalog::default();
-        seed_catalog(&mut catalog);
+        let catalog = seed::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
 
         quick_test_eq(

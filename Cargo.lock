@@ -472,6 +472,7 @@ dependencies = [
  "rust_decimal",
  "sqlparser",
  "storage",
+ "test_util",
 ]
 
 [[package]]
@@ -725,6 +726,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "test_util"
+version = "0.1.0"
+dependencies = [
+ "catalog",
+ "common",
+ "lazy_static",
+ "storage",
 ]
 
 [[package]]

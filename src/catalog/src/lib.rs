@@ -45,6 +45,12 @@ pub trait CatalogStore: fmt::Debug {
     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem>;
 }
 
+impl<C: CatalogStore + ?Sized> CatalogStore for Box<C> {
+    fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem> {
+        (**self).resolve_item(item_name)
+    }
+}
+
 /// An item in a [`CatalogStore`].
 ///
 /// "item" has a very specific meaning in the context of a SQL

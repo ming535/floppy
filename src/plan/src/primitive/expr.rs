@@ -42,6 +42,10 @@ impl Expr {
     }
 
     pub fn cast_to(&self, ecx: &ExprContext, ty: &ScalarType) -> Result<Expr> {
+        if self.typ(ecx).scalar_type == *ty {
+            return Ok(self.clone());
+        }
+
         match self {
             Self::Literal(Literal { datum: Datum::String(s), scalar_type }) => {
                 match ty {

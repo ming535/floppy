@@ -1,16 +1,12 @@
 [package]
-name = "plan"
+name = "test_util"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+lazy_static = "1.4.0"
 common = {path = "../common"}
-storage = {path = "../storage"}
 catalog = {path = "../catalog"}
-sqlparser = {version = "0.18.0", features = ["serde"]}
-rust_decimal = "1.26"
-
-[dev-dependencies]
-test_util = {path = "../test_util"}
+storage = {path = "../storage"}

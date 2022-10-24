@@ -9,5 +9,6 @@ members = [
     "src/pgwire",
     "src/fp",
     "src/session",
+    "src/test_util",
     "clients",
 ]
