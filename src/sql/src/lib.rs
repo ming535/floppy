@@ -1,6 +1,6 @@
 use crate::visitor::{ExprVisitor, IndentVisitor};
 
-pub mod analyze;
+pub mod analyzer;
 mod context;
 mod ddl;
 mod logical_plan;
