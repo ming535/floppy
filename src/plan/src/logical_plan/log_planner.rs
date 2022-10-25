@@ -1,6 +1,6 @@
 use crate::context::{ExprContext, StatementContext};
 use crate::primitive::expr;
-use crate::primitive::expr::{CoercibleExpr, Expr};
+use crate::primitive::expr::{wildcard_column_ref, CoercibleExpr, Expr};
 use crate::primitive::func::{add, gt};
 use crate::LogicalPlan;
 use catalog::names::{FullObjectName, PartialObjectName};
@@ -131,34 +131,56 @@ fn plan_projection(
         scx: Arc::new(scx.clone()),
         rel_desc: Arc::new(input.rel_desc()),
     };
-    let ctxs = projection
+    let exprs = projection
         .into_iter()
         .map(|e| {
-            let expr = plan_select_item(&ecx, e)?.type_as_any(&ecx)?;
-            let column_name = match &expr {
-                Expr::Column(ColumnRef { name, .. }) => name.clone(),
-                _ => "?column?".to_string(),
-            };
-            let typ = expr.typ(&ecx);
-            Ok(ProjectionCtx {
-                expr,
-                column_name,
-                typ,
-            })
+            plan_select_item(&ecx, e)
+            // let column_name = match &expr {
+            //     Expr::Column(ColumnRef { name, .. }) => name.clone(),
+            //     _ => "?column?".to_string(),
+            // };
+            // let typ = expr.typ(&ecx);
+            // Ok(ProjectionCtx {
+            //     expr,
+            //     column_name,
+            //     typ,
+            // })
         })
-        .collect::<Result<Vec<ProjectionCtx>>>()?;
+        .collect::<Result<Vec<Vec<CoercibleExpr>>>>()?;
 
-    let column_types = ctxs
+    let exprs = exprs
+        .into_iter()
+        .flat_map(|e| e.into_iter())
+        .collect::<Vec<CoercibleExpr>>();
+
+    let exprs = exprs
+        .into_iter()
+        .map(|e| e.type_as_any(&ecx))
+        .collect::<Result<Vec<Expr>>>()?;
+
+    // let column_types = ctxs
+    //     .iter()
+    //     .map(|c| c.typ.clone())
+    //     .collect::<Vec<ColumnType>>();
+    // let column_names = ctxs
+    //     .iter()
+    //     .map(|c| c.column_name.clone())
+    //     .collect::<Vec<ColumnName>>();
+    let column_names = exprs
         .iter()
-        .map(|c| c.typ.clone())
+        .map(|e| match e {
+            Expr::Column(ColumnRef { name, .. }) => name.to_string(),
+            _ => "?column?".to_string(),
+        })
+        .collect::<Vec<String>>();
+
+    let column_types = exprs
+        .iter()
+        .map(|e| e.typ(&ecx))
         .collect::<Vec<ColumnType>>();
-    let column_names = ctxs
-        .iter()
-        .map(|c| c.column_name.clone())
-        .collect::<Vec<ColumnName>>();
 
     let rel_desc = RelationDesc::new(column_types, column_names, vec![], vec![]);
-    let exprs = ctxs.iter().map(|c| c.expr.clone()).collect::<Vec<Expr>>();
+    // let exprs = exprs.iter().map(|c| c.expr.clone()).collect::<Vec<Expr>>();
     Ok(LogicalPlan::Projection {
         exprs,
         input: Box::new(input),
@@ -166,9 +188,13 @@ fn plan_projection(
     })
 }
 
-fn plan_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<CoercibleExpr> {
+fn plan_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<Vec<CoercibleExpr>> {
     match item {
-        SelectItem::UnnamedExpr(expr) => plan_expr(ecx, expr),
+        SelectItem::UnnamedExpr(expr) => Ok(vec![plan_expr(ecx, expr)?]),
+        SelectItem::Wildcard => Ok(wildcard_column_ref(&ecx.rel_desc)
+            .into_iter()
+            .map(|e| e.into())
+            .collect::<Vec<CoercibleExpr>>()),
         _ => Err(FloppyError::NotImplemented(format!(
             "select item not supported: {}",
             item
@@ -560,7 +586,7 @@ mod tests {
             &scx,
             "SELECT c1 FROM test WHERE c2 > 100",
             "Projection: c1\
-                   \n  Filter: c2 > 100\
+                   \n  Filter: c2 > Int32(100)\
                    \n    Table: test",
         );
     }

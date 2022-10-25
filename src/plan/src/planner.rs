@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_select_no_relation() -> Result<()> {
-        let (catalog, table) = seed::seed(&vec![])?;
+        let (catalog, _) = seed::seed(&vec![])?;
         let scx = StatementContext::new(Arc::new(catalog));
         let mut plan = plan(&scx, "SELECT 1 + 2")?;
         let row = plan.next().expect("no error").expect("should have one row");
@@ -32,6 +32,19 @@ mod tests {
 
         let row = plan.next().expect("no error");
         assert_eq!(row.is_none(), true);
+        Ok(())
+    }
+
+    #[test]
+    fn test_simple_scan() -> Result<()> {
+        // let r = Row::new(vec![Datum::Int32(1), Datum::Int32(2)]);
+        // let (catalog, _) = seed::seed(&vec![r.clone()])?;
+        // let scx = StatementContext::new(Arc::new(catalog));
+        // let mut plan = plan(&scx, "SELECT * FROM test")?;
+        // let row = plan.next().expect("no error").expect("should have one row");
+        // assert_eq!(row, r.clone());
+        // let row = plan.next().expect("no error");
+        // assert_eq!(row.is_none(), true);
         Ok(())
     }
 }

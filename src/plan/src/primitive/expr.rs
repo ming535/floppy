@@ -1,7 +1,7 @@
 use crate::context::ExprContext;
 use crate::primitive::func::{BinaryExpr, VariadicExpr};
 use common::error::{FloppyError, Result};
-use common::relation::{ColumnRef, ColumnType, Row};
+use common::relation::{ColumnRef, ColumnType, RelationDesc, Row};
 use common::scalar::{Datum, ScalarType};
 use rust_decimal::Decimal;
 use std::fmt;
@@ -87,6 +87,20 @@ impl fmt::Display for Expr {
             Self::CallVariadic(e) => write!(f, "{}", e),
         }
     }
+}
+
+pub fn wildcard_column_ref(rel_desc: &RelationDesc) -> Vec<Expr> {
+    rel_desc
+        .column_names()
+        .iter()
+        .enumerate()
+        .map(|(id, name)| {
+            Expr::Column(ColumnRef {
+                id,
+                name: name.clone(),
+            })
+        })
+        .collect::<Vec<Expr>>()
 }
 
 #[derive(Debug, Clone)]

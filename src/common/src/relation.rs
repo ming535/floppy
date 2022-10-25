@@ -70,8 +70,10 @@ pub type ColumnName = String;
 
 /// A description of the shape of a relation.
 ///
-/// It bundles a [`RelationType`] with the name of each column in the raltion.
+/// It bundles a [`RelationType`] with the name of each column in the relation.
 ///
+/// To simplify the design, we assume that column is never deleted in a table,
+/// so that a column's index in the Vector uniquely identify a valid column.
 #[derive(Debug, Clone)]
 pub struct RelationDesc {
     rel_type: RelationType,
