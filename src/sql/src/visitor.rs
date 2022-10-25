@@ -10,13 +10,13 @@ pub trait ExprVisitor<Node> {
     /// The type of error returned by this visitor.
     type Error;
 
-    /// Invoked on a logical plan before any of its child inputs have been
+    /// Invoked on a logical sql before any of its child inputs have been
     /// visited. If Ok(true) is returned, the recursion continues. If
     /// Err(..) or Ok(false) are returned, the recursion stops
     /// immediately and the error, if any, is returned to `accept`
     fn pre_visit(&mut self, node: &Node) -> Result<bool, Self::Error>;
 
-    /// Invoked on a logical plan after all of its child inputs have
+    /// Invoked on a logical sql after all of its child inputs have
     /// been visited. The return value is handled the same as the
     /// return value of `pre_visit`. The provided default implementation
     /// returns `Ok(true)`.

@@ -28,7 +28,7 @@ pub(crate) fn plan(
             name,
         } => plan_table(table_id, rel_desc, name),
         _ => Err(FloppyError::NotImplemented(format!(
-            "physical plan not implemented"
+            "physical sql not implemented"
         ))),
     }
 }

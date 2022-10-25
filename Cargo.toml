@@ -4,7 +4,7 @@ members = [
     "src/catalog",
     "src/storage",
     "src/kv",
-    "src/plan",
+    "src/sql",
     "src/pgrepr",
     "src/pgwire",
     "src/fp",

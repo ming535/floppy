@@ -27,7 +27,7 @@ pub fn transform_statement(
     }
 }
 
-/// transform_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
+/// transform_query translate [`sqlparser::ast::Query`] into a logical sql [`PlannedQuery`]
 /// which contains [`LogicalPlan`] and [`RelationDesc`].
 pub(crate) fn transform_query(
     scx: &StatementContext,

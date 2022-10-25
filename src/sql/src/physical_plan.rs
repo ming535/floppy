@@ -33,7 +33,7 @@ impl PhysicalPlan {
             Self::Filter(p) => p.next(),
             Self::Projection(p) => p.next(),
             _ => Err(FloppyError::NotImplemented(format!(
-                "physical plan not implemented: {:?}",
+                "physical sql not implemented: {:?}",
                 self
             ))),
         }
