@@ -4,8 +4,6 @@ use common::relation::{GlobalId, RelationDesc};
 use std::fmt;
 use std::fmt::Formatter;
 
-pub mod log_planner;
-
 /// A `LogicalPlan` computes a table.
 /// It represents a tree of data flow where each node in the graph
 /// computes a table from the input of the node.

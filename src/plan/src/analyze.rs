@@ -8,15 +8,18 @@ use common::error::{FloppyError, Result};
 use common::relation::{ColumnName, ColumnRef, ColumnType, RelationDesc};
 use common::scalar::ScalarType;
 use sqlparser::ast::{
-    BinaryOperator, Expr as SqlExpr, Ident as SqlIdent, Query as SqlQuery, Select,
+    BinaryOperator, Expr as AstExpr, Ident as AstIdent, Query as AstQuery, Select,
     SelectItem, SetExpr, Statement as SqlStatement, TableFactor, TableWithJoins,
     Value as SqlValue,
 };
 use std::sync::Arc;
 
-pub fn plan_statement(scx: &StatementContext, s: &SqlStatement) -> Result<LogicalPlan> {
+pub fn transform_statement(
+    scx: &StatementContext,
+    s: &SqlStatement,
+) -> Result<LogicalPlan> {
     match s {
-        SqlStatement::Query(q) => plan_query(scx, &q),
+        SqlStatement::Query(q) => transform_query(scx, &q),
         _ => Err(FloppyError::NotImplemented(format!(
             "statement not implemented yet: {}",
             s
@@ -24,20 +27,20 @@ pub fn plan_statement(scx: &StatementContext, s: &SqlStatement) -> Result<Logica
     }
 }
 
-/// plan_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
+/// transform_query translate [`sqlparser::ast::Query`] into a logical plan [`PlannedQuery`]
 /// which contains [`LogicalPlan`] and [`RelationDesc`].
-pub(crate) fn plan_query(
+pub(crate) fn transform_query(
     scx: &StatementContext,
-    query: &SqlQuery,
+    query: &AstQuery,
 ) -> Result<LogicalPlan> {
     let set_expr = &query.body;
-    plan_set_expr(scx, set_expr)
+    transform_set_expr(scx, set_expr)
     // todo! order_by, limit, offset, fetch
 }
 
-fn plan_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<LogicalPlan> {
+fn transform_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<LogicalPlan> {
     match set_expr {
-        SetExpr::Select(select) => plan_select(scx, select),
+        SetExpr::Select(select) => transform_select(scx, select),
         _ => Err(FloppyError::NotImplemented(format!(
             "Query {} not implemented yet",
             set_expr
@@ -45,13 +48,13 @@ fn plan_set_expr(scx: &StatementContext, set_expr: &SetExpr) -> Result<LogicalPl
     }
 }
 
-fn plan_select(scx: &StatementContext, select: &Select) -> Result<LogicalPlan> {
-    let planned_query = plan_table_with_joins(scx, &select.from)?;
-    let planned_query = plan_filter(scx, planned_query, &select.selection)?;
-    plan_projection(scx, planned_query, &select.projection)
+fn transform_select(scx: &StatementContext, select: &Select) -> Result<LogicalPlan> {
+    let planned_query = transform_table_with_joins(scx, &select.from)?;
+    let planned_query = transform_filter(scx, planned_query, &select.selection)?;
+    transform_projection(scx, planned_query, &select.projection)
 }
 
-fn plan_table_with_joins(
+fn transform_table_with_joins(
     scx: &StatementContext,
     from: &Vec<TableWithJoins>,
 ) -> Result<LogicalPlan> {
@@ -94,10 +97,10 @@ fn plan_table_with_joins(
     }
 }
 
-fn plan_filter(
+fn transform_filter(
     scx: &StatementContext,
     input: LogicalPlan,
-    filter: &Option<SqlExpr>,
+    filter: &Option<AstExpr>,
 ) -> Result<LogicalPlan> {
     match filter {
         Some(filter) => {
@@ -105,7 +108,7 @@ fn plan_filter(
                 scx: Arc::new(scx.clone()),
                 rel_desc: Arc::new(input.rel_desc()),
             };
-            let expr = plan_expr(&ecx, filter)?;
+            let expr = transform_expr(&ecx, filter)?;
             let expr = expr.type_as(&ecx, &ScalarType::Boolean)?;
             Ok(LogicalPlan::Filter {
                 input: Box::new(input),
@@ -122,7 +125,7 @@ struct ProjectionCtx {
     typ: ColumnType,
 }
 
-fn plan_projection(
+fn transform_projection(
     scx: &StatementContext,
     input: LogicalPlan,
     projection: &Vec<SelectItem>,
@@ -134,7 +137,7 @@ fn plan_projection(
     let exprs = projection
         .into_iter()
         .map(|e| {
-            plan_select_item(&ecx, e)
+            transform_select_item(&ecx, e)
             // let column_name = match &expr {
             //     Expr::Column(ColumnRef { name, .. }) => name.clone(),
             //     _ => "?column?".to_string(),
@@ -188,9 +191,12 @@ fn plan_projection(
     })
 }
 
-fn plan_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<Vec<CoercibleExpr>> {
+fn transform_select_item(
+    ecx: &ExprContext,
+    item: &SelectItem,
+) -> Result<Vec<CoercibleExpr>> {
     match item {
-        SelectItem::UnnamedExpr(expr) => Ok(vec![plan_expr(ecx, expr)?]),
+        SelectItem::UnnamedExpr(expr) => Ok(vec![transform_expr(ecx, expr)?]),
         SelectItem::Wildcard => Ok(wildcard_column_ref(&ecx.rel_desc)
             .into_iter()
             .map(|e| e.into())
@@ -202,11 +208,13 @@ fn plan_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<Vec<Coercibl
     }
 }
 
-pub fn plan_expr(ecx: &ExprContext, sql_expr: &SqlExpr) -> Result<CoercibleExpr> {
+pub fn transform_expr(ecx: &ExprContext, sql_expr: &AstExpr) -> Result<CoercibleExpr> {
     match sql_expr {
-        SqlExpr::Value(v) => plan_literal(ecx, v),
-        SqlExpr::Identifier(name) => plan_identifier(ecx, name),
-        SqlExpr::BinaryOp { left, op, right } => plan_binary_op(ecx, left, op, right),
+        AstExpr::Value(v) => transform_literal(ecx, v),
+        AstExpr::Identifier(name) => transform_identifier(ecx, name),
+        AstExpr::BinaryOp { left, op, right } => {
+            transform_binary_op(ecx, left, op, right)
+        }
         _ => Err(FloppyError::NotImplemented(format!(
             "Unsupported expression {:?}",
             sql_expr
@@ -214,7 +222,7 @@ pub fn plan_expr(ecx: &ExprContext, sql_expr: &SqlExpr) -> Result<CoercibleExpr>
     }
 }
 
-fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> {
+fn transform_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> {
     match literal {
         SqlValue::Number(n, _) => expr::parse_sql_number(&n).map(|e| e.into()),
         SqlValue::SingleQuotedString(s) => {
@@ -225,7 +233,7 @@ fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> 
         }
         SqlValue::Boolean(b) => Ok(expr::literal_boolean(*b).into()),
         SqlValue::Null => Ok(CoercibleExpr::LiteralNull),
-        SqlValue::Placeholder(p) => plan_parameter(ecx, p.to_string()),
+        SqlValue::Placeholder(p) => transform_parameter(ecx, p.to_string()),
         _ => Err(FloppyError::NotImplemented(format!(
             "literal not supported: {}",
             literal
@@ -233,33 +241,33 @@ fn plan_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> 
     }
 }
 
-fn plan_identifier(ecx: &ExprContext, name: &SqlIdent) -> Result<CoercibleExpr> {
+fn transform_identifier(ecx: &ExprContext, name: &AstIdent) -> Result<CoercibleExpr> {
     let rel_desc = ecx.rel_desc.clone();
     let id = rel_desc.column_idx(&name.value)?;
     let name = rel_desc.column_name(id).to_string();
     Ok(Expr::Column(ColumnRef { id, name }).into())
 }
 
-fn plan_binary_op(
+fn transform_binary_op(
     ecx: &ExprContext,
-    left: &SqlExpr,
+    left: &AstExpr,
     op: &BinaryOperator,
-    right: &SqlExpr,
+    right: &AstExpr,
 ) -> Result<CoercibleExpr> {
     let rel_desc = ecx.rel_desc.clone();
-    let left = plan_expr(ecx, left)?;
-    let right = plan_expr(ecx, right)?;
+    let left = transform_expr(ecx, left)?;
+    let right = transform_expr(ecx, right)?;
     match op {
-        BinaryOperator::Plus => plan_bop_plus(ecx, left, right),
-        BinaryOperator::Minus => plan_bop_minus(ecx, left, right),
-        BinaryOperator::Gt => plan_bop_gt(ecx, left, right),
-        BinaryOperator::Lt => plan_bop_lt(ecx, left, right),
-        BinaryOperator::GtEq => plan_bop_gte(ecx, left, right),
-        BinaryOperator::LtEq => plan_bop_lte(ecx, left, right),
-        BinaryOperator::Eq => plan_bop_eq(ecx, left, right),
-        BinaryOperator::NotEq => plan_bop_neq(ecx, left, right),
-        BinaryOperator::And => plan_bop_and(ecx, left, right),
-        BinaryOperator::Or => plan_bop_or(ecx, left, right),
+        BinaryOperator::Plus => transform_bop_plus(ecx, left, right),
+        BinaryOperator::Minus => transform_bop_minus(ecx, left, right),
+        BinaryOperator::Gt => transform_bop_gt(ecx, left, right),
+        BinaryOperator::Lt => transform_bop_lt(ecx, left, right),
+        BinaryOperator::GtEq => transform_bop_gte(ecx, left, right),
+        BinaryOperator::LtEq => transform_bop_lte(ecx, left, right),
+        BinaryOperator::Eq => transform_bop_eq(ecx, left, right),
+        BinaryOperator::NotEq => transform_bop_neq(ecx, left, right),
+        BinaryOperator::And => transform_bop_and(ecx, left, right),
+        BinaryOperator::Or => transform_bop_or(ecx, left, right),
         _ => Err(FloppyError::NotImplemented(format!(
             "binary op not implemented: {:?}",
             op
@@ -267,7 +275,7 @@ fn plan_binary_op(
     }
 }
 
-fn plan_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
+fn transform_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
     let param = p.strip_prefix("$");
     if param.is_none() {
         return Err(FloppyError::Plan(format!("invalid parameter: {}", p)));
@@ -299,7 +307,7 @@ fn plan_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
 /// ```
 ///
 ///  At least one of the expression is a numeric type.
-fn plan_bop_plus(
+fn transform_bop_plus(
     ecx: &ExprContext,
     cexpr1: CoercibleExpr,
     cexpr2: CoercibleExpr,
@@ -311,7 +319,7 @@ fn plan_bop_plus(
     add(ecx, &expr1, &expr2).map(|e| e.into())
 }
 
-fn plan_bop_minus(
+fn transform_bop_minus(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -319,7 +327,7 @@ fn plan_bop_minus(
     unimplemented!()
 }
 
-fn plan_bop_gt(
+fn transform_bop_gt(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -331,7 +339,7 @@ fn plan_bop_gt(
     gt(ecx, &expr1, &expr2).map(|e| e.into())
 }
 
-fn plan_bop_lt(
+fn transform_bop_lt(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -339,7 +347,7 @@ fn plan_bop_lt(
     unimplemented!()
 }
 
-fn plan_bop_gte(
+fn transform_bop_gte(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -347,7 +355,7 @@ fn plan_bop_gte(
     unimplemented!()
 }
 
-fn plan_bop_lte(
+fn transform_bop_lte(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -355,7 +363,7 @@ fn plan_bop_lte(
     unimplemented!()
 }
 
-fn plan_bop_eq(
+fn transform_bop_eq(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -363,7 +371,7 @@ fn plan_bop_eq(
     unimplemented!()
 }
 
-fn plan_bop_neq(
+fn transform_bop_neq(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -371,7 +379,7 @@ fn plan_bop_neq(
     unimplemented!()
 }
 
-fn plan_bop_and(
+fn transform_bop_and(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -379,7 +387,7 @@ fn plan_bop_and(
     unimplemented!()
 }
 
-fn plan_bop_or(
+fn transform_bop_or(
     ecx: &ExprContext,
     left: CoercibleExpr,
     right: CoercibleExpr,
@@ -440,7 +448,7 @@ mod tests {
         let dialect = PostgreSqlDialect {};
         let ast = &Parser::parse_sql(&dialect, sql)?[0];
         match ast {
-            Statement::Query(q) => plan_query(scx, q),
+            Statement::Query(q) => transform_query(scx, q),
             _ => Err(FloppyError::NotImplemented(format!(
                 "not implemented {}",
                 ast

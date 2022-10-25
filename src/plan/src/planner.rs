@@ -1,6 +1,6 @@
+use crate::analyze;
 use crate::context::StatementContext;
-use crate::logical_plan::log_planner;
-use crate::physical_plan::phys_planner;
+use crate::physical_plan::planner;
 use crate::PhysicalPlan;
 use common::error::Result;
 use sqlparser::dialect::PostgreSqlDialect;
@@ -10,8 +10,8 @@ pub fn plan(scx: &StatementContext, sql: &str) -> Result<PhysicalPlan> {
     let dialect = PostgreSqlDialect {};
     let statement = &Parser::parse_sql(&dialect, sql)?[0];
 
-    let logical_plan = log_planner::plan_statement(scx, statement)?;
-    phys_planner::plan(scx, logical_plan)
+    let logical_plan = analyze::transform_statement(scx, statement)?;
+    planner::plan(scx, logical_plan)
 }
 
 #[cfg(test)]
