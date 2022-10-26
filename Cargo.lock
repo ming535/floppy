@@ -678,10 +678,12 @@ version = "0.1.0"
 dependencies = [
  "catalog",
  "common",
+ "futures",
  "rust_decimal",
  "sqlparser",
  "storage",
  "test_util",
+ "tokio",
 ]
 
 [[package]]

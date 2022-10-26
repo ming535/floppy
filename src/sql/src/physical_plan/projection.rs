@@ -1,8 +1,12 @@
 use crate::context::ExprContext;
+use crate::physical_plan::RowStream;
 use crate::{Expr, PhysicalPlan};
 use common::error::Result;
 use common::relation::{RelationDesc, Row};
+use futures::{Stream, StreamExt};
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 #[derive(Debug)]
 pub struct ProjectionExec {
@@ -13,17 +17,42 @@ pub struct ProjectionExec {
 }
 
 impl ProjectionExec {
-    pub fn next(&mut self) -> Result<Option<Row>> {
-        let row = self.input.next()?;
-        if let Some(row) = row {
-            let values: Result<Vec<_>> = self
-                .exprs
-                .iter()
-                .map(|x| x.evaluate(&self.ecx, &row))
-                .collect();
-            Ok(Some(Row::new(values?)))
-        } else {
-            Ok(None)
-        }
+    pub fn stream(&self) -> Result<RowStream> {
+        Ok(Box::pin(ProjectionExecStream {
+            ecx: self.ecx.clone(),
+            input: self.input.stream()?,
+            exprs: self.exprs.clone(),
+        }))
+    }
+}
+
+struct ProjectionExecStream {
+    exprs: Vec<Expr>,
+    ecx: ExprContext,
+    input: RowStream,
+}
+
+impl ProjectionExecStream {
+    fn project(&self, r: &Row) -> Result<Row> {
+        let values = self
+            .exprs
+            .iter()
+            .map(|x| x.evaluate(&self.ecx, r))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Row::new(values))
+    }
+}
+
+impl Stream for ProjectionExecStream {
+    type Item = Result<Row>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.input.poll_next_unpin(cx).map(|x| match x {
+            Some(Ok(r)) => Some(self.project(&r)),
+            other => other,
+        })
     }
 }

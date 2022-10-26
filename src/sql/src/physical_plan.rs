@@ -12,6 +12,8 @@ use common::error::{FloppyError, Result};
 use common::relation::Row;
 use empty::EmptyExec;
 use filter::FilterExec;
+use futures::Stream;
+use std::pin::Pin;
 
 #[derive(Debug)]
 pub enum PhysicalPlan {
@@ -27,11 +29,12 @@ pub enum PhysicalPlan {
 }
 
 impl PhysicalPlan {
-    pub fn next(&mut self) -> Result<Option<Row>> {
+    /// `stream` compile/returns a graph of `Stream` that is ready to be executed.
+    pub fn stream(&self) -> Result<RowStream> {
         match self {
-            Self::Empty(p) => p.next(),
-            Self::Filter(p) => p.next(),
-            Self::Projection(p) => p.next(),
+            Self::Empty(p) => p.stream(),
+            Self::Filter(p) => p.stream(),
+            Self::Projection(p) => p.stream(),
             _ => Err(FloppyError::NotImplemented(format!(
                 "physical sql not implemented: {:?}",
                 self
@@ -39,3 +42,8 @@ impl PhysicalPlan {
         }
     }
 }
+
+/// Trait for iterator execution.
+/// The actual logic of different physical relational operators is implemented
+/// in various `RowStream`
+pub type RowStream = Pin<Box<dyn Stream<Item = Result<Row>>>>;
