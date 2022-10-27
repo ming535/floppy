@@ -5,21 +5,14 @@ use crate::{
 use common::error::{CatalogError, FloppyError};
 use common::relation::{GlobalId, RelationDesc};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// An in-memory catalog used in tests that requires a catalog.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MemCatalog {
     /// the key is an item's name without any qualifier.
     tables: HashMap<String, MemCatalogItem>,
-}
-
-impl Default for MemCatalog {
-    fn default() -> Self {
-        Self {
-            tables: HashMap::new(),
-        }
-    }
 }
 
 impl CatalogStore for MemCatalog {
@@ -40,7 +33,8 @@ impl CatalogStore for MemCatalog {
 
 impl MemCatalog {
     pub fn insert_table(&mut self, name: &str, id: GlobalId, desc: RelationDesc) {
-        self.tables.insert(
+        let mut tmp = self.tables.clone();
+        tmp.insert(
             name.into(),
             MemCatalogItem::Table {
                 name: name.into(),
@@ -48,10 +42,20 @@ impl MemCatalog {
                 desc,
             },
         );
+        self.tables = tmp;
+
+        // self.tables.insert(
+        //     name.into(),
+        //     MemCatalogItem::Table {
+        //         name: name.into(),
+        //         id,
+        //         desc,
+        //     },
+        // );
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MemCatalogItem {
     Table {
         name: QualifiedObjectName,

@@ -103,7 +103,7 @@ impl TryFrom<&SqlObjectName> for PartialObjectName {
 
 /// A fully-qualified non-human readable name of an item in the catalog using IDs for the database
 /// and schema.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QualifiedObjectName {
     pub qualifiers: ObjectQualifiers,
     pub item: String,
@@ -121,7 +121,7 @@ impl From<&str> for QualifiedObjectName {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectQualifiers {
     pub database: DatabaseId,
     pub schema: SchemaId,

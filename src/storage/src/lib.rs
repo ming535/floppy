@@ -1,8 +1,6 @@
 /// The storage layer hides the details of the persistent and query of database objects.
 use common::error::Result;
-use common::relation::{GlobalId, IndexRange, RelationDesc, Row};
-use common::scalar::Datum;
-use std::fmt;
+use common::relation::{GlobalId, IndexRange, Row};
 use std::ops::{Bound, RangeBounds};
 
 pub mod memory;

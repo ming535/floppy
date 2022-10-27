@@ -8,6 +8,7 @@ use common::error::Result;
 use common::relation::{GlobalId, RelationDesc};
 use std::borrow::Cow;
 use std::fmt;
+use std::sync::Arc;
 
 /// To simplify the design, all SQL objects are under "fp" database.
 const FLOPPY_DB_NAME: &str = "fp";
@@ -45,7 +46,13 @@ pub trait CatalogStore: fmt::Debug {
     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem>;
 }
 
-impl<C: CatalogStore + ?Sized> CatalogStore for Box<C> {
+// impl<C: CatalogStore + ?Sized> CatalogStore for Box<C> {
+//     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem> {
+//         (**self).resolve_item(item_name)
+//     }
+// }
+
+impl<C: CatalogStore + ?Sized> CatalogStore for Arc<C> {
     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem> {
         (**self).resolve_item(item_name)
     }

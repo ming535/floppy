@@ -1,40 +1,41 @@
 mod empty;
 mod filter;
-mod index_scan;
 pub mod planner;
+mod pri_scan;
 mod projection;
-mod table_scan;
+mod sec_scan;
 
-use crate::physical_plan::index_scan::SecondaryIndexScan;
+use crate::context::ExecutionContext;
+use crate::physical_plan::pri_scan::PriKeyScanExec;
 use crate::physical_plan::projection::ProjectionExec;
-use crate::physical_plan::table_scan::{FullTableScanExec, PrimaryIndexTableScanExec};
+use crate::physical_plan::sec_scan::SecKeyScan;
 use common::error::{FloppyError, Result};
 use common::relation::Row;
 use empty::EmptyExec;
 use filter::FilterExec;
 use futures::Stream;
 use std::pin::Pin;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum PhysicalPlan {
     Empty(EmptyExec),
-    /// Scan from the full table.
-    FullScan(FullTableScanExec),
     /// Scan the table with primary index range.
-    PrimaryIndexScan(PrimaryIndexTableScanExec),
+    PriKeyScan(PriKeyScanExec),
     /// Scan the table using secondary index range.
-    SecondaryIndexScan(SecondaryIndexScan),
+    SecKeyScan(SecKeyScan),
     Filter(FilterExec),
     Projection(ProjectionExec),
 }
 
 impl PhysicalPlan {
     /// `stream` compile/returns a graph of `Stream` that is ready to be executed.
-    pub fn stream(&self) -> Result<RowStream> {
+    pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         match self {
-            Self::Empty(p) => p.stream(),
-            Self::Filter(p) => p.stream(),
-            Self::Projection(p) => p.stream(),
+            Self::Empty(p) => p.stream(exec_ctx.clone()),
+            Self::Filter(p) => p.stream(exec_ctx.clone()),
+            Self::Projection(p) => p.stream(exec_ctx.clone()),
+            Self::PriKeyScan(p) => p.stream(exec_ctx),
             _ => Err(FloppyError::NotImplemented(format!(
                 "physical sql not implemented: {:?}",
                 self

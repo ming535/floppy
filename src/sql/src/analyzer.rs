@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn select_table_not_exists() {
         let catalog = seed::seed_catalog();
-        let scx = StatementContext::new(Arc::new(catalog));
+        let scx = StatementContext::new(catalog);
         let err =
             logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
         assert!(matches!(
@@ -554,7 +554,7 @@ mod tests {
     #[test]
     fn select_column_not_exists() {
         let catalog = seed::seed_catalog();
-        let scx = StatementContext::new(Arc::new(catalog));
+        let scx = StatementContext::new(catalog);
 
         let err =
             logical_plan(&scx, "SELECT fake FROM test").expect_err("query is invalid");

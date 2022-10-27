@@ -4,6 +4,7 @@ use common::scalar::{Datum, ScalarType};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use storage::TableStore;
 
 #[derive(Debug, Clone)]
 pub struct StatementContext {
@@ -40,5 +41,18 @@ impl ExprContext {
 
     pub fn param_values(&self) -> &RefCell<BTreeMap<usize, Datum>> {
         &self.scx.param_values
+    }
+}
+
+/// A bundle of things that is needed when execute a query.
+pub struct ExecutionContext {
+    pub table_store: Arc<dyn TableStore>,
+}
+
+impl ExecutionContext {
+    pub fn new(table_store: Arc<dyn TableStore>) -> Self {
+        Self {
+            table_store: table_store.clone(),
+        }
     }
 }

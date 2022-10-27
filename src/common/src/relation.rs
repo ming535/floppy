@@ -290,11 +290,19 @@ pub struct IndexRange {
 
 impl RangeBounds<IndexKeyDatums> for IndexRange {
     fn start_bound(&self) -> Bound<&IndexKeyDatums> {
-        todo!()
+        match &self.lo {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(b) => Bound::Included(b),
+            Bound::Excluded(b) => Bound::Excluded(b),
+        }
     }
 
     fn end_bound(&self) -> Bound<&IndexKeyDatums> {
-        todo!()
+        match &self.hi {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(b) => Bound::Included(b),
+            Bound::Excluded(b) => Bound::Excluded(b),
+        }
     }
 }
 

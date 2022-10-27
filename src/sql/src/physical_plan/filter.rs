@@ -1,9 +1,10 @@
-use crate::context::ExprContext;
+use crate::context::{ExecutionContext, ExprContext};
 use crate::physical_plan::RowStream;
 use crate::{Expr, PhysicalPlan};
 use common::error::{FloppyError, Result};
 use common::relation::Row;
 use common::scalar::Datum;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct FilterExec {
@@ -13,7 +14,7 @@ pub struct FilterExec {
 }
 
 impl FilterExec {
-    pub fn stream(&self) -> Result<RowStream> {
+    pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         todo!()
         //     loop {
         //         if let Some(r) = self.input.evaluate()? {

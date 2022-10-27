@@ -17,6 +17,7 @@ pub fn plan(scx: &StatementContext, sql: &str) -> Result<PhysicalPlan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::ExecutionContext;
     use common::relation::Row;
     use common::scalar::Datum;
     use futures::StreamExt;
@@ -25,35 +26,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {
-        let (catalog, _) = seed::seed(&vec![])?;
-        let scx = StatementContext::new(Arc::new(catalog));
+        let (catalog, table_store) = seed::seed(&vec![])?;
+        let scx = StatementContext::new(catalog.clone());
+        let exec_ctx = ExecutionContext::new(table_store.clone());
         let mut plan = plan(&scx, "SELECT 1 + 2")?;
-        let mut stream = plan.stream().expect("no error");
+        let mut stream = plan.stream(Arc::new(exec_ctx)).expect("no error");
         let row = stream
             .next()
             .await
-            .expect("have one row")
+            .expect("have a result")
             .expect("no error");
         assert_eq!(row, Row::new(vec![Datum::Int32(3)]));
-
-        let stream = plan.stream().expect("no error");
-        // assert_eq!(stream.is_none(), true);
+        assert_eq!(stream.next().await.is_none(), true);
         Ok(())
     }
 
-    #[test]
-    fn test_simple_scan() -> Result<()> {
-        // let r = Row::new(vec![Datum::Int32(1), Datum::Int32(2)]);
-        // let (catalog, _) = seed::seed(&vec![r.clone()])?;
-        // let scx = StatementContext::new(Arc::new(catalog));
-        // let mut sql = plan(&scx, "SELECT * FROM test")?;
-        // let row = sql
-        //     .evaluate()
-        //     .expect("no error")
-        //     .expect("should have one row");
-        // assert_eq!(row, r.clone());
-        // let row = sql.evaluate().expect("no error");
-        // assert_eq!(row.is_none(), true);
+    #[tokio::test]
+    async fn test_simple_scan() -> Result<()> {
+        let r = Row::new(vec![Datum::Int32(1), Datum::Int32(2)]);
+        let (catalog, table_store) = seed::seed(&vec![r.clone()])?;
+        let scx = StatementContext::new(catalog.clone());
+        let exec_ctx = ExecutionContext::new(table_store.clone());
+        let mut stream = plan(&scx, "SELECT * FROM test")?.stream(Arc::new(exec_ctx))?;
+        let row = stream
+            .next()
+            .await
+            .expect("have a result")
+            .expect("no error");
+        assert_eq!(row, r);
+        assert_eq!(stream.next().await.is_none(), true);
         Ok(())
     }
 }

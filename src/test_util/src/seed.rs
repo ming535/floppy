@@ -21,21 +21,21 @@ lazy_static! {
     );
 }
 
-pub fn seed_catalog() -> Box<dyn catalog::CatalogStore> {
-    let mut catalog = Box::new(catalog::memory::MemCatalog::default());
+pub fn seed_catalog() -> Arc<dyn catalog::CatalogStore> {
+    let mut catalog = catalog::memory::MemCatalog::default();
     catalog.insert_table(*TEST_TABLE_NAME, *TEST_TABLE_ID, TEST_REL_DESC.clone());
-    catalog
+    Arc::new(catalog)
 }
 
-pub fn seed_table(data: &Vec<Row>) -> Result<Box<dyn storage::TableStore>> {
-    let mut table = Box::new(storage::memory::MemoryEngine::default());
+pub fn seed_table(data: &Vec<Row>) -> Result<Arc<dyn storage::TableStore>> {
+    let mut table = Arc::new(storage::memory::MemoryEngine::default());
     table.seed(&TEST_TABLE_ID, data)?;
     Ok(table)
 }
 
 pub fn seed(
     data: &Vec<Row>,
-) -> Result<(Box<dyn catalog::CatalogStore>, Box<dyn storage::TableStore>)> {
+) -> Result<(Arc<dyn catalog::CatalogStore>, Arc<dyn storage::TableStore>)> {
     let catalog = seed_catalog();
     let table = seed_table(data)?;
     Ok((catalog, table))

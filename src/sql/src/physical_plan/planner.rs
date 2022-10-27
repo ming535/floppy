@@ -1,6 +1,7 @@
 use crate::context::{ExprContext, StatementContext};
 use crate::physical_plan::empty::EmptyExec;
 use crate::physical_plan::filter::FilterExec;
+use crate::physical_plan::pri_scan::PriKeyScanExec;
 use crate::physical_plan::projection::ProjectionExec;
 use crate::{Expr, LogicalPlan, PhysicalPlan};
 use catalog::names::FullObjectName;
@@ -76,7 +77,11 @@ fn plan_table(
     rel_desc: RelationDesc,
     full_name: FullObjectName,
 ) -> Result<PhysicalPlan> {
-    todo!()
+    Ok(PhysicalPlan::PriKeyScan(PriKeyScanExec {
+        table_id,
+        rel_desc,
+        full_name,
+    }))
 }
 
 #[cfg(test)]

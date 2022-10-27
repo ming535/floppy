@@ -1,9 +1,11 @@
+use crate::context::ExecutionContext;
 use crate::physical_plan::RowStream;
 use common::error::Result;
 use common::relation::Row;
 use common::scalar::Datum;
 use futures::Stream;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 #[derive(Debug)]
@@ -18,7 +20,7 @@ impl EmptyExec {
 }
 
 impl EmptyExec {
-    pub fn stream(&self) -> Result<RowStream> {
+    pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         Ok(Box::pin(FilterExecStream { index: 0 }))
     }
 }

@@ -1,4 +1,4 @@
-use crate::context::ExprContext;
+use crate::context::{ExecutionContext, ExprContext};
 use crate::physical_plan::RowStream;
 use crate::{Expr, PhysicalPlan};
 use common::error::Result;
@@ -17,10 +17,10 @@ pub struct ProjectionExec {
 }
 
 impl ProjectionExec {
-    pub fn stream(&self) -> Result<RowStream> {
+    pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         Ok(Box::pin(ProjectionExecStream {
             ecx: self.ecx.clone(),
-            input: self.input.stream()?,
+            input: self.input.stream(exec_ctx.clone())?,
             exprs: self.exprs.clone(),
         }))
     }
