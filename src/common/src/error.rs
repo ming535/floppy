@@ -1,6 +1,7 @@
 use crate::relation::{GlobalId, RelationDesc};
 use rust_decimal;
 use sqlparser::parser::ParserError;
+use std::convert::Infallible;
 use std::fmt::Formatter;
 use std::{fmt, result};
 

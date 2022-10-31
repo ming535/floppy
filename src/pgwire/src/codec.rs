@@ -5,9 +5,8 @@
 
 use crate::message::ErrorResponse;
 use crate::message::{
-    BackendMessage, FrontendMessage,
-    FrontendStartupMessage, TransactionStatus,
-    VERSION_CANCEL, VERSION_GSSENC, VERSION_SSL,
+    BackendMessage, FrontendMessage, FrontendStartupMessage, TransactionStatus, VERSION_CANCEL,
+    VERSION_GSSENC, VERSION_SSL,
 };
 use byteorder::{ByteOrder, NetworkEndian};
 use bytes::{Buf, BufMut, BytesMut};
@@ -17,9 +16,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
-use tokio::io::{
-    self, AsyncRead, AsyncReadExt, AsyncWrite,
-};
+use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 pub const REJECT_ENCRYPTION: u8 = b'N';
@@ -34,16 +31,12 @@ impl Error for CodecError {}
 impl fmt::Display for CodecError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            CodecError::StringNoTerminator => {
-                "The string does not have a terminator"
-            }
+            CodecError::StringNoTerminator => "The string does not have a terminator",
         })
     }
 }
 
-pub async fn decode_startup<A>(
-    mut conn: A,
-) -> Result<Option<FrontendStartupMessage>>
+pub async fn decode_startup<A>(mut conn: A) -> Result<Option<FrontendStartupMessage>>
 where
     A: AsyncRead + Unpin,
 {
@@ -70,16 +63,12 @@ where
     let mut buf = Cursor::new(&buf);
     let version = buf.read_i32()?;
     let message = match version {
-        VERSION_CANCEL => {
-            FrontendStartupMessage::CancelRequest {
-                conn_id: buf.read_u32()?,
-                secret_key: buf.read_u32()?,
-            }
-        }
+        VERSION_CANCEL => FrontendStartupMessage::CancelRequest {
+            conn_id: buf.read_u32()?,
+            secret_key: buf.read_u32()?,
+        },
         VERSION_SSL => FrontendStartupMessage::SslRequest,
-        VERSION_GSSENC => {
-            FrontendStartupMessage::GssEncRequest
-        }
+        VERSION_GSSENC => FrontendStartupMessage::GssEncRequest,
         _ => {
             let mut params = HashMap::new();
             while buf.peek_byte()? != 0 {
@@ -87,10 +76,7 @@ where
                 let value = buf.read_cstr()?.to_owned();
                 params.insert(name, value);
             }
-            FrontendStartupMessage::Startup {
-                version,
-                params,
-            }
+            FrontendStartupMessage::Startup { version, params }
         }
     };
 
@@ -110,8 +96,7 @@ where
     pub fn new(conn_id: u32, inner: A) -> FramedConn<A> {
         FramedConn {
             conn_id,
-            inner: Framed::new(inner, Codec::new())
-                .buffer(32),
+            inner: Framed::new(inner, Codec::new()).buffer(32),
         }
     }
 
@@ -120,9 +105,7 @@ where
     /// Blocks until the client sends a complete message. If the client
     /// terminates the stream, returns `None`. Returns an error if the client
     /// sends a malformed message or if the connection underlying is broken.
-    pub async fn recv(
-        &mut self,
-    ) -> Result<Option<FrontendMessage>> {
+    pub async fn recv(&mut self) -> Result<Option<FrontendMessage>> {
         let message = self.inner.try_next().await?;
         Ok(message)
     }
@@ -135,10 +118,7 @@ where
     ///
     /// Please use `StateMachine::send` instead if calling from `StateMachine`,
     /// as it applies session-based filters before calling this method.
-    pub async fn send<M>(
-        &mut self,
-        message: M,
-    ) -> Result<()>
+    pub async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Into<BackendMessage>,
     {
@@ -171,9 +151,7 @@ where
     }
 }
 
-fn parse_frame_len(
-    src: &[u8],
-) -> std::result::Result<usize, io::Error> {
+fn parse_frame_len(src: &[u8]) -> std::result::Result<usize, io::Error> {
     let n = NetworkEndian::read_u32(src) as usize;
     if n < 4 {
         return Err(io::Error::new(
@@ -220,6 +198,7 @@ impl Encoder<BackendMessage> for Codec {
             BackendMessage::AuthenticationOk => b'R',
             BackendMessage::EmptyQueryResponse => b'I',
             BackendMessage::ReadyForQuery(_) => b'Z',
+            BackendMessage::RowDescription(_) => b'T',
             BackendMessage::ErrorResponse(r) => {
                 if r.severity.is_error() {
                     b'E'
@@ -240,25 +219,34 @@ impl Encoder<BackendMessage> for Codec {
                 dst.put_u32(0);
             }
             BackendMessage::EmptyQueryResponse => (),
+            BackendMessage::RowDescription(fields) => {
+                dst.put_length_i16(fields.len())?;
+                for f in &fields {
+                    dst.put_string(&f.name.to_string());
+                    dst.put_u32(f.table_id);
+                    dst.put_u16(f.column_id);
+                    dst.put_u32(f.type_oid);
+                    dst.put_i16(f.type_len);
+                    dst.put_i32(f.type_mod);
+                    // TODO: make the format correct
+                    dst.put_format_i16(f.format);
+                }
+            }
             BackendMessage::ReadyForQuery(status) => {
                 dst.put_u8(match status {
                     TransactionStatus::Idle => b'I',
-                    TransactionStatus::InTransaction => {
-                        b'T'
-                    }
+                    TransactionStatus::InTransaction => b'T',
                     TransactionStatus::Failed => b'E',
                 });
             }
-            BackendMessage::ErrorResponse(
-                ErrorResponse {
-                    severity,
-                    code,
-                    message,
-                    detail,
-                    hint,
-                    position,
-                },
-            ) => {
+            BackendMessage::ErrorResponse(ErrorResponse {
+                severity,
+                code,
+                message,
+                detail,
+                hint,
+                position,
+            }) => {
                 dst.put_u8(b'S');
                 dst.put_string(severity.as_str());
                 dst.put_u8(b'C');
@@ -285,20 +273,19 @@ impl Encoder<BackendMessage> for Codec {
 
         // Overwrite length placeholder with true length.
         let len = i32::try_from(len).map_err(|_| {
-            io::Error::new(io::ErrorKind::Other, "length of encoded message does not fit into an i32",)
+            io::Error::new(
+                io::ErrorKind::Other,
+                "length of encoded message does not fit into an i32",
+            )
         })?;
-        dst[base..base + 4]
-            .copy_from_slice(&len.to_be_bytes());
+        dst[base..base + 4].copy_from_slice(&len.to_be_bytes());
         Ok(())
     }
 }
 
 trait Pgbuf: BufMut {
     fn put_string(&mut self, s: &str);
-    fn put_length_i16(
-        &mut self,
-        len: usize,
-    ) -> std::result::Result<(), io::Error>;
+    fn put_length_i16(&mut self, len: usize) -> std::result::Result<(), io::Error>;
     fn put_format_i8(&mut self, format: pgrepr::Format);
     fn put_format_i16(&mut self, format: pgrepr::Format);
 }
@@ -309,16 +296,9 @@ impl<B: BufMut> Pgbuf for B {
         self.put_u8(b'\0');
     }
 
-    fn put_length_i16(
-        &mut self,
-        len: usize,
-    ) -> std::result::Result<(), io::Error> {
-        let len = i16::try_from(len).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                "length does not fit in an i16",
-            )
-        })?;
+    fn put_length_i16(&mut self, len: usize) -> std::result::Result<(), io::Error> {
+        let len = i16::try_from(len)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "length does not fit in an i16"))?;
         self.put_i16(len);
         Ok(())
     }
@@ -343,8 +323,7 @@ impl Decoder for Codec {
     fn decode(
         &mut self,
         src: &mut BytesMut,
-    ) -> std::result::Result<Option<Self::Item>, Self::Error>
-    {
+    ) -> std::result::Result<Option<Self::Item>, Self::Error> {
         loop {
             match self.decode_state {
                 DecodeState::Head => {
@@ -352,21 +331,17 @@ impl Decoder for Codec {
                         return Ok(None);
                     }
                     let msg_type = src[0];
-                    let frame_len =
-                        parse_frame_len(&src[1..])?;
+                    let frame_len = parse_frame_len(&src[1..])?;
                     src.advance(5);
                     src.reserve(frame_len);
-                    self.decode_state = DecodeState::Data(
-                        msg_type, frame_len,
-                    );
+                    self.decode_state = DecodeState::Data(msg_type, frame_len);
                 }
 
                 DecodeState::Data(msg_type, frame_len) => {
                     if src.len() < frame_len {
                         return Ok(None);
                     }
-                    let buf =
-                        src.split_to(frame_len).freeze();
+                    let buf = src.split_to(frame_len).freeze();
                     let buf = Cursor::new(&buf);
 
                     let msg = match msg_type {
@@ -380,9 +355,9 @@ impl Decoder for Codec {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
                                 format!(
-                                "decode frame unknown message type {}",
-                                char::from(msg_type)
-                            ),
+                                    "decode frame unknown message type {}",
+                                    char::from(msg_type)
+                                ),
                             ))
                         }
                     };
@@ -417,9 +392,10 @@ impl<'a> Cursor<'a> {
 
     /// Returns the next byte without advancing the cursor.
     fn peek_byte(&self) -> Result<u8> {
-        self.buf.get(0).copied().ok_or_else(|| {
-            FloppyError::from(input_err("No byte to read"))
-        })
+        self.buf
+            .get(0)
+            .copied()
+            .ok_or_else(|| FloppyError::from(input_err("No byte to read")))
     }
 
     /// Returns the next byte, advancing the cursor by one byte.
@@ -442,14 +418,9 @@ impl<'a> Cursor<'a> {
     /// we should be returning bytes, so that we can support messages that are
     /// not UTF-8 encoded. At the moment, we've not discovered a need for this,
     /// though, and using proper strings is convenient.
-    fn read_cstr(
-        &mut self,
-    ) -> std::result::Result<&'a str, io::Error> {
-        if let Some(pos) =
-            self.buf.iter().position(|b| *b == 0)
-        {
-            let val = std::str::from_utf8(&self.buf[..pos])
-                .map_err(input_err)?;
+    fn read_cstr(&mut self) -> std::result::Result<&'a str, io::Error> {
+        if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
+            let val = std::str::from_utf8(&self.buf[..pos]).map_err(input_err)?;
             self.advance(pos + 1);
             Ok(val)
         } else {
@@ -501,9 +472,10 @@ impl<'a> Cursor<'a> {
         match self.read_i16()? {
             0 => Ok(pgrepr::Format::Text),
             1 => Ok(pgrepr::Format::Binary),
-            n => Err(FloppyError::from(input_err(
-                format!("unknown format code: {}", n),
-            ))),
+            n => Err(FloppyError::from(input_err(format!(
+                "unknown format code: {}",
+                n
+            )))),
         }
     }
 
@@ -513,18 +485,11 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn input_err(
-    source: impl Into<Box<dyn Error + Send + Sync>>,
-) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidInput,
-        source.into(),
-    )
+fn input_err(source: impl Into<Box<dyn Error + Send + Sync>>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, source.into())
 }
 
-fn decode_query(
-    mut buf: Cursor,
-) -> std::result::Result<FrontendMessage, io::Error> {
+fn decode_query(mut buf: Cursor) -> std::result::Result<FrontendMessage, io::Error> {
     Ok(FrontendMessage::Query {
         sql: buf.read_cstr()?.to_string(),
     })

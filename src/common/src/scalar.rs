@@ -165,12 +165,6 @@ pub enum ScalarType {
     Int64,
     /// The type of [`Datum::String`].
     String,
-    /// Stored as [`Datum::String`], but expresses a fixed-width, blank-padded
-    /// string.
-    ///
-    /// Note that a `length` of `None` is used in special cases, such as
-    /// creating lists.
-    Char { length: Option<CharLength> },
     /// Stored as [`Datum::String`], but can optionally express a limit on the
     /// string's length.
     VarChar {
@@ -205,7 +199,6 @@ impl fmt::Display for ScalarType {
             Self::Int32 => write!(f, "Int32"),
             Self::Int64 => write!(f, "Int64"),
             Self::String => write!(f, "String"),
-            Self::Char { .. } => write!(f, "Char"),
             Self::VarChar { .. } => write!(f, "VarChar"),
             Self::Oid => write!(f, "Oid"),
         }

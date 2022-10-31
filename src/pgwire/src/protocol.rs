@@ -58,7 +58,7 @@ where
         let message = self.conn.recv().await?;
         match message {
             Some(FrontendMessage::Query { sql }) => {
-                self.query(sql).await?;
+                self.simple_query(sql).await?;
             }
             _ => {
                 warn!("unimplemented: {:?}", message)
@@ -102,7 +102,7 @@ where
         self.flush().await
     }
 
-    async fn query(&mut self, sql: String) -> Result<State> {
+    async fn simple_query(&mut self, sql: String) -> Result<State> {
         let stmts = match parse_sql(&sql) {
             Ok(stmts) => stmts,
             Err(err) => {
@@ -151,9 +151,9 @@ where
         // Bind the portal.
         let param_types = vec![];
         const EMPTY_PORTAL: &str = "";
-        if let Err(e) =
-            self.session
-                .declare_portal(EMPTY_PORTAL.to_string(), stmt, param_types)
+        if let Err(e) = self
+            .session
+            .declare_portal(EMPTY_PORTAL.to_string(), stmt, param_types)
         {
             return self
                 .error(ErrorResponse::error(
@@ -184,7 +184,9 @@ where
             self.send(BackendMessage::RowDescription(
                 message::encode_row_description(rel_desc, &formats),
             ))
-        }
+            .await?;
+        };
+        // execute the query and send row results.
         todo!()
     }
 

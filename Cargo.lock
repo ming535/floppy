@@ -411,6 +411,7 @@ name = "pgrepr"
 version = "0.1.0"
 dependencies = [
  "common",
+ "postgres-types",
 ]
 
 [[package]]

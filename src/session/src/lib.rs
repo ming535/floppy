@@ -24,6 +24,10 @@ impl Session {
         }
     }
 
+    /// Creates a new portal with prepared statement.
+    /// To creates the `PreparedStatement`, we need to analyze the `Statement` to transform
+    /// it into a `LogicalPlan`. From the `LogicalPlan`, we can get a `RelationDesc` and
+    /// store it in `PreparedStatement`.
     pub fn declare_portal(
         &mut self,
         name: String,

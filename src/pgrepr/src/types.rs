@@ -1,7 +1,9 @@
 use crate::value::numeric::{InvalidNumericMaxScaleError, NUMERIC_DATUM_MAX_PRECISION};
 use common::adt::char::InvalidCharLengthError;
-use common::adt::varchar::InvalidVarCharMaxLengthError;
+use common::adt::varchar::{InvalidVarCharMaxLengthError, VarCharMaxLength};
+use common::error::FloppyError;
 use common::scalar::ScalarType;
+use postgres_types;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
@@ -52,6 +54,12 @@ pub enum Type {
     Int4,
     /// An 8-byte signed integer.
     Int8,
+    /// A 2-byte unsigned integer. This does not exist in PostgreSQL.
+    UInt2,
+    /// A 4-byte unsigned integer. This does not exist in PostgreSQL.
+    UInt4,
+    /// An 8-byte unsigned integer. This does not exist in PostgreSQL.
+    UInt8,
     /// A time interval.
     Interval {
         /// Optional constraints on the type.
@@ -123,6 +131,206 @@ pub enum Type {
     Int2Vector,
 }
 
+impl Type {
+    pub(crate) fn inner(&self) -> &'static postgres_types::Type {
+        match self {
+            Type::Array(inner) => unreachable!(),
+            Type::Bool => &postgres_types::Type::BOOL,
+            Type::Bytea => &postgres_types::Type::BYTEA,
+            Type::Char => &postgres_types::Type::CHAR,
+            Type::Date => &postgres_types::Type::DATE,
+            Type::Float4 => &postgres_types::Type::FLOAT4,
+            Type::Float8 => &postgres_types::Type::FLOAT8,
+            Type::Int2 => &postgres_types::Type::INT2,
+            Type::Int4 => &postgres_types::Type::INT4,
+            Type::Int8 => &postgres_types::Type::INT8,
+            Type::UInt2 | Type::UInt4 | Type::UInt8 => unreachable!(),
+            Type::Interval { .. } => &postgres_types::Type::INTERVAL,
+            Type::Json => &postgres_types::Type::JSON,
+            Type::Jsonb => &postgres_types::Type::JSONB,
+            Type::List(inner) => unreachable!(),
+            Type::Map { value_type } => unreachable!(),
+            Type::Numeric { .. } => &postgres_types::Type::NUMERIC,
+            Type::Oid => &postgres_types::Type::OID,
+            Type::Record(_) => &postgres_types::Type::RECORD,
+            Type::Text => &postgres_types::Type::TEXT,
+            Type::BpChar { .. } => &postgres_types::Type::BPCHAR,
+            Type::VarChar { .. } => &postgres_types::Type::VARCHAR,
+            Type::Time { .. } => &postgres_types::Type::TIME,
+            Type::TimeTz { .. } => &postgres_types::Type::TIMETZ,
+            Type::Timestamp { .. } => &postgres_types::Type::TIMESTAMP,
+            Type::TimestampTz { .. } => &postgres_types::Type::TIMESTAMPTZ,
+            Type::Uuid => &postgres_types::Type::UUID,
+            Type::RegProc => &postgres_types::Type::REGPROC,
+            Type::RegType => &postgres_types::Type::REGTYPE,
+            Type::RegClass => &postgres_types::Type::REGCLASS,
+            Type::Int2Vector => unreachable!(),
+        }
+    }
+
+    /// Returns the [OID] of this type.
+    /// Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
+    /// Type oid represents an object identifier.
+    ///
+    /// [OID]: https://www.postgresql.org/docs/current/datatype-oid.html
+    pub fn oid(&self) -> u32 {
+        self.inner().oid()
+    }
+
+    /// Returns the constraint on the type, if any.
+    pub fn constraint(&self) -> Option<&dyn TypeConstraint> {
+        match self {
+            Type::BpChar {
+                length: Some(length),
+            } => Some(length),
+            Type::VarChar {
+                max_length: Some(max_length),
+            } => Some(max_length),
+            Type::Numeric {
+                constraints: Some(constraints),
+            } => Some(constraints),
+            Type::Interval {
+                constraints: Some(constraints),
+            } => Some(constraints),
+            Type::Time {
+                precision: Some(precision),
+            } => Some(precision),
+            Type::TimeTz {
+                precision: Some(precision),
+            } => Some(precision),
+            Type::Timestamp {
+                precision: Some(precision),
+            } => Some(precision),
+            Type::TimestampTz {
+                precision: Some(precision),
+            } => Some(precision),
+            Type::Array(_)
+            | Type::Bool
+            | Type::Bytea
+            | Type::BpChar { length: None }
+            | Type::Char
+            | Type::Date
+            | Type::Float4
+            | Type::Float8
+            | Type::Int2
+            | Type::Int4
+            | Type::Int8
+            | Type::UInt2
+            | Type::UInt4
+            | Type::UInt8
+            | Type::Interval { constraints: None }
+            | Type::Json
+            | Type::Jsonb
+            | Type::List(_)
+            | Type::Map { .. }
+            | Type::Numeric { constraints: None }
+            | Type::Int2Vector
+            | Type::Oid
+            | Type::Record(_)
+            | Type::RegClass
+            | Type::RegProc
+            | Type::RegType
+            | Type::Text
+            | Type::Time { precision: None }
+            | Type::TimeTz { precision: None }
+            | Type::Timestamp { precision: None }
+            | Type::TimestampTz { precision: None }
+            | Type::Uuid
+            | Type::VarChar { max_length: None } => None,
+        }
+    }
+
+    /// Returns the number of bytes in the binary representation of this type,
+    /// or -1 if the type has a variable-length representation.
+    pub fn typlen(&self) -> i16 {
+        match self {
+            Type::Array(inner) => -1,
+            Type::Bool => 1,
+            Type::Bytea => -1,
+            Type::Char => 1,
+            Type::Date => 4,
+            Type::Float4 => 4,
+            Type::Float8 => 8,
+            Type::Int2 => 2,
+            Type::Int4 => 4,
+            Type::Int8 => 8,
+            Type::UInt2 => 2,
+            Type::UInt4 => 4,
+            Type::UInt8 => 8,
+            Type::Interval { .. } => 16,
+            Type::Json => -1,
+            Type::Jsonb => -1,
+            Type::List(_) => -1,
+            Type::Map { .. } => -1,
+            Type::Numeric { .. } => -1,
+            Type::Oid => 4,
+            Type::Record(_) => -1,
+            Type::Text => -1,
+            Type::BpChar { .. } => -1,
+            Type::VarChar { .. } => -1,
+            Type::Time { .. } => 8,
+            Type::TimeTz { .. } => 12,
+            Type::Timestamp { .. } => 8,
+            Type::TimestampTz { .. } => 12,
+            Type::Uuid => 16,
+            Type::RegProc => 4,
+            Type::RegType => 4,
+            Type::RegClass => 4,
+            Type::Int2Vector => -1,
+        }
+    }
+
+    /// Returns the packed type modifier ("typmod") for the type.
+    ///
+    /// The typmod is a 32-bit integer associated with the type that encodes
+    /// optional constraints on the type. For example, the typmod on
+    /// `Type::VarChar` encodes an optional constraint on the value's length.
+    /// Most types are never associated with a typmod.
+    ///
+    /// Negative typmods indicate no constraint.
+    pub fn typmod(&self) -> i32 {
+        match self.constraint() {
+            Some(constraint) => constraint.into_typmod(),
+            None => -1,
+        }
+    }
+}
+
+impl TryFrom<&Type> for ScalarType {
+    type Error = FloppyError;
+
+    fn try_from(typ: &Type) -> Result<ScalarType, FloppyError> {
+        match typ {
+            Type::Bool => Ok(ScalarType::Boolean),
+            Type::Int2 => Ok(ScalarType::Int16),
+            Type::Int4 => Ok(ScalarType::Int32),
+            Type::Int8 => Ok(ScalarType::Int64),
+            Type::VarChar { max_length } => Ok(ScalarType::String),
+            Type::Oid => Ok(ScalarType::Oid),
+            other => Err(FloppyError::NotImplemented(format!(
+                "Type {:?} is not implemented",
+                other
+            ))),
+        }
+    }
+}
+
+impl From<&ScalarType> for Type {
+    fn from(typ: &ScalarType) -> Self {
+        match typ {
+            ScalarType::Boolean => Type::Bool,
+            ScalarType::Int16 => Type::Int2,
+            ScalarType::Int32 => Type::Int4,
+            ScalarType::Int64 => Type::Int8,
+            ScalarType::String => Type::Text,
+            ScalarType::VarChar { max_length } => Type::VarChar {
+                max_length: (*max_length).map(CharLength::from),
+            },
+            ScalarType::Oid => Type::Oid,
+        }
+    }
+}
+
 /// An unpacked [`typmod`](Type::typmod) for a [`Type`].
 pub trait TypeConstraint: fmt::Display {
     /// Unpacks the type constraint from a typmod value.
@@ -137,6 +345,14 @@ pub trait TypeConstraint: fmt::Display {
 /// A length associated with [`Type::Char`] and [`Type::VarChar`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CharLength(i32);
+
+impl From<VarCharMaxLength> for CharLength {
+    fn from(length: VarCharMaxLength) -> CharLength {
+        // The `VarCharMaxLength` newtype wrapper ensures that the inner `u32`
+        // is small enough to fit into an `i32` with room for `VARHDRSZ`.
+        CharLength(i32::try_from(length.into_u32()).unwrap())
+    }
+}
 
 impl TypeConstraint for CharLength {
     fn from_typmod(typmod: i32) -> Result<Option<CharLength>, String> {
@@ -293,22 +509,6 @@ impl fmt::Display for NumericConstraints {
     }
 }
 
-impl TryFrom<&Type> for ScalarType {
-    type Error = TypeConversionError;
-
-    fn try_from(typ: &Type) -> Result<ScalarType, TypeConversionError> {
-        match typ {
-            Type::Bool => Ok(ScalarType::Boolean),
-            Type::Int2 => Ok(ScalarType::Int16),
-            Type::Int4 => Ok(ScalarType::Int32),
-            Type::Int8 => Ok(ScalarType::Int64),
-            Type::VarChar { max_length } => Ok(ScalarType::String),
-            Type::Oid => Ok(ScalarType::Oid),
-            other => Err(TypeConversionError::UnsupportedType(other.clone())),
-        }
-    }
-}
-
 /// An error that can occur when converting a [`Type`] to a [`ScalarType`].
 #[derive(Debug, Clone)]
 pub enum TypeConversionError {
@@ -343,9 +543,3 @@ impl fmt::Display for TypeConversionError {
 }
 
 impl Error for TypeConversionError {}
-
-impl From<&ScalarType> for Type {
-    fn from(typ: &ScalarType) -> Self {
-        todo!()
-    }
-}

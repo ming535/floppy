@@ -29,9 +29,11 @@ pub const VERSIONS: &[i32] = &[
     VERSION_SSL,
     VERSION_GSSENC,
 ];
+use common::error::Result;
 use common::relation::RelationDesc;
 use postgres::error::SqlState;
 use session::TransactionState;
+use tracing::field::Field;
 
 /// Like [`FrontendMessage`], but only the messages that can occur during
 /// startup protocol negotiation.
@@ -101,9 +103,9 @@ pub fn encode_row_description(
     desc.iter()
         .zip_eq(formats)
         .map(|((name, typ), format)| {
-            let pg_type = pgrepr::Type::from(&typ.scalar_type)?;
+            let pg_type = pgrepr::Type::from(&typ.scalar_type);
             FieldDescription {
-                name: name.clone(),
+                name: name.to_string(),
                 table_id: 0,
                 column_id: 0,
                 type_oid: pg_type.oid(),
