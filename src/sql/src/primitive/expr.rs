@@ -13,24 +13,23 @@ use std::fmt::Formatter;
 pub enum Expr {
     /// A column reference.
     Column(ColumnRef),
-    /// Positional parameter when prepare a SQL statement for execution:
-    /// https://www.postgresql.org/docs/current/sql-prepare.html
+    /// Positional parameter when prepare a SQL statement
+    /// for execution: https://www.postgresql.org/docs/current/sql-prepare.html
     Parameter(usize),
     /// A constant value.
     Literal(Literal),
     /// A binary expression.
     CallBinary(BinaryExpr),
-    /// An expression that have variable number of parameters.
-    /// for example: 1 == 2 AND 2 == 3 OR 4 > 5
+    /// An expression that have variable number of
+    /// parameters. for example: 1 == 2 AND 2 == 3 OR 4
+    /// > 5
     CallVariadic(VariadicExpr),
 }
 
 impl Expr {
     pub fn typ(&self, ecx: &ExprContext) -> ColumnType {
         match self {
-            Self::Column(ColumnRef { id, .. }) => {
-                ecx.rel_desc.rel_type().column_type(*id).clone()
-            }
+            Self::Column(ColumnRef { id, .. }) => ecx.rel_desc.rel_type().column_type(*id).clone(),
             Self::Parameter(n) => ecx.param_types().borrow()[n].clone().nullable(true),
             Self::Literal(Literal { datum, scalar_type }) => ColumnType {
                 scalar_type: scalar_type.clone(),
@@ -47,21 +46,22 @@ impl Expr {
         }
 
         match self {
-            Self::Literal(Literal { datum: Datum::String(s), scalar_type }) => {
-                match ty {
-                    ScalarType::Int32 => {
-                        Ok(literal_i32(Decimal::from_str_exact(s)?.try_into()?))
-                    }
-                    ScalarType::Int64 => {
-                        Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?))
-                    }
-                    _ => Err(FloppyError::NotImplemented(format!(
-                        "only support implicit cast from string to numeric, explicit cast also not supported. err from {} to {}", self, ty
-                    )))
-                }
-            }
+            Self::Literal(Literal {
+                datum: Datum::String(s),
+                scalar_type,
+            }) => match ty {
+                ScalarType::Int32 => Ok(literal_i32(Decimal::from_str_exact(s)?.try_into()?)),
+                ScalarType::Int64 => Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?)),
+                _ => Err(FloppyError::NotImplemented(format!(
+                    "only support implicit cast from string to numeric, explicit cast also not \
+                     supported. err from {} to {}",
+                    self, ty
+                ))),
+            },
             _ => Err(FloppyError::NotImplemented(format!(
-                "only support implicit cast from string to numeric, explicit cast also not supported. err from {} to {}", self, ty
+                "only support implicit cast from string to numeric, explicit cast also not \
+                 supported. err from {} to {}",
+                self, ty
             ))),
         }
     }
@@ -172,20 +172,23 @@ pub fn literal_null(ty: ScalarType) -> Expr {
 }
 
 /// A `CoercibleExpr` is a [`Expr`] whose type is not fully
-/// determined. Several SQL expressions can be freely coerced based upon where
-/// in the expression tree they appear. For example, the string literal '42'
-/// will be automatically coerced to the integer 42 if used in a numeric
-/// context:
+/// determined. Several SQL expressions can be freely
+/// coerced based upon where in the expression tree they
+/// appear. For example, the string literal '42'
+/// will be automatically coerced to the integer 42 if used
+/// in a numeric context:
 ///
 /// ```sql
 /// SELECT '42' + 42
 /// ```
 ///
-/// This separate type gives the code that needs to interact with coercions very
-/// fine-grained control over what coercions happen and when.
+/// This separate type gives the code that needs to interact
+/// with coercions very fine-grained control over what
+/// coercions happen and when.
 ///
-/// SQl expressions will be translated to [`CoercibleExpr`]first, and then
-/// translated to [`Expr`] based on the expression's context.
+/// SQl expressions will be translated to
+/// [`CoercibleExpr`]first, and then translated to [`Expr`]
+/// based on the expression's context.
 ///
 /// For example in
 ///
@@ -193,19 +196,19 @@ pub fn literal_null(ty: ScalarType) -> Expr {
 /// SELECT ... WHERE $1
 /// ```
 ///
-/// the `WHERE` clause will coerce the contained unconstrained type parameter
-/// `$1` to have type bool.
+/// the `WHERE` clause will coerce the contained
+/// unconstrained type parameter `$1` to have type bool.
 ///
-/// Another example is [`CallBinary`], the exact type of the parameter depends on
-/// specific function.
+/// Another example is [`CallBinary`], the exact type of the
+/// parameter depends on specific function.
 #[derive(Debug, Clone)]
 pub enum CoercibleExpr {
     Coerced(Expr),
     Parameter(usize),
     LiteralNull,
     /// A string where the type is not determined.
-    /// For example in `SELECT 1 + '2'`, the actual type of '2' is
-    /// determined based on the context.
+    /// For example in `SELECT 1 + '2'`, the actual type of
+    /// '2' is determined based on the context.
     LiteralString(String),
 }
 
@@ -231,9 +234,10 @@ impl CoercibleExpr {
     }
 
     /// Convert a `CoercibleExpr` into a `Expr`.
-    /// The type of `CoercibleExpr::Coerced` is already known, so we actually don't do
-    /// andy conversion.
-    /// For other `CoercibleExpr`, we convert it into `ScalarType::String`.
+    /// The type of `CoercibleExpr::Coerced` is already
+    /// known, so we actually don't do andy conversion.
+    /// For other `CoercibleExpr`, we convert it into
+    /// `ScalarType::String`.
     pub fn type_as_any(&self, ecx: &ExprContext) -> Result<Expr> {
         self.coerce_type(ecx, &ScalarType::String)
     }
@@ -251,9 +255,7 @@ impl CoercibleExpr {
         let expr = match self {
             Self::Coerced(e) => e.clone(),
             Self::LiteralNull => literal_null(ty.clone()),
-            Self::LiteralString(s) => {
-                cast(&Datum::String(s.clone()), &ScalarType::String, ty)?
-            }
+            Self::LiteralString(s) => cast(&Datum::String(s.clone()), &ScalarType::String, ty)?,
             Self::Parameter(n) => {
                 let prev = ecx.param_types().borrow_mut().insert(*n, ty.clone());
                 assert!(prev.is_none());
@@ -308,9 +310,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
                 )))
             }
         }
-        (Datum::String(s), ScalarType::String, ScalarType::String) => {
-            Ok(literal_string(s))
-        }
+        (Datum::String(s), ScalarType::String, ScalarType::String) => Ok(literal_string(s)),
         _ => Err(FloppyError::NotImplemented(format!(
             "cast not implemented from datum: {} typ: {}, to : {}",
             datum, scalar_type, to

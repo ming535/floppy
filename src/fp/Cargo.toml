@@ -13,3 +13,7 @@ sqlparser = {version = "0.18.0", features = ["serde"]}
 common = { path = "../common" }
 storage = { path = "../storage" }
 pgwire = { path = "../pgwire" }
+test_util = {path = "../test_util"}
+
+[dev-dependencies]
+test_util = {path = "../test_util"}

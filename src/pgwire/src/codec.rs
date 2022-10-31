@@ -1,5 +1,6 @@
-//! Encoding/decoding of messages in pgwire. See "[Frontend/Backend Protocol:
-//! Message Formats][1]" in the PostgreSQL reference for the specification.
+//! Encoding/decoding of messages in pgwire. See
+//! "[Frontend/Backend Protocol: Message Formats][1]" in the
+//! PostgreSQL reference for the specification.
 //!
 //! [1]: https://www.postgresql.org/docs/11/protocol-message-formats.html
 
@@ -83,7 +84,8 @@ where
     Ok(Some(message))
 }
 
-/// A connection that manages the encoding and decoding of pgwire frames.
+/// A connection that manages the encoding and decoding of
+/// pgwire frames.
 pub struct FramedConn<A> {
     conn_id: u32,
     inner: sink::Buffer<Framed<A, Codec>, BackendMessage>,
@@ -100,11 +102,14 @@ where
         }
     }
 
-    /// Reads and decodes one frontend message from the client.
+    /// Reads and decodes one frontend message from the
+    /// client.
     ///
-    /// Blocks until the client sends a complete message. If the client
-    /// terminates the stream, returns `None`. Returns an error if the client
-    /// sends a malformed message or if the connection underlying is broken.
+    /// Blocks until the client sends a complete message. If
+    /// the client terminates the stream, returns
+    /// `None`. Returns an error if the client
+    /// sends a malformed message or if the connection
+    /// underlying is broken.
     pub async fn recv(&mut self) -> Result<Option<FrontendMessage>> {
         let message = self.inner.try_next().await?;
         Ok(message)
@@ -112,12 +117,14 @@ where
 
     /// Encodes and sends one backend message to the client.
     ///
-    /// Note that the connection is not flushed after calling this method. You
-    /// must call [`FramedConn::flush`] explicitly. Returns an error if the
+    /// Note that the connection is not flushed after
+    /// calling this method. You must call [`FramedConn:
+    /// :flush`] explicitly. Returns an error if the
     /// underlying connection is broken.
     ///
-    /// Please use `StateMachine::send` instead if calling from `StateMachine`,
-    /// as it applies session-based filters before calling this method.
+    /// Please use `StateMachine::send` instead if calling
+    /// from `StateMachine`, as it applies session-based
+    /// filters before calling this method.
     pub async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Into<BackendMessage>,
@@ -126,18 +133,19 @@ where
         Ok(self.inner.send(message).await?)
     }
 
-    /// Encodes and sends the backend messages in the `messages` iterator to the
-    /// client.
+    /// Encodes and sends the backend messages in the
+    /// `messages` iterator to the client.
     ///
-    /// As with [`FramedConn::send`], the connection is not flushed after
-    /// calling this method. You must call [`FramedConn::flush`] explicitly.
-    /// Returns an error if the underlying connection is broken.
+    /// As with [`FramedConn::send`], the connection is not
+    /// flushed after calling this method. You must call
+    /// [`FramedConn::flush`] explicitly. Returns an
+    /// error if the underlying connection is broken.
     pub async fn send_all(
         &mut self,
         messages: impl IntoIterator<Item = BackendMessage>,
     ) -> Result<()> {
-        // we intentionally don't use `self.conn.send_all` here to avoid
-        // flushing the sink unnecessarily.
+        // we intentionally don't use `self.conn.send_all` here to
+        // avoid flushing the sink unnecessarily.
         for m in messages {
             self.send(m).await?;
         }
@@ -209,7 +217,8 @@ impl Encoder<BackendMessage> for Codec {
         };
         dst.put_u8(byte);
 
-        // Write message length placeholder. The true length is filled in later.
+        // Write message length placeholder. The true length is
+        // filled in later.
         let base = dst.len();
         dst.put_u32(0);
 
@@ -372,20 +381,23 @@ impl Decoder for Codec {
 
 /// Decodes data within pgwire messages.
 ///
-/// The API provided is very similar to [`bytes::Buf`], but operations return
-/// errors rather than panicking. This is important for safety, as we don't want
-/// to crash if the user sends us malformed pgwire messages.
+/// The API provided is very similar to [`bytes::Buf`], but
+/// operations return errors rather than panicking. This is
+/// important for safety, as we don't want to crash if the
+/// user sends us malformed pgwire messages.
 ///
-/// There are also some special-purpose methods, like [`Cursor::read_cstr`],
-/// that are specific to pgwire messages.
+/// There are also some special-purpose methods, like
+/// [`Cursor::read_cstr`], that are specific to pgwire
+/// messages.
 #[derive(Debug)]
 struct Cursor<'a> {
     buf: &'a [u8],
 }
 
 impl<'a> Cursor<'a> {
-    /// Constructs a new `Cursor` from a byte slice. The cursor will begin
-    /// decoding from the beginning of the slice.
+    /// Constructs a new `Cursor` from a byte slice. The
+    /// cursor will begin decoding from the beginning of
+    /// the slice.
     fn new(buf: &'a [u8]) -> Cursor {
         Cursor { buf }
     }
@@ -398,26 +410,31 @@ impl<'a> Cursor<'a> {
             .ok_or_else(|| FloppyError::from(input_err("No byte to read")))
     }
 
-    /// Returns the next byte, advancing the cursor by one byte.
+    /// Returns the next byte, advancing the cursor by one
+    /// byte.
     fn read_byte(&mut self) -> Result<u8> {
         let byte = self.peek_byte()?;
         self.advance(1);
         Ok(byte)
     }
 
-    /// Returns the next null-terminated string. The null character is not
-    /// included the returned string. The cursor is advanced past the null-
-    /// terminated string.
+    /// Returns the next null-terminated string. The null
+    /// character is not included the returned string.
+    /// The cursor is advanced past the null- terminated
+    /// string.
     ///
-    /// If there is no null byte remaining in the string, returns
-    /// `CodecError::StringNoTerminator`. If the string is not valid UTF-8,
-    /// returns an `io::Error` with an error kind of
+    /// If there is no null byte remaining in the string,
+    /// returns `CodecError::StringNoTerminator`. If the
+    /// string is not valid UTF-8, returns an
+    /// `io::Error` with an error kind of
     /// `io::ErrorKind::InvalidInput`.
     ///
-    /// NOTE(benesch): it is possible that returning a string here is wrong, and
-    /// we should be returning bytes, so that we can support messages that are
-    /// not UTF-8 encoded. At the moment, we've not discovered a need for this,
-    /// though, and using proper strings is convenient.
+    /// NOTE(benesch): it is possible that returning a
+    /// string here is wrong, and we should be returning
+    /// bytes, so that we can support messages that are
+    /// not UTF-8 encoded. At the moment, we've not
+    /// discovered a need for this, though, and using
+    /// proper strings is convenient.
     fn read_cstr(&mut self) -> std::result::Result<&'a str, io::Error> {
         if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
             let val = std::str::from_utf8(&self.buf[..pos]).map_err(input_err)?;
@@ -428,8 +445,8 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Reads the next 16-bit signed integer, advancing the cursor by two
-    /// bytes.
+    /// Reads the next 16-bit signed integer, advancing the
+    /// cursor by two bytes.
     fn read_i16(&mut self) -> Result<i16> {
         if self.buf.len() < 2 {
             return Err(FloppyError::from(input_err(
@@ -441,8 +458,8 @@ impl<'a> Cursor<'a> {
         Ok(val)
     }
 
-    /// Reads the next 32-bit signed integer, advancing the cursor by four
-    /// bytes.
+    /// Reads the next 32-bit signed integer, advancing the
+    /// cursor by four bytes.
     fn read_i32(&mut self) -> Result<i32> {
         if self.buf.len() < 4 {
             return Err(FloppyError::from(input_err(
@@ -454,8 +471,8 @@ impl<'a> Cursor<'a> {
         Ok(val)
     }
 
-    /// Reads the next 32-bit unsigned integer, advancing the cursor by four
-    /// bytes.
+    /// Reads the next 32-bit unsigned integer, advancing
+    /// the cursor by four bytes.
     fn read_u32(&mut self) -> Result<u32> {
         if self.buf.len() < 4 {
             return Err(FloppyError::from(input_err(
@@ -467,7 +484,8 @@ impl<'a> Cursor<'a> {
         Ok(val)
     }
 
-    /// Reads the next 16-bit format code, advancing the cursor by two bytes.
+    /// Reads the next 16-bit format code, advancing the
+    /// cursor by two bytes.
     fn read_format(&mut self) -> Result<pgrepr::Format> {
         match self.read_i16()? {
             0 => Ok(pgrepr::Format::Text),

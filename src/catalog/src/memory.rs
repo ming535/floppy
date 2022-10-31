@@ -8,7 +8,8 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-/// An in-memory catalog used in tests that requires a catalog.
+/// An in-memory catalog used in tests that requires a
+/// catalog.
 #[derive(Debug, Default)]
 pub struct MemCatalog {
     /// the key is an item's name without any qualifier.

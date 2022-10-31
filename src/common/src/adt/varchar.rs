@@ -7,16 +7,16 @@ pub const MAX_MAX_LENGTH: u32 = 10_485_760;
 
 /// The `max_length` of a [`ScalarType::VarChar`].
 ///
-/// This newtype wrapper ensures that the length is within the valid range.
+/// This newtype wrapper ensures that the length is within
+/// the valid range.
 ///
 /// [`ScalarType::VarChar`]: crate::ScalarType::VarChar
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct VarCharMaxLength(pub(crate) u32);
 
 impl VarCharMaxLength {
-    /// Consumes the newtype wrapper, returning the inner `u32`.
+    /// Consumes the newtype wrapper, returning the inner
+    /// `u32`.
     pub fn into_u32(self) -> u32 {
         self.0
     }
@@ -35,8 +35,8 @@ impl TryFrom<i64> for VarCharMaxLength {
     }
 }
 
-/// The error returned when constructing a [`VarCharMaxLength`] from an invalid
-/// value.
+/// The error returned when constructing a
+/// [`VarCharMaxLength`] from an invalid value.
 #[derive(Debug, Clone)]
 pub struct InvalidVarCharMaxLengthError;
 

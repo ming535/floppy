@@ -76,10 +76,12 @@ where
         Ok(State::Ready)
     }
 
-    /// Sends a backend message to the client, after applying a severity filter.
+    /// Sends a backend message to the client, after
+    /// applying a severity filter.
     ///
-    /// The message is only sent if its severity is above the severity set
-    /// in the session, with the default value being NOTICE.
+    /// The message is only sent if its severity is above
+    /// the severity set in the session, with the
+    /// default value being NOTICE.
     async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Into<BackendMessage>,
@@ -114,19 +116,21 @@ where
         let num_stmts = stmts.len();
 
         for stmt in stmts {
-            // In an aborted transaction, reject all commands except COMMIT/ROLLBACK.
+            // In an aborted transaction, reject all commands except
+            // COMMIT/ROLLBACK.
             if self.session.is_aborted_txn() && !is_txn_exit_stmt(Some(&stmt)) {
                 self.aborted_txn_error().await?;
                 break;
             }
 
-            // Start an implicit transaction if we aren't in any transaction and there's
-            // more than one statement. This mirrors the `use_implicit_block` variable in
-            // postgres.
+            // Start an implicit transaction if we aren't in any
+            // transaction and there's more than one
+            // statement. This mirrors the `use_implicit_block` variable
+            // in postgres.
             //
-            // This needs to be done in the loop instead of once at the top because
-            // a COMMIT/ROLLBACK statement needs to start a new transaction on next
-            // statement.
+            // This needs to be done in the loop instead of once at the
+            // top because a COMMIT/ROLLBACK statement needs
+            // to start a new transaction on next statement.
             self.session.start_txn(Some(num_stmts)).await;
 
             match self.one_query(stmt).await? {
@@ -136,7 +140,8 @@ where
             }
         }
 
-        // Implicit transactions are closed at the end of a Query message.
+        // Implicit transactions are closed at the end of a Query
+        // message.
         if self.session.txn().is_implicit() {
             self.session.commit_txn().await?;
         }

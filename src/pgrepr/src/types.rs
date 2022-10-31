@@ -13,12 +13,14 @@ use std::fmt::Formatter;
 /// [`VARHDRSZ`]: https://github.com/postgres/postgres/blob/REL_14_0/src/include/c.h#L627
 const VARHDRSZ: i32 = 4;
 
-/// Mirror of PostgreSQL's [`MAX_INTERVAL_PRECISION`] constant.
+/// Mirror of PostgreSQL's [`MAX_INTERVAL_PRECISION`]
+/// constant.
 ///
 /// See: <https://github.com/postgres/postgres/blob/27b77ecf9/src/include/datatype/timestamp.h#L54>
 const MAX_INTERVAL_PRECISION: i32 = 6;
 
-/// Mirror of PostgreSQL's [`MAX_TIMESTAMP_PRECISION`] constant.
+/// Mirror of PostgreSQL's [`MAX_TIMESTAMP_PRECISION`]
+/// constant.
 ///
 /// See: <https://github.com/postgres/postgres/blob/27b77ecf9/src/include/datatype/timestamp.h#L53>
 const MAX_TIMESTAMP_PRECISION: i32 = 6;
@@ -30,8 +32,9 @@ const MAX_TIME_PRECISION: i32 = 6;
 
 /// The type of a [`Value`](crate::Value).
 ///
-/// The [`Display`](fmt::Display) representation of a type is guaranteed to be
-/// valid PostgreSQL syntax that names the type and any modifiers.
+/// The [`Display`](fmt::Display) representation of a type
+/// is guaranteed to be valid PostgreSQL syntax that names
+/// the type and any modifiers.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Type {
     /// A variable-length multidimensional array of values.
@@ -54,11 +57,14 @@ pub enum Type {
     Int4,
     /// An 8-byte signed integer.
     Int8,
-    /// A 2-byte unsigned integer. This does not exist in PostgreSQL.
+    /// A 2-byte unsigned integer. This does not exist in
+    /// PostgreSQL.
     UInt2,
-    /// A 4-byte unsigned integer. This does not exist in PostgreSQL.
+    /// A 4-byte unsigned integer. This does not exist in
+    /// PostgreSQL.
     UInt4,
-    /// An 8-byte unsigned integer. This does not exist in PostgreSQL.
+    /// An 8-byte unsigned integer. This does not exist in
+    /// PostgreSQL.
     UInt8,
     /// A time interval.
     Interval {
@@ -91,32 +97,38 @@ pub enum Type {
     BpChar {
         /// The length of the string.
         ///
-        /// If unspecified, the type represents a variable-length string.
+        /// If unspecified, the type represents a
+        /// variable-length string.
         length: Option<CharLength>,
     },
     /// A variable-length string with an optional limit.
     VarChar {
-        /// An optional maximum length to enforce, in characters.
+        /// An optional maximum length to enforce, in
+        /// characters.
         max_length: Option<CharLength>,
     },
     /// A time of day without a day.
     Time {
-        /// An optional precision for the fractional digits in the second field.
+        /// An optional precision for the fractional digits
+        /// in the second field.
         precision: Option<TimePrecision>,
     },
     /// A time with a time zone.
     TimeTz {
-        /// An optional precision for the fractional digits in the second field.
+        /// An optional precision for the fractional digits
+        /// in the second field.
         precision: Option<TimePrecision>,
     },
     /// A date and time, without a timezone.
     Timestamp {
-        /// An optional precision for the fractional digits in the second field.
+        /// An optional precision for the fractional digits
+        /// in the second field.
         precision: Option<TimestampPrecision>,
     },
     /// A date and time, with a timezone.
     TimestampTz {
-        /// An optional precision for the fractional digits in the second field.
+        /// An optional precision for the fractional digits
+        /// in the second field.
         precision: Option<TimestampPrecision>,
     },
     /// A universally unique identifier.
@@ -169,8 +181,10 @@ impl Type {
     }
 
     /// Returns the [OID] of this type.
-    /// Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
-    /// Type oid represents an object identifier.
+    /// Object identifiers (OIDs) are used internally by
+    /// PostgreSQL as primary keys for various system
+    /// tables. Type oid represents an object
+    /// identifier.
     ///
     /// [OID]: https://www.postgresql.org/docs/current/datatype-oid.html
     pub fn oid(&self) -> u32 {
@@ -240,8 +254,9 @@ impl Type {
         }
     }
 
-    /// Returns the number of bytes in the binary representation of this type,
-    /// or -1 if the type has a variable-length representation.
+    /// Returns the number of bytes in the binary
+    /// representation of this type, or -1 if the type
+    /// has a variable-length representation.
     pub fn typlen(&self) -> i16 {
         match self {
             Type::Array(inner) => -1,
@@ -280,12 +295,15 @@ impl Type {
         }
     }
 
-    /// Returns the packed type modifier ("typmod") for the type.
+    /// Returns the packed type modifier ("typmod") for the
+    /// type.
     ///
-    /// The typmod is a 32-bit integer associated with the type that encodes
-    /// optional constraints on the type. For example, the typmod on
-    /// `Type::VarChar` encodes an optional constraint on the value's length.
-    /// Most types are never associated with a typmod.
+    /// The typmod is a 32-bit integer associated with the
+    /// type that encodes optional constraints on the
+    /// type. For example, the typmod on `Type::VarChar`
+    /// encodes an optional constraint on the value's
+    /// length. Most types are never associated with a
+    /// typmod.
     ///
     /// Negative typmods indicate no constraint.
     pub fn typmod(&self) -> i32 {
@@ -342,14 +360,16 @@ pub trait TypeConstraint: fmt::Display {
     fn into_typmod(&self) -> i32;
 }
 
-/// A length associated with [`Type::Char`] and [`Type::VarChar`].
+/// A length associated with [`Type::Char`] and
+/// [`Type::VarChar`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CharLength(i32);
 
 impl From<VarCharMaxLength> for CharLength {
     fn from(length: VarCharMaxLength) -> CharLength {
-        // The `VarCharMaxLength` newtype wrapper ensures that the inner `u32`
-        // is small enough to fit into an `i32` with room for `VARHDRSZ`.
+        // The `VarCharMaxLength` newtype wrapper ensures that the
+        // inner `u32` is small enough to fit into an `i32`
+        // with room for `VARHDRSZ`.
         CharLength(i32::try_from(length.into_u32()).unwrap())
     }
 }
@@ -416,7 +436,8 @@ impl fmt::Display for IntervalConstraints {
     }
 }
 
-/// A precision associated with [`Type::Time`] and [`Type::TimeTz`].
+/// A precision associated with [`Type::Time`] and
+/// [`Type::TimeTz`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct TimePrecision(i32);
 
@@ -445,7 +466,8 @@ impl fmt::Display for TimePrecision {
     }
 }
 
-/// A precision associated with [`Type::Timestamp`] and [`Type::TimestampTz`].
+/// A precision associated with [`Type::Timestamp`] and
+/// [`Type::TimestampTz`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct TimestampPrecision(i32);
 
@@ -509,7 +531,8 @@ impl fmt::Display for NumericConstraints {
     }
 }
 
-/// An error that can occur when converting a [`Type`] to a [`ScalarType`].
+/// An error that can occur when converting a [`Type`] to a
+/// [`ScalarType`].
 #[derive(Debug, Clone)]
 pub enum TypeConversionError {
     /// The source type is unsupported as a `ScalarType`.
@@ -517,14 +540,14 @@ pub enum TypeConversionError {
     /// The source type contained an invalid max scale for a
     /// [`ScalarType::Numeric`].
     InvalidNumericMaxScale(InvalidNumericMaxScaleError),
-    /// The source type contained an invalid constraint for a
-    /// [`ScalarType::Numeric`].
+    /// The source type contained an invalid constraint for
+    /// a [`ScalarType::Numeric`].
     InvalidNumericConstraint(String),
     /// The source type contained an invalid length for a
     /// [`ScalarType::Char`].
     InvalidCharLength(InvalidCharLengthError),
-    /// The source type contained an invalid max length for a
-    /// [`ScalarType::VarChar`].
+    /// The source type contained an invalid max length for
+    /// a [`ScalarType::VarChar`].
     InvalidVarCharMaxLength(InvalidVarCharMaxLengthError),
 }
 

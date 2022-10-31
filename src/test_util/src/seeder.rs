@@ -5,8 +5,6 @@ use lazy_static::lazy_static;
 use std::sync::Arc;
 
 /// test
-///
-///
 lazy_static! {
     static ref TEST_TABLE_NAME: &'static str = "test";
     static ref TEST_TABLE_ID: GlobalId = 1;
@@ -33,7 +31,7 @@ pub fn seed_table(data: &Vec<Row>) -> Result<Arc<dyn storage::TableStore>> {
     Ok(table)
 }
 
-pub fn seed(
+pub fn seed_catalog_and_table(
     data: &Vec<Row>,
 ) -> Result<(Arc<dyn catalog::CatalogStore>, Arc<dyn storage::TableStore>)> {
     let catalog = seed_catalog();

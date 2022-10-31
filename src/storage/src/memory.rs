@@ -25,11 +25,7 @@ impl MemoryEngine {
 struct EngineInner(RefCell<BTreeMap<IndexKeyDatums, Row>>);
 
 impl TableStore for MemoryEngine {
-    fn primary_index_range(
-        &self,
-        _: &GlobalId,
-        index_range: &IndexRange,
-    ) -> Result<RowIter> {
+    fn primary_index_range(&self, _: &GlobalId, index_range: &IndexRange) -> Result<RowIter> {
         let index_range = index_range.clone();
         let result_set = self
             .inner

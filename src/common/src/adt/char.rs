@@ -7,19 +7,19 @@ const MAX_LENGTH: u32 = 10_485_760;
 
 /// The `length` of a [`ScalarType::Char`].
 ///
-/// This newtype wrapper ensures that the length is within the valid range.
+/// This newtype wrapper ensures that the length is within
+/// the valid range.
 ///
 /// [`ScalarType::Char`]: crate::ScalarType::Char
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct CharLength(pub(crate) u32);
 
 impl CharLength {
     /// A length of one.
     pub const ONE: CharLength = CharLength(1);
 
-    /// Consumes the newtype wrapper, returning the inner `u32`.
+    /// Consumes the newtype wrapper, returning the inner
+    /// `u32`.
     pub fn into_u32(self) -> u32 {
         self.0
     }
@@ -36,7 +36,8 @@ impl TryFrom<i64> for CharLength {
     }
 }
 
-/// The error returned when constructing a [`CharLength`] from an invalid value.
+/// The error returned when constructing a [`CharLength`]
+/// from an invalid value.
 #[derive(Debug, Clone)]
 pub struct InvalidCharLengthError;
 

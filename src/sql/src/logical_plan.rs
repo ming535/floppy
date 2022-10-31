@@ -5,13 +5,13 @@ use std::fmt;
 use std::fmt::Formatter;
 
 /// A `LogicalPlan` computes a table.
-/// It represents a tree of data flow where each node in the graph
-/// computes a table from the input of the node.
+/// It represents a tree of data flow where each node in the
+/// graph computes a table from the input of the node.
 /// The `LogicalPlan` is not ready to be executed yet.
 #[derive(Debug)]
 pub enum LogicalPlan {
-    /// An empty relation exists in queries without a `From` clause, eg
-    /// ```sql
+    /// An empty relation exists in queries without a `From`
+    /// clause, eg ```sql
     /// SELECT 1 + 1;
     /// ```
     Empty,
@@ -76,8 +76,8 @@ impl LogicalPlan {
 }
 
 impl LogicalPlan {
-    /// Return a `format`able structure that produces a single line
-    /// per node. For example:
+    /// Return a `format`able structure that produces a
+    /// single line per node. For example:
     /// ```text
     /// Projection: #employee.id
     ///   Filter: #employee.state Eq Utf8(\"CO\")\

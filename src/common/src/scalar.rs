@@ -8,9 +8,9 @@ use std::{fmt, ops};
 
 /// A single value.
 ///
-/// Note that `Datum` must always derive [`Eq`] to enforce equality with
-/// `repr::Row`.
-#[derive(Clone, Debug, Hash)]
+/// Note that `Datum` must always derive [`Eq`] to enforce
+/// equality with `repr::Row`.
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Datum {
     Boolean(bool),
     /// A 16-bit signed integer.
@@ -85,33 +85,33 @@ impl ops::Sub for Datum {
     }
 }
 
-impl PartialEq for Datum {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Boolean(d1), Self::Boolean(d2)) => d1 == d2,
-            (Self::Int16(d1), Self::Int16(d2)) => d1 == d2,
-            (Self::Int32(d1), Self::Int32(d2)) => d1 == d2,
-            (Self::UInt32(d1), Self::UInt32(d2)) => d1 == d2,
-            (Self::String(d1), Self::String(d2)) => d1 == d2,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Datum {}
-
-impl PartialOrd for Datum {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (Self::Int16(d1), Self::Int16(d2)) => d1.partial_cmp(d2),
-            (Self::Int32(d1), Self::Int32(d2)) => d1.partial_cmp(d2),
-            (Self::Int64(d1), Self::Int64(d2)) => d1.partial_cmp(d2),
-            (Self::UInt32(d1), Self::UInt32(d2)) => d1.partial_cmp(d2),
-            (Self::String(d1), Self::String(d2)) => d1.partial_cmp(d2),
-            _ => None,
-        }
-    }
-}
+// impl PartialEq for Datum {
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Self::Boolean(d1), Self::Boolean(d2)) => d1 == d2,
+//             (Self::Int16(d1), Self::Int16(d2)) => d1 == d2,
+//             (Self::Int32(d1), Self::Int32(d2)) => d1 == d2,
+//             (Self::UInt32(d1), Self::UInt32(d2)) => d1 == d2,
+//             (Self::String(d1), Self::String(d2)) => d1 == d2,
+//             _ => false,
+//         }
+//     }
+// }
+//
+// impl Eq for Datum {}
+//
+// impl PartialOrd for Datum {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         match (self, other) {
+//             (Self::Int16(d1), Self::Int16(d2)) => d1.partial_cmp(d2),
+//             (Self::Int32(d1), Self::Int32(d2)) => d1.partial_cmp(d2),
+//             (Self::Int64(d1), Self::Int64(d2)) => d1.partial_cmp(d2),
+//             (Self::UInt32(d1), Self::UInt32(d2)) => d1.partial_cmp(d2),
+//             (Self::String(d1), Self::String(d2)) => d1.partial_cmp(d2),
+//             _ => None,
+//         }
+//     }
+// }
 
 impl fmt::Display for Datum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -151,8 +151,8 @@ impl Datum {
 
 /// The type of a [`Datum`].
 ///
-/// There is a direct correspondence between `Datum` variants and `ScalarType`
-/// variants.
+/// There is a direct correspondence between `Datum`
+/// variants and `ScalarType` variants.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScalarType {
     /// The type of [`Datum::Boolean`]
@@ -165,8 +165,8 @@ pub enum ScalarType {
     Int64,
     /// The type of [`Datum::String`].
     String,
-    /// Stored as [`Datum::String`], but can optionally express a limit on the
-    /// string's length.
+    /// Stored as [`Datum::String`], but can optionally
+    /// express a limit on the string's length.
     VarChar {
         max_length: Option<VarCharMaxLength>,
     },

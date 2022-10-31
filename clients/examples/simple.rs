@@ -1,7 +1,5 @@
 use postgres::config::SslMode;
-use postgres::{
-    Client, Config, Error, NoTls, SimpleQueryMessage,
-};
+use postgres::{Client, Config, Error, NoTls, SimpleQueryMessage};
 use std::fmt::Write;
 
 fn main() -> Result<(), Error> {

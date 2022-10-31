@@ -1,14 +1,16 @@
 use std::error::Error;
 use std::fmt;
 
-/// The number of internal decimal units in a [`Numeric`] value.
+/// The number of internal decimal units in a [`Numeric`]
+/// value.
 pub const NUMERIC_DATUM_WIDTH: u8 = 13;
 
-/// The maximum number of digits expressable in a [`Numeric`] value.
+/// The maximum number of digits expressable in a
+/// [`Numeric`] value.
 pub const NUMERIC_DATUM_MAX_PRECISION: u8 = NUMERIC_DATUM_WIDTH * 3;
 
-/// The error returned when constructing a [`NumericMaxScale`] from an invalid
-/// value.
+/// The error returned when constructing a
+/// [`NumericMaxScale`] from an invalid value.
 #[derive(Debug, Clone)]
 pub struct InvalidNumericMaxScaleError;
 

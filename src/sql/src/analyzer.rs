@@ -8,16 +8,12 @@ use common::error::{FloppyError, Result};
 use common::relation::{ColumnName, ColumnRef, ColumnType, RelationDesc};
 use common::scalar::ScalarType;
 use sqlparser::ast::{
-    BinaryOperator, Expr as AstExpr, Ident as AstIdent, Query as AstQuery, Select,
-    SelectItem, SetExpr, Statement as SqlStatement, TableFactor, TableWithJoins,
-    Value as SqlValue,
+    BinaryOperator, Expr as AstExpr, Ident as AstIdent, Query as AstQuery, Select, SelectItem,
+    SetExpr, Statement as SqlStatement, TableFactor, TableWithJoins, Value as SqlValue,
 };
 use std::sync::Arc;
 
-pub fn transform_statement(
-    scx: &StatementContext,
-    s: &SqlStatement,
-) -> Result<LogicalPlan> {
+pub fn transform_statement(scx: &StatementContext, s: &SqlStatement) -> Result<LogicalPlan> {
     match s {
         SqlStatement::Query(q) => transform_query(scx, &q),
         _ => Err(FloppyError::NotImplemented(format!(
@@ -27,12 +23,10 @@ pub fn transform_statement(
     }
 }
 
-/// transform_query translate [`sqlparser::ast::Query`] into a logical sql [`PlannedQuery`]
-/// which contains [`LogicalPlan`] and [`RelationDesc`].
-pub(crate) fn transform_query(
-    scx: &StatementContext,
-    query: &AstQuery,
-) -> Result<LogicalPlan> {
+/// transform_query translate [`sqlparser::ast::Query`] into
+/// a logical sql [`PlannedQuery`] which contains
+/// [`LogicalPlan`] and [`RelationDesc`].
+pub(crate) fn transform_query(scx: &StatementContext, query: &AstQuery) -> Result<LogicalPlan> {
     let set_expr = &query.body;
     transform_set_expr(scx, set_expr)
     // todo! order_by, limit, offset, fetch
@@ -74,12 +68,14 @@ fn transform_table_with_joins(
     let table_factor = &from[0].relation;
     match table_factor {
         // alias, args, with_hints are not supported
-        TableFactor::Table { alias: Some(_), .. } => Err(FloppyError::NotImplemented(
-            format!("table alias {} not implemented yet", table_factor),
-        )),
-        TableFactor::Table { args: Some(_), .. } => Err(FloppyError::NotImplemented(
-            format!("table args {} not implemented yet", table_factor),
-        )),
+        TableFactor::Table { alias: Some(_), .. } => Err(FloppyError::NotImplemented(format!(
+            "table alias {} not implemented yet",
+            table_factor
+        ))),
+        TableFactor::Table { args: Some(_), .. } => Err(FloppyError::NotImplemented(format!(
+            "table args {} not implemented yet",
+            table_factor
+        ))),
         TableFactor::Table { name, .. } => {
             let partial_object_name: PartialObjectName = name.try_into()?;
             let table = scx.catalog.resolve_item(&partial_object_name)?;
@@ -139,9 +135,9 @@ fn transform_projection(
         .map(|e| {
             transform_select_item(&ecx, e)
             // let column_name = match &expr {
-            //     Expr::Column(ColumnRef { name, .. }) => name.clone(),
-            //     _ => "?column?".to_string(),
-            // };
+            //     Expr::Column(ColumnRef { name, .. }) =>
+            // name.clone(),     _ => "?column?"
+            // .to_string(), };
             // let typ = expr.typ(&ecx);
             // Ok(ProjectionCtx {
             //     expr,
@@ -183,7 +179,8 @@ fn transform_projection(
         .collect::<Vec<ColumnType>>();
 
     let rel_desc = RelationDesc::new(column_types, column_names, vec![], vec![]);
-    // let exprs = exprs.iter().map(|c| c.expr.clone()).collect::<Vec<Expr>>();
+    // let exprs = exprs.iter().map(|c|
+    // c.expr.clone()).collect::<Vec<Expr>>();
     Ok(LogicalPlan::Projection {
         exprs,
         input: Box::new(input),
@@ -191,10 +188,7 @@ fn transform_projection(
     })
 }
 
-fn transform_select_item(
-    ecx: &ExprContext,
-    item: &SelectItem,
-) -> Result<Vec<CoercibleExpr>> {
+fn transform_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<Vec<CoercibleExpr>> {
     match item {
         SelectItem::UnnamedExpr(expr) => Ok(vec![transform_expr(ecx, expr)?]),
         SelectItem::Wildcard => Ok(wildcard_column_ref(&ecx.rel_desc)
@@ -212,9 +206,7 @@ pub fn transform_expr(ecx: &ExprContext, sql_expr: &AstExpr) -> Result<Coercible
     match sql_expr {
         AstExpr::Value(v) => transform_literal(ecx, v),
         AstExpr::Identifier(name) => transform_identifier(ecx, name),
-        AstExpr::BinaryOp { left, op, right } => {
-            transform_binary_op(ecx, left, op, right)
-        }
+        AstExpr::BinaryOp { left, op, right } => transform_binary_op(ecx, left, op, right),
         _ => Err(FloppyError::NotImplemented(format!(
             "Unsupported expression {:?}",
             sql_expr
@@ -225,12 +217,8 @@ pub fn transform_expr(ecx: &ExprContext, sql_expr: &AstExpr) -> Result<Coercible
 fn transform_literal(ecx: &ExprContext, literal: &SqlValue) -> Result<CoercibleExpr> {
     match literal {
         SqlValue::Number(n, _) => expr::parse_sql_number(&n).map(|e| e.into()),
-        SqlValue::SingleQuotedString(s) => {
-            Ok(CoercibleExpr::LiteralString(s.to_string()))
-        }
-        SqlValue::DoubleQuotedString(s) => {
-            Ok(CoercibleExpr::LiteralString(s.to_string()))
-        }
+        SqlValue::SingleQuotedString(s) => Ok(CoercibleExpr::LiteralString(s.to_string())),
+        SqlValue::DoubleQuotedString(s) => Ok(CoercibleExpr::LiteralString(s.to_string())),
         SqlValue::Boolean(b) => Ok(expr::literal_boolean(*b).into()),
         SqlValue::Null => Ok(CoercibleExpr::LiteralNull),
         SqlValue::Placeholder(p) => transform_parameter(ecx, p.to_string()),
@@ -443,7 +431,7 @@ mod tests {
     use sqlparser::parser::Parser;
     use std::cell::RefCell;
     use std::sync::Arc;
-    use test_util::seed;
+    use test_util::seeder;
     fn logical_plan(scx: &StatementContext, sql: &str) -> Result<LogicalPlan> {
         let dialect = PostgreSqlDialect {};
         let ast = &Parser::parse_sql(&dialect, sql)?[0];
@@ -475,53 +463,42 @@ mod tests {
             param_values: RefCell::default(),
         };
 
-        quick_test_eq(
-            &scx,
-            "SELECT 1",
-            "Projection: Int32(1)\
-                   \n  EmptyTable",
-        );
+        quick_test_eq(&scx, "SELECT 1", "Projection: Int32(1)\n  EmptyTable");
 
         quick_test_eq(
             &scx,
             "SELECT 1 + 1",
-            "Projection: Int32(1) + Int32(1)\
-                    \n  EmptyTable",
+            "Projection: Int32(1) + Int32(1)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 1 + '2'",
-            "Projection: Int32(1) + Int32(2)\
-                    \n  EmptyTable",
+            "Projection: Int32(1) + Int32(2)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 1 + ?",
-            "Projection: Int32(1) + Int32(?)\
-                   \n  EmptyTable",
+            "Projection: Int32(1) + Int32(?)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 2, 3",
-            "Projection: Int32(2), Int32(3)\
-                    \n  EmptyTable",
+            "Projection: Int32(2), Int32(3)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 2 + 4, 3",
-            "Projection: Int32(2) + Int32(4), Int32(3)\
-                    \n  EmptyTable",
+            "Projection: Int32(2) + Int32(4), Int32(3)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 2 + 2147483648, 3",
-            "Projection: Int64(2) + Int64(4), Int32(3)\
-                    \n  EmptyTable",
+            "Projection: Int64(2) + Int64(4), Int32(3)\n  EmptyTable",
         );
 
         let err = quick_test_fail(&scx, "SELECT '1' + '2'").expect_err("sql error");
@@ -541,10 +518,9 @@ mod tests {
 
     #[test]
     fn select_table_not_exists() {
-        let catalog = seed::seed_catalog();
+        let catalog = seeder::seed_catalog();
         let scx = StatementContext::new(catalog);
-        let err =
-            logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
+        let err = logical_plan(&scx, "SELECT * FROM faketable").expect_err("query is invalid");
         assert!(matches!(
             err,
             FloppyError::Catalog(CatalogError::TableNotFound(_))
@@ -553,11 +529,10 @@ mod tests {
 
     #[test]
     fn select_column_not_exists() {
-        let catalog = seed::seed_catalog();
+        let catalog = seeder::seed_catalog();
         let scx = StatementContext::new(catalog);
 
-        let err =
-            logical_plan(&scx, "SELECT fake FROM test").expect_err("query is invalid");
+        let err = logical_plan(&scx, "SELECT fake FROM test").expect_err("query is invalid");
         println!("err: {}", err);
         assert!(matches!(
             err,
@@ -567,35 +542,27 @@ mod tests {
 
     #[test]
     fn select_column() {
-        let catalog = seed::seed_catalog();
+        let catalog = seeder::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
 
-        quick_test_eq(
-            &scx,
-            "SELECT c1 FROM test",
-            "Projection: c1\
-                   \n  Table: test",
-        );
+        quick_test_eq(&scx, "SELECT c1 FROM test", "Projection: c1\n  Table: test");
 
         quick_test_eq(
             &scx,
             "SELECT * FROM test",
-            "Projection: c1, c2\
-                   \n  Table: test",
+            "Projection: c1, c2\n  Table: test",
         );
     }
 
     #[test]
     fn select_filter() {
-        let catalog = seed::seed_catalog();
+        let catalog = seeder::seed_catalog();
         let scx = StatementContext::new(Arc::new(catalog));
 
         quick_test_eq(
             &scx,
             "SELECT c1 FROM test WHERE c2 > 100",
-            "Projection: c1\
-                   \n  Filter: c2 > Int32(100)\
-                   \n    Table: test",
+            "Projection: c1\n  Filter: c2 > Int32(100)\n    Table: test",
         );
     }
 }

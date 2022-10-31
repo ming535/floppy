@@ -148,6 +148,7 @@ dependencies = [
  "pgwire",
  "sqlparser",
  "storage",
+ "test_util",
  "tokio",
  "tracing",
  "tracing-subscriber",

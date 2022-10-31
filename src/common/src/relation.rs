@@ -24,11 +24,13 @@ pub struct RelationType {
     /// The type for each column, in order.
     column_types: Vec<ColumnType>,
     /// Indices that represents a primary key.
-    /// If the user haven't specify a primary key, then a `RowId` is generated
-    /// for this table as a primary key. A table can have only one primary index.
+    /// If the user haven't specify a primary key, then a
+    /// `RowId` is generated for this table as a primary
+    /// key. A table can have only one primary index.
     prim_key: Vec<usize>,
-    /// Sets of indices that are "secondary keys" for this relation.
-    /// A relation can have multiple secondary indices.
+    /// Sets of indices that are "secondary keys" for this
+    /// relation. A relation can have multiple secondary
+    /// indices.
     secondary_keys: Vec<Vec<usize>>,
 }
 
@@ -59,8 +61,9 @@ impl RelationType {
         &self.column_types
     }
 
-    /// Returns an immutable reference of a specified `Field` instance
-    /// selected using an offset within the internal `fields` vector
+    /// Returns an immutable reference of a specified
+    /// `Field` instance selected using an offset within
+    /// the internal `fields` vector
     pub fn column_type(&self, i: usize) -> &ColumnType {
         &self.column_types[i]
     }
@@ -70,10 +73,12 @@ pub type ColumnName = String;
 
 /// A description of the shape of a relation.
 ///
-/// It bundles a [`RelationType`] with the name of each column in the relation.
+/// It bundles a [`RelationType`] with the name of each
+/// column in the relation.
 ///
-/// To simplify the design, we assume that column is never deleted in a table,
-/// so that a column's index in the Vector uniquely identify a valid column.
+/// To simplify the design, we assume that column is never
+/// deleted in a table, so that a column's index in the
+/// Vector uniquely identify a valid column.
 #[derive(Debug, Clone)]
 pub struct RelationDesc {
     rel_type: RelationType,
@@ -174,16 +179,18 @@ impl RelationDesc {
 /// Describe the output of a SQL statement.
 #[derive(Debug, Clone)]
 pub struct StatementDesc {
-    /// The shape of the rows produced by the statement, if the statement
-    /// produces rows.
+    /// The shape of the rows produced by the statement, if
+    /// the statement produces rows.
     pub rel_desc: Option<RelationDesc>,
-    /// The determined types of the parameters in the statement, if any.
+    /// The determined types of the parameters in the
+    /// statement, if any.
     pub param_types: Vec<ScalarType>,
 }
 
 impl StatementDesc {
-    /// Reports the number of columns in the statement's result set, or zero
-    /// if the statement does not return rows.
+    /// Reports the number of columns in the statement's
+    /// result set, or zero if the statement does not
+    /// return rows.
     pub fn arity(&self) -> usize {
         self.rel_desc
             .as_ref()
@@ -192,7 +199,8 @@ impl StatementDesc {
     }
 }
 
-/// A vector of values to which parameter references should be bound.
+/// A vector of values to which parameter references should
+/// be bound.
 #[derive(Debug, Clone)]
 pub struct Params {
     pub datums: Row,
@@ -258,7 +266,7 @@ pub struct ColumnRef {
 pub type GlobalId = u64;
 
 /// IndexKey is a sorted column datums.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct IndexKeyDatums(Vec<Datum>);
 
 impl FromIterator<Datum> for IndexKeyDatums {
@@ -268,18 +276,19 @@ impl FromIterator<Datum> for IndexKeyDatums {
     }
 }
 
-impl PartialOrd<Self> for IndexKeyDatums {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        todo!()
-    }
-}
-
-impl Ord for IndexKeyDatums {
-    fn cmp(&self, other: &Self) -> Ordering {
-        assert_eq!(self.0.len(), other.0.len());
-        todo!()
-    }
-}
+// impl PartialOrd<Self> for IndexKeyDatums {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         todo!()
+//     }
+// }
+//
+// impl Ord for IndexKeyDatums {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         assert_eq!(self.0.len(), other.0.len());
+//         self.partial_cmp()
+//         todo!()
+//     }
+// }
 
 /// IndexRange represent the index's boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -312,13 +321,15 @@ mod tests {
     #[test]
     fn key_range() {
         let key_start = IndexKeyDatums(vec![Datum::Int32(1), Datum::Int32(2)]);
-        let key_end = IndexKeyDatums(vec![Datum::Int32(1), Datum::Int32(4)]);
+        let key_end = IndexKeyDatums(vec![Datum::Int32(3), Datum::Int32(4)]);
         assert_eq!(
             (key_start.clone()..key_end.clone()),
             Range {
-                start: key_start,
-                end: key_end
+                start: key_start.clone(),
+                end: key_end.clone()
             }
         );
+
+        assert_eq!(key_start < key_end, true);
     }
 }

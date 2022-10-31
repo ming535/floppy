@@ -52,12 +52,8 @@ impl BinaryExpr {
         }
 
         match self.func {
-            BinaryFunc::AddInt16 | BinaryFunc::AddInt32 | BinaryFunc::AddInt64 => {
-                datum1 + datum2
-            }
-            BinaryFunc::SubInt16 | BinaryFunc::SubInt32 | BinaryFunc::SubInt64 => {
-                datum1 - datum2
-            }
+            BinaryFunc::AddInt16 | BinaryFunc::AddInt32 | BinaryFunc::AddInt64 => datum1 + datum2,
+            BinaryFunc::SubInt16 | BinaryFunc::SubInt32 | BinaryFunc::SubInt64 => datum1 - datum2,
             BinaryFunc::Eq => Ok(Datum::Boolean(datum1 == datum2)),
             BinaryFunc::NotEq => Ok(Datum::Boolean(datum1 != datum2)),
             BinaryFunc::Lt => Ok(Datum::Boolean(datum1 < datum2)),
@@ -208,7 +204,8 @@ impl VariadicExpr {
             )));
         }
 
-        // since we only support "AND", "OR", let's simplify the logic here.
+        // since we only support "AND", "OR", let's simplify the
+        // logic here.
         match self.func {
             VariadicFunc::And => datums
                 .iter()

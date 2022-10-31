@@ -29,7 +29,8 @@ pub enum PhysicalPlan {
 }
 
 impl PhysicalPlan {
-    /// `stream` compile/returns a graph of `Stream` that is ready to be executed.
+    /// `stream` compile/returns a graph of `Stream` that is
+    /// ready to be executed.
     pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         match self {
             Self::Empty(p) => p.stream(exec_ctx.clone()),
@@ -45,6 +46,6 @@ impl PhysicalPlan {
 }
 
 /// Trait for iterator execution.
-/// The actual logic of different physical relational operators is implemented
-/// in various `RowStream`
+/// The actual logic of different physical relational
+/// operators is implemented in various `RowStream`
 pub type RowStream = Pin<Box<dyn Stream<Item = Result<Row>>>>;

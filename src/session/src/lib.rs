@@ -25,9 +25,11 @@ impl Session {
     }
 
     /// Creates a new portal with prepared statement.
-    /// To creates the `PreparedStatement`, we need to analyze the `Statement` to transform
-    /// it into a `LogicalPlan`. From the `LogicalPlan`, we can get a `RelationDesc` and
-    /// store it in `PreparedStatement`.
+    /// To creates the `PreparedStatement`, we need to
+    /// analyze the `Statement` to transform
+    /// it into a `LogicalPlan`. From the `LogicalPlan`, we
+    /// can get a `RelationDesc` and store it in
+    /// `PreparedStatement`.
     pub fn declare_portal(
         &mut self,
         name: String,
@@ -83,16 +85,19 @@ pub struct PreparedStatement {
     desc: StatementDesc,
 }
 
-/// A portal represents the execution state of a running or runnable query.
+/// A portal represents the execution state of a running or
+/// runnable query.
 #[derive(Debug)]
 pub struct Portal {
     /// The statement that is bound to this portal.
     pub stmt: Option<Statement>,
     /// The statement description
     pub desc: StatementDesc,
-    /// The bound values for the parameters in the prepared statement, if any.
+    /// The bound values for the parameters in the prepared
+    /// statement, if any.
     pub bound_params: Params,
-    /// The desired output format for each column in the result set.
+    /// The desired output format for each column in the
+    /// result set.
     pub result_formats: Vec<pgrepr::Format>,
     /// The execution state of the portal.
     pub state: PortalState,
@@ -109,31 +114,37 @@ pub enum PortalState {
 
 /// The transaction status of a session.
 ///
-/// PostgreSQL's transaction states are in backend/access/transam/xact.c.
+/// PostgreSQL's transaction states are in
+/// backend/access/transam/xact.c.
 #[derive(Debug)]
 pub enum TransactionState {
     /// Idle. Matches `TBLOCK_DEFAULT`.
     Default,
     /// Running a possibly single-query transaction. Matches
-    /// `TBLOCK_STARTED`. WARNING: This might not actually be
-    /// a single statement due to the extended protocol. Thus,
-    /// we should not perform optimizations based on this.
-    /// See: <https://git.postgresql.org/gitweb/?p=postgresql.git&a=commitdiff&h=f92944137>.
+    /// `TBLOCK_STARTED`. WARNING: This might not actually
+    /// be a single statement due to the extended
+    /// protocol. Thus, we should not perform
+    /// optimizations based on this. See: <https://git.postgresql.org/gitweb/?p=postgresql.git&a=commitdiff&h=f92944137>.
     Started(Transaction),
-    /// Currently in a transaction issued from a `BEGIN`. Matches `TBLOCK_INPROGRESS`.
+    /// Currently in a transaction issued from a `BEGIN`.
+    /// Matches `TBLOCK_INPROGRESS`.
     InTransaction(Transaction),
-    /// Currently in an implicit transaction started from a multi-statement query
-    /// with more than 1 statements. Matches `TBLOCK_IMPLICIT_INPROGRESS`.
+    /// Currently in an implicit transaction started from a
+    /// multi-statement query with more than 1
+    /// statements. Matches `TBLOCK_IMPLICIT_INPROGRESS`.
     InTransactionImplicit(Transaction),
-    /// In a failed transaction that was started explicitly (i.e., previously
-    /// InTransaction). We do not use Failed for implicit transactions because
-    /// those cleanup after themselves. Matches `TBLOCK_ABORT`.
+    /// In a failed transaction that was started explicitly
+    /// (i.e., previously InTransaction). We do not use
+    /// Failed for implicit transactions because
+    /// those cleanup after themselves. Matches
+    /// `TBLOCK_ABORT`.
     Failed(Transaction),
 }
 
 impl TransactionState {
-    /// Expresses whether or not the transaction was implicitly started.
-    /// However, its negation does not imply explicitly started.
+    /// Expresses whether or not the transaction was
+    /// implicitly started. However, its negation does
+    /// not imply explicitly started.
     pub fn is_implicit(&self) -> bool {
         match self {
             Self::Started(_) | Self::InTransactionImplicit(_) => true,

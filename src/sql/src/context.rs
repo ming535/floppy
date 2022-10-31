@@ -9,11 +9,11 @@ use storage::TableStore;
 #[derive(Debug, Clone)]
 pub struct StatementContext {
     pub catalog: Arc<dyn CatalogStore>,
-    /// The types of the parameters in the query. This is filled in as planning
-    /// occurs.
+    /// The types of the parameters in the query. This is
+    /// filled in as planning occurs.
     pub param_types: RefCell<BTreeMap<usize, ScalarType>>,
-    /// The datums of the parameters in the query. This is filled in as Binding
-    /// occurs.
+    /// The datums of the parameters in the query. This is
+    /// filled in as Binding occurs.
     pub param_values: RefCell<BTreeMap<usize, Datum>>,
 }
 
@@ -27,7 +27,8 @@ impl StatementContext {
     }
 }
 
-/// A bundle of things that are needed for planning `ScalarExpr`s.
+/// A bundle of things that are needed for planning
+/// `ScalarExpr`s.
 #[derive(Debug, Clone)]
 pub struct ExprContext {
     pub scx: Arc<StatementContext>,

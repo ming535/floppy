@@ -19,21 +19,14 @@ impl Listener {
         let conn_id = Arc::new(AtomicU32::new(1));
 
         loop {
-            let (conn, addr) =
-                self.listener.accept().await?;
+            let (conn, addr) = self.listener.accept().await?;
 
             let mut handler = Handler {};
             let conn_id = conn_id.clone();
             tokio::spawn(async move {
-                let conn_id =
-                    conn_id.fetch_add(1, Ordering::SeqCst);
-                if let Err(e) =
-                    handler.run(conn_id, conn).await
-                {
-                    error!(
-                        "error handling connection {}: {}",
-                        conn_id, e
-                    )
+                let conn_id = conn_id.fetch_add(1, Ordering::SeqCst);
+                if let Err(e) = handler.run(conn_id, conn).await {
+                    error!("error handling connection {}: {}", conn_id, e)
                 }
             });
         }
@@ -46,15 +39,10 @@ struct Handler {
 }
 
 impl Handler {
-    async fn run(
-        &mut self,
-        conn_id: u32,
-        mut conn: TcpStream,
-    ) -> Result<()> {
+    async fn run(&mut self, conn_id: u32, mut conn: TcpStream) -> Result<()> {
         info!("handle connection");
         loop {
-            let message =
-                codec::decode_startup(&mut conn).await?;
+            let message = codec::decode_startup(&mut conn).await?;
             conn = match message {
                 // Clients sometimes hang up during the startup sequence, e.g.
                 // because they receive an unacceptable response to an
@@ -62,29 +50,18 @@ impl Handler {
                 None => {
                     return Ok(());
                 }
-                Some(FrontendStartupMessage::Startup {
-                    version,
-                    params,
-                }) => {
+                Some(FrontendStartupMessage::Startup { version, params }) => {
                     info!("startup conn {}", conn_id);
-                    let mut conn =
-                        FramedConn::new(conn_id, conn);
-                    protocol::run(conn_id, &mut conn)
-                        .await?;
+                    let mut conn = FramedConn::new(conn_id, conn);
+                    protocol::run(conn_id, &mut conn).await?;
                     return Ok(());
                 }
-                Some(
-                    FrontendStartupMessage::SslRequest,
-                ) => {
-                    conn.write_all(&[REJECT_ENCRYPTION])
-                        .await?;
+                Some(FrontendStartupMessage::SslRequest) => {
+                    conn.write_all(&[REJECT_ENCRYPTION]).await?;
                     conn
                 }
                 _ => {
-                    warn!(
-                        "not supported now: {:?}",
-                        message
-                    );
+                    warn!("not supported now: {:?}", message);
                     return Ok(());
                 }
             }
@@ -94,10 +71,7 @@ impl Handler {
     }
 }
 
-pub async fn run(
-    listener: TcpListener,
-    shutdown: impl Future,
-) {
+pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let mut server = Listener { listener };
 
     tokio::select! {

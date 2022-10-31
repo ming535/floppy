@@ -18,15 +18,18 @@ impl FilterExec {
         todo!()
         //     loop {
         //         if let Some(r) = self.input.evaluate()? {
-        //             let v = self.predicate.evaluate(&self.ecx, &r)?;
+        //             let v =
+        // self.predicate.evaluate(&self.ecx, &r)?;
         //             match v {
-        //                 Datum::Boolean(true) => break Ok(Some(r)),
-        //                 Datum::Boolean(false) => continue,
+        //                 Datum::Boolean(true) => break
+        // Ok(Some(r)),
+        // Datum::Boolean(false) => continue,
         //                 other => {
-        //                     break Err(FloppyError::Internal(format!(
-        //                         "predicate evaluate error: {:?}",
-        //                         other
-        //                     )))
+        //                     break
+        // Err(FloppyError::Internal(format!(
+        //                         "predicate evaluate
+        // error: {:?}",
+        // other                     )))
         //                 }
         //             }
         //         } else {

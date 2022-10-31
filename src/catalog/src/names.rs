@@ -3,7 +3,8 @@ use common::error::FloppyError;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::ObjectName as SqlObjectName;
 
-/// A fully-qualified human readable name of an item in the catalog.
+/// A fully-qualified human readable name of an item in the
+/// catalog.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FullObjectName {
     pub database: String,
@@ -47,10 +48,11 @@ impl From<&str> for FullObjectName {
     }
 }
 
-/// An optionally-qualified human-readable name of an item in the catalog.
+/// An optionally-qualified human-readable name of an item
+/// in the catalog.
 ///
-/// This is like a [`FullObjectName`], but either the database or schema name may be
-/// omitted.
+/// This is like a [`FullObjectName`], but either the
+/// database or schema name may be omitted.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PartialObjectName {
     pub database: Option<String>,
@@ -101,8 +103,8 @@ impl TryFrom<&SqlObjectName> for PartialObjectName {
     }
 }
 
-/// A fully-qualified non-human readable name of an item in the catalog using IDs for the database
-/// and schema.
+/// A fully-qualified non-human readable name of an item in
+/// the catalog using IDs for the database and schema.
 #[derive(Debug, Clone)]
 pub struct QualifiedObjectName {
     pub qualifiers: ObjectQualifiers,
@@ -128,15 +130,11 @@ pub struct ObjectQualifiers {
 }
 
 /// The identifier for a database
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct DatabaseId(pub u64);
 
 /// The identifier for a schema.
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct SchemaId(pub u64);
 
 #[cfg(test)]

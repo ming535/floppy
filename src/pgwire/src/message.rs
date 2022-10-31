@@ -1,15 +1,17 @@
-// Pgwire protocol versions are represented as 32-bit integers, where the
-// high 16 bits represent the major version and the low 16 bits represent the
-// minor version.
+// Pgwire protocol versions are represented as 32-bit
+// integers, where the high 16 bits represent the major
+// version and the low 16 bits represent the minor version.
 //
-// There have only been three released protocol versions, v1.0, v2.0, and v3.0.
-// The protocol changes very infrequently: the most recent protocol version,
-// v3.0, was released with Postgres v7.4 in 2003.
+// There have only been three released protocol versions,
+// v1.0, v2.0, and v3.0. The protocol changes very
+// infrequently: the most recent protocol version, v3.0, was
+// released with Postgres v7.4 in 2003.
 //
-// Somewhat unfortunately, the protocol overloads the version field to indicate
-// special types of connections, namely, SSL connections and cancellation
-// connections. These pseudo-versions were constructed to avoid ever matching
-// a true protocol version.
+// Somewhat unfortunately, the protocol overloads the
+// version field to indicate special types of connections,
+// namely, SSL connections and cancellation connections.
+// These pseudo-versions were constructed to avoid ever
+// matching a true protocol version.
 
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -35,8 +37,8 @@ use postgres::error::SqlState;
 use session::TransactionState;
 use tracing::field::Field;
 
-/// Like [`FrontendMessage`], but only the messages that can occur during
-/// startup protocol negotiation.
+/// Like [`FrontendMessage`], but only the messages that can
+/// occur during startup protocol negotiation.
 #[derive(Debug)]
 pub enum FrontendStartupMessage {
     Startup {
@@ -50,7 +52,8 @@ pub enum FrontendStartupMessage {
     /// Request GSSAPI encryption for the connection.
     GssEncRequest,
 
-    /// Cancel a query that is running on another connection.
+    /// Cancel a query that is running on another
+    /// connection.
     CancelRequest {
         /// The target connection ID.
         conn_id: u32,
@@ -59,8 +62,8 @@ pub enum FrontendStartupMessage {
     },
 }
 
-/// A decoded frontend pgwire [message], representing instructions for the
-/// backend.
+/// A decoded frontend pgwire [message], representing
+/// instructions for the backend.
 ///
 /// [message]: https://www.postgresql.org/docs/11/protocol-message-formats.html
 #[derive(Debug)]

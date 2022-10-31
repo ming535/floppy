@@ -14,9 +14,7 @@ fn main() -> Result<(), Error> {
         .password("123456")
         .connect(NoTls)?;
 
-    for row in client
-        .query("SELECT * FROM t1;SELECT 1 + 2;", &[])?
-    {
+    for row in client.query("SELECT * FROM t1;SELECT 1 + 2;", &[])? {
         let c1: i32 = row.get("c1");
         let c2: i32 = row.get("c2");
         println!("row c1 = {}, c2 = {}", c1, c2);

@@ -22,11 +22,11 @@ mod tests {
     use common::scalar::Datum;
     use futures::StreamExt;
     use std::sync::Arc;
-    use test_util::seed;
+    use test_util::seeder;
 
     #[tokio::test]
     async fn test_select_no_relation() -> Result<()> {
-        let (catalog, table_store) = seed::seed(&vec![])?;
+        let (catalog, table_store) = seeder::seed_catalog_and_table(&vec![])?;
         let scx = StatementContext::new(catalog.clone());
         let exec_ctx = ExecutionContext::new(table_store.clone());
         let mut plan = plan(&scx, "SELECT 1 + 2")?;
@@ -43,8 +43,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_scan() -> Result<()> {
-        let r = Row::new(vec![Datum::Int32(1), Datum::Int32(2)]);
-        let (catalog, table_store) = seed::seed(&vec![r.clone()])?;
+        let r1 = Row::new(vec![Datum::Int32(1), Datum::Int32(2)]);
+        let r2 = Row::new(vec![Datum::Int32(3), Datum::Int32(4)]);
+        let (catalog, table_store) = seeder::seed_catalog_and_table(&vec![r1.clone(), r2.clone()])?;
         let scx = StatementContext::new(catalog.clone());
         let exec_ctx = ExecutionContext::new(table_store.clone());
         let mut stream = plan(&scx, "SELECT * FROM test")?.stream(Arc::new(exec_ctx))?;
@@ -53,7 +54,7 @@ mod tests {
             .await
             .expect("have a result")
             .expect("no error");
-        assert_eq!(row, r);
+        assert_eq!(row, r1);
         assert_eq!(stream.next().await.is_none(), true);
         Ok(())
     }
