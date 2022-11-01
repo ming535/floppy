@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::RangeBounds;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MemoryEngine {
     rel_desc: RelationDesc,
     // Clustered table data that is sorted by primary key.
@@ -13,7 +13,7 @@ pub struct MemoryEngine {
 }
 
 impl MemoryEngine {
-    pub fn empty(rel_desc: RelationDesc) -> Self {
+    pub fn new(rel_desc: RelationDesc) -> Self {
         Self {
             rel_desc,
             inner: EngineInner::default(),

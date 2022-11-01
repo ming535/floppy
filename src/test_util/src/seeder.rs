@@ -1,3 +1,5 @@
+use catalog::names::{FullObjectName, PartialObjectName};
+use catalog::CatalogStore;
 use common::error::Result;
 use common::relation::{ColumnType, GlobalId, RelationDesc, Row};
 use common::scalar::ScalarType;
@@ -14,7 +16,7 @@ lazy_static! {
             ColumnType::new(ScalarType::Int32, false),
         ],
         vec!["c1".to_string(), "c2".to_string()],
-        vec![],
+        vec![0, 1],
         vec![],
     );
 }
@@ -25,8 +27,8 @@ pub fn seed_catalog() -> Arc<dyn catalog::CatalogStore> {
     Arc::new(catalog)
 }
 
-pub fn seed_table(data: &Vec<Row>) -> Result<Arc<dyn storage::TableStore>> {
-    let mut table = Arc::new(storage::memory::MemoryEngine::default());
+pub fn seed_table(rel_desc: RelationDesc, data: &Vec<Row>) -> Result<Arc<dyn storage::TableStore>> {
+    let mut table = Arc::new(storage::memory::MemoryEngine::new(rel_desc));
     table.seed(&TEST_TABLE_ID, data)?;
     Ok(table)
 }
@@ -35,6 +37,9 @@ pub fn seed_catalog_and_table(
     data: &Vec<Row>,
 ) -> Result<(Arc<dyn catalog::CatalogStore>, Arc<dyn storage::TableStore>)> {
     let catalog = seed_catalog();
-    let table = seed_table(data)?;
+    let partial_name: PartialObjectName = (*TEST_TABLE_NAME).into();
+    let full_name: FullObjectName = partial_name.clone().into();
+    let rel_desc = catalog.resolve_item(&partial_name)?.desc(&full_name)?;
+    let table = seed_table(rel_desc.into_owned(), data)?;
     Ok((catalog, table))
 }

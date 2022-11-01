@@ -55,7 +55,13 @@ mod tests {
             .expect("have a result")
             .expect("no error");
         assert_eq!(row, r1);
-        assert_eq!(stream.next().await.is_none(), true);
+
+        let row = stream
+            .next()
+            .await
+            .expect("have a result")
+            .expect("no error");
+        assert_eq!(row, r2);
         Ok(())
     }
 }

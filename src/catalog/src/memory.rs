@@ -44,15 +44,6 @@ impl MemCatalog {
             },
         );
         self.tables = tmp;
-
-        // self.tables.insert(
-        //     name.into(),
-        //     MemCatalogItem::Table {
-        //         name: name.into(),
-        //         id,
-        //         desc,
-        //     },
-        // );
     }
 }
 
