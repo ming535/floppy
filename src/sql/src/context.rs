@@ -47,13 +47,15 @@ impl ExprContext {
 
 /// A bundle of things that is needed when execute a query.
 pub struct ExecutionContext {
+    pub catalog_store: Arc<dyn CatalogStore>,
     pub table_store: Arc<dyn TableStore>,
 }
 
 impl ExecutionContext {
-    pub fn new(table_store: Arc<dyn TableStore>) -> Self {
+    pub fn new(catalog_store: Arc<dyn CatalogStore>, table_store: Arc<dyn TableStore>) -> Self {
         Self {
-            table_store: table_store.clone(),
+            catalog_store,
+            table_store,
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::visitor::{ExprVisitor, IndentVisitor};
 
 pub mod analyzer;
-mod context;
+pub mod context;
 mod ddl;
 mod logical_plan;
 pub mod physical_plan;

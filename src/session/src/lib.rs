@@ -1,14 +1,21 @@
+use catalog::CatalogStore;
 use common::error::Result;
 use common::relation::{Params, StatementDesc};
 use common::scalar::ScalarType;
 use pgrepr;
+use sql::analyzer;
+use sql::context::StatementContext;
 use sqlparser::ast::Statement;
 use std::collections::HashMap;
+use std::sync::Arc;
+use storage::TableStore;
 
 /// A session holds per-connection state.
 #[derive(Debug)]
 pub struct Session {
     conn_id: u32,
+    catalog_store: Arc<dyn CatalogStore>,
+    table_store: Arc<dyn TableStore>,
     prepared_statements: HashMap<String, PreparedStatement>,
     portals: HashMap<String, Portal>,
     txn_state: TransactionState,
@@ -16,11 +23,15 @@ pub struct Session {
 
 impl Session {
     pub fn new(conn_id: u32) -> Session {
-        Session {
-            conn_id,
-            txn_state: TransactionState::Default,
-            prepared_statements: HashMap::new(),
-            portals: HashMap::new(),
+        unsafe {
+            Session {
+                conn_id,
+                catalog_store: catalog::global_catalog_store.as_ref().unwrap().clone(),
+                table_store: storage::global_table_store.as_ref().unwrap().clone(),
+                txn_state: TransactionState::Default,
+                prepared_statements: HashMap::new(),
+                portals: HashMap::new(),
+            }
         }
     }
 
@@ -36,7 +47,36 @@ impl Session {
         stmt: Statement,
         param_types: Vec<Option<ScalarType>>,
     ) -> Result<()> {
-        todo!()
+        let statement_ctx = StatementContext::new(self.catalog_store.clone());
+        let logical_plan = analyzer::transform_statement(&statement_ctx, &stmt)?;
+        let rel_desc = logical_plan.rel_desc();
+        let stmt_desc = StatementDesc {
+            rel_desc: Some(rel_desc),
+            param_types: vec![],
+        };
+        let prepared_statement = PreparedStatement {
+            stmt: Some(stmt.clone()),
+            desc: StatementDesc {
+                rel_desc: Some(logical_plan.rel_desc()),
+                param_types: vec![],
+            },
+        };
+        self.prepared_statements
+            .insert(name.clone(), prepared_statement);
+
+        // setup portal
+        let result_formats = vec![pgrepr::Format::Text; stmt_desc.arity()];
+        self.portals.insert(
+            name,
+            Portal {
+                stmt: Some(stmt),
+                desc: stmt_desc,
+                bound_params: Params::empty(),
+                result_formats,
+                state: PortalState::NotStarted,
+            },
+        );
+        Ok(())
     }
 
     pub fn get_portal(&self, portal_name: &str) -> Option<&Portal> {
@@ -52,7 +92,7 @@ impl Session {
     }
 
     pub async fn start_txn(&mut self, num_stmts: Option<usize>) {
-        todo!()
+        println!("start txn: {:?}", num_stmts);
     }
 
     pub async fn commit_txn(&mut self) -> Result<()> {

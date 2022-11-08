@@ -9,3 +9,6 @@ edition = "2021"
 sqlparser = {version = "0.18.0", features = ["serde"]}
 common = {path = "../common"}
 pgrepr = {path = "../pgrepr"}
+sql = {path = "../sql"}
+catalog = {path = "../catalog"}
+storage = {path = "../storage"}

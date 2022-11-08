@@ -202,7 +202,7 @@ fn transform_select_item(ecx: &ExprContext, item: &SelectItem) -> Result<Vec<Coe
     }
 }
 
-pub fn transform_expr(ecx: &ExprContext, sql_expr: &AstExpr) -> Result<CoercibleExpr> {
+pub(crate) fn transform_expr(ecx: &ExprContext, sql_expr: &AstExpr) -> Result<CoercibleExpr> {
     match sql_expr {
         AstExpr::Value(v) => transform_literal(ecx, v),
         AstExpr::Identifier(name) => transform_identifier(ecx, name),

@@ -17,6 +17,10 @@ async fn main() -> Result<()> {
         .map(|n| Row::new(vec![Datum::Int32(n), Datum::Int32(n)]))
         .collect();
     let (catalog, table) = seeder::seed_catalog_and_table(&data)?;
+    unsafe {
+        catalog::global_catalog_store = Some(catalog);
+        storage::global_table_store = Some(table);
+    }
 
     let shutdown = signal::ctrl_c();
     let listener = TcpListener::bind("127.0.0.1:6432").await?;

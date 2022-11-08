@@ -50,17 +50,11 @@ const FLOPPY_SCHEMA_ID: SchemaId = SchemaId(101);
 ///     (i.e., because the name was successfully resolved,
 ///     or was constructed based on the output of a prior
 ///     lookup operation).
-pub trait CatalogStore: fmt::Debug {
+pub trait CatalogStore: fmt::Debug + Send + Sync {
     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem>;
 }
 
-// impl<C: CatalogStore + ?Sized> CatalogStore for Box<C> {
-//     fn resolve_item(&self, item_name: &PartialObjectName)
-// -> Result<&dyn CatalogItem> {         (**self).
-// resolve_item(item_name)     }
-// }
-
-impl<C: CatalogStore + ?Sized> CatalogStore for Arc<C> {
+impl<C: CatalogStore + ?Sized + Send + Sync> CatalogStore for Arc<C> {
     fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem> {
         (**self).resolve_item(item_name)
     }
@@ -103,3 +97,5 @@ pub enum CatalogItemType {
     Table,
     Index,
 }
+
+pub static mut global_catalog_store: Option<Arc<dyn CatalogStore>> = None;

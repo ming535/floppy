@@ -4,6 +4,7 @@ use common::relation::{GlobalId, IndexKeyDatums, IndexRange, RelationDesc, Row};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::RangeBounds;
+use std::sync::Mutex;
 
 #[derive(Debug)]
 pub struct MemoryEngine {
@@ -22,7 +23,7 @@ impl MemoryEngine {
 }
 
 #[derive(Debug, Default)]
-struct EngineInner(RefCell<BTreeMap<IndexKeyDatums, Row>>);
+struct EngineInner(Mutex<BTreeMap<IndexKeyDatums, Row>>);
 
 impl TableStore for MemoryEngine {
     fn primary_index_range(&self, _: &GlobalId, index_range: &IndexRange) -> Result<RowIter> {
@@ -30,7 +31,8 @@ impl TableStore for MemoryEngine {
         let result_set = self
             .inner
             .0
-            .borrow()
+            .lock()
+            .unwrap()
             .clone()
             .into_iter()
             .filter(move |e| index_range.clone().contains(&e.0))
@@ -41,7 +43,7 @@ impl TableStore for MemoryEngine {
 
     fn insert(&self, _: &GlobalId, row: &Row) -> Result<()> {
         let key_datums = row.prim_key_datums(&self.rel_desc)?;
-        self.inner.0.borrow_mut().insert(key_datums, row.clone());
+        self.inner.0.lock().unwrap().insert(key_datums, row.clone());
         Ok(())
     }
 }

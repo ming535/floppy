@@ -207,6 +207,15 @@ pub struct Params {
     pub types: Vec<ScalarType>,
 }
 
+impl Params {
+    pub fn empty() -> Self {
+        Self {
+            datums: Row::empty(),
+            types: vec![],
+        }
+    }
+}
+
 /// A `Row` represents a tuple in memory.
 /// It has contains schema and data.
 #[derive(Debug, Clone, PartialEq)]

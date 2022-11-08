@@ -153,7 +153,7 @@ where
     }
 
     async fn one_query(&mut self, stmt: Statement) -> Result<State> {
-        // Bind the portal.
+        // Bind the portal using empty parameters.
         let param_types = vec![];
         const EMPTY_PORTAL: &str = "";
         if let Err(e) = self
@@ -192,7 +192,7 @@ where
             .await?;
         };
         // execute the query and send row results.
-        todo!()
+        todo!();
     }
 
     async fn aborted_txn_error(&mut self) -> Result<State> {
