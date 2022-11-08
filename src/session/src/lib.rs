@@ -2,7 +2,6 @@ use catalog::CatalogStore;
 use common::error::Result;
 use common::relation::{Params, StatementDesc};
 use common::scalar::ScalarType;
-use pgrepr;
 use sql::analyzer;
 use sql::context::StatementContext;
 use sqlparser::ast::Statement;
@@ -47,36 +46,7 @@ impl Session {
         stmt: Statement,
         param_types: Vec<Option<ScalarType>>,
     ) -> Result<()> {
-        let statement_ctx = StatementContext::new(self.catalog_store.clone());
-        let logical_plan = analyzer::transform_statement(&statement_ctx, &stmt)?;
-        let rel_desc = logical_plan.rel_desc();
-        let stmt_desc = StatementDesc {
-            rel_desc: Some(rel_desc),
-            param_types: vec![],
-        };
-        let prepared_statement = PreparedStatement {
-            stmt: Some(stmt.clone()),
-            desc: StatementDesc {
-                rel_desc: Some(logical_plan.rel_desc()),
-                param_types: vec![],
-            },
-        };
-        self.prepared_statements
-            .insert(name.clone(), prepared_statement);
-
-        // setup portal
-        let result_formats = vec![pgrepr::Format::Text; stmt_desc.arity()];
-        self.portals.insert(
-            name,
-            Portal {
-                stmt: Some(stmt),
-                desc: stmt_desc,
-                bound_params: Params::empty(),
-                result_formats,
-                state: PortalState::NotStarted,
-            },
-        );
-        Ok(())
+        todo!()
     }
 
     pub fn get_portal(&self, portal_name: &str) -> Option<&Portal> {
@@ -136,9 +106,6 @@ pub struct Portal {
     /// The bound values for the parameters in the prepared
     /// statement, if any.
     pub bound_params: Params,
-    /// The desired output format for each column in the
-    /// result set.
-    pub result_formats: Vec<pgrepr::Format>,
     /// The execution state of the portal.
     pub state: PortalState,
 }

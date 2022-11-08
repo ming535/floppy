@@ -12,8 +12,8 @@ lazy_static! {
     static ref TEST_TABLE_ID: GlobalId = 1;
     static ref TEST_REL_DESC: RelationDesc = RelationDesc::new(
         vec![
-            ColumnType::new(ScalarType::Int32, false),
-            ColumnType::new(ScalarType::Int32, false),
+            ColumnType::new(ScalarType::Int64, false),
+            ColumnType::new(ScalarType::Int64, false),
         ],
         vec!["c1".to_string(), "c2".to_string()],
         vec![0, 1],

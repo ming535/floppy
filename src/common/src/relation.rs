@@ -329,8 +329,8 @@ mod tests {
     use std::ops::Range;
     #[test]
     fn key_range() {
-        let key_start = IndexKeyDatums(vec![Datum::Int32(1), Datum::Int32(2)]);
-        let key_end = IndexKeyDatums(vec![Datum::Int32(3), Datum::Int32(4)]);
+        let key_start = IndexKeyDatums(vec![Datum::Int64(1), Datum::Int64(2)]);
+        let key_end = IndexKeyDatums(vec![Datum::Int64(3), Datum::Int64(4)]);
         assert_eq!(
             (key_start.clone()..key_end.clone()),
             Range {

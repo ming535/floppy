@@ -1,5 +1,6 @@
 #[test]
 fn simple_sql() {
+
     // let dialect = GenericDialect {}; // or AnsiDialect
     //
     // let sql = "SELECT a, b \

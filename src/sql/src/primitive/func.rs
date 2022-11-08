@@ -22,11 +22,7 @@ impl fmt::Display for BinaryExpr {
 impl BinaryExpr {
     pub fn typ(&self) -> ColumnType {
         let scalar_type = match self.func {
-            BinaryFunc::AddInt16 => ScalarType::Int16,
-            BinaryFunc::AddInt32 => ScalarType::Int32,
             BinaryFunc::AddInt64 => ScalarType::Int64,
-            BinaryFunc::SubInt16 => ScalarType::Int16,
-            BinaryFunc::SubInt32 => ScalarType::Int32,
             BinaryFunc::SubInt64 => ScalarType::Int64,
             BinaryFunc::Eq => ScalarType::Boolean,
             BinaryFunc::NotEq => ScalarType::Boolean,
@@ -52,8 +48,8 @@ impl BinaryExpr {
         }
 
         match self.func {
-            BinaryFunc::AddInt16 | BinaryFunc::AddInt32 | BinaryFunc::AddInt64 => datum1 + datum2,
-            BinaryFunc::SubInt16 | BinaryFunc::SubInt32 | BinaryFunc::SubInt64 => datum1 - datum2,
+            BinaryFunc::AddInt64 => datum1 + datum2,
+            BinaryFunc::SubInt64 => datum1 - datum2,
             BinaryFunc::Eq => Ok(Datum::Boolean(datum1 == datum2)),
             BinaryFunc::NotEq => Ok(Datum::Boolean(datum1 != datum2)),
             BinaryFunc::Lt => Ok(Datum::Boolean(datum1 < datum2)),
@@ -66,11 +62,7 @@ impl BinaryExpr {
 
 #[derive(Debug, Clone)]
 pub enum BinaryFunc {
-    AddInt16,
-    AddInt32,
     AddInt64,
-    SubInt16,
-    SubInt32,
     SubInt64,
     Eq,
     NotEq,
@@ -83,8 +75,8 @@ pub enum BinaryFunc {
 impl fmt::Display for BinaryFunc {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AddInt16 | Self::AddInt32 | Self::AddInt64 => write!(f, "+"),
-            Self::SubInt16 | Self::SubInt32 | Self::SubInt64 => write!(f, "-"),
+            Self::AddInt64 => write!(f, "+"),
+            Self::SubInt64 => write!(f, "-"),
             Self::Eq => write!(f, "="),
             Self::NotEq => write!(f, "!="),
             Self::Lt => write!(f, "<"),
@@ -107,8 +99,6 @@ pub fn add(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
     }
 
     let f = match ty1 {
-        ScalarType::Int16 => BinaryFunc::AddInt16,
-        ScalarType::Int32 => BinaryFunc::AddInt32,
         ScalarType::Int64 => BinaryFunc::AddInt64,
         _ => {
             return Err(FloppyError::Internal(format!(

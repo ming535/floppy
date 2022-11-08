@@ -396,16 +396,6 @@ fn numeric_op_cast(ecx: &ExprContext, expr1: Expr, expr2: Expr) -> Result<(Expr,
                 let expr2 = expr2.cast_to(ecx, &ScalarType::Int64)?;
                 Ok((expr1, expr2))
             }
-            (ScalarType::Int32, _) | (_, ScalarType::Int32) => {
-                let expr1 = expr1.cast_to(ecx, &ScalarType::Int32)?;
-                let expr2 = expr2.cast_to(ecx, &ScalarType::Int32)?;
-                Ok((expr1, expr2))
-            }
-            (ScalarType::Int16, _) | (_, ScalarType::Int16) => {
-                let expr1 = expr1.cast_to(ecx, &ScalarType::Int16)?;
-                let expr2 = expr2.cast_to(ecx, &ScalarType::Int16)?;
-                Ok((expr1, expr2))
-            }
             _ => Err(FloppyError::Internal(format!("numeric type error"))),
         },
         (true, false) => {
@@ -463,42 +453,42 @@ mod tests {
             param_values: RefCell::default(),
         };
 
-        quick_test_eq(&scx, "SELECT 1", "Projection: Int32(1)\n  EmptyTable");
+        quick_test_eq(&scx, "SELECT 1", "Projection: Int64(1)\n  EmptyTable");
 
         quick_test_eq(
             &scx,
             "SELECT 1 + 1",
-            "Projection: Int32(1) + Int32(1)\n  EmptyTable",
+            "Projection: Int64(1) + Int64(1)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 1 + '2'",
-            "Projection: Int32(1) + Int32(2)\n  EmptyTable",
+            "Projection: Int64(1) + Int64(2)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 1 + ?",
-            "Projection: Int32(1) + Int32(?)\n  EmptyTable",
+            "Projection: Int64(1) + Int64(?)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 2, 3",
-            "Projection: Int32(2), Int32(3)\n  EmptyTable",
+            "Projection: Int64(2), Int64(3)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
             "SELECT 2 + 4, 3",
-            "Projection: Int32(2) + Int32(4), Int32(3)\n  EmptyTable",
+            "Projection: Int64(2) + Int64(4), Int64(3)\n  EmptyTable",
         );
 
         quick_test_eq(
             &scx,
-            "SELECT 2 + 2147483648, 3",
-            "Projection: Int64(2) + Int64(4), Int32(3)\n  EmptyTable",
+            "SELECT 2 + 4, 3",
+            "Projection: Int64(2) + Int64(4), Int64(3)\n  EmptyTable",
         );
 
         let err = quick_test_fail(&scx, "SELECT '1' + '2'").expect_err("sql error");
@@ -562,7 +552,7 @@ mod tests {
         quick_test_eq(
             &scx,
             "SELECT c1 FROM test WHERE c2 > 100",
-            "Projection: c1\n  Filter: c2 > Int32(100)\n    Table: test",
+            "Projection: c1\n  Filter: c2 > Int64(100)\n    Table: test",
         );
     }
 }

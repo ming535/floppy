@@ -47,10 +47,9 @@ impl Expr {
 
         match self {
             Self::Literal(Literal {
-                datum: Datum::String(s),
+                datum: Datum::Text(s),
                 scalar_type,
             }) => match ty {
-                ScalarType::Int32 => Ok(literal_i32(Decimal::from_str_exact(s)?.try_into()?)),
                 ScalarType::Int64 => Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?)),
                 _ => Err(FloppyError::NotImplemented(format!(
                     "only support implicit cast from string to numeric, explicit cast also not \
@@ -136,20 +135,6 @@ pub fn literal_boolean(b: bool) -> Expr {
     })
 }
 
-pub fn literal_i16(i: i16) -> Expr {
-    Expr::Literal(Literal {
-        datum: Datum::Int16(i),
-        scalar_type: ScalarType::Int16,
-    })
-}
-
-pub fn literal_i32(i: i32) -> Expr {
-    Expr::Literal(Literal {
-        datum: Datum::Int32(i),
-        scalar_type: ScalarType::Int32,
-    })
-}
-
 pub fn literal_i64(i: i64) -> Expr {
     Expr::Literal(Literal {
         datum: Datum::Int64(i),
@@ -157,10 +142,10 @@ pub fn literal_i64(i: i64) -> Expr {
     })
 }
 
-pub fn literal_string(s: &str) -> Expr {
+pub fn literal_text(s: &str) -> Expr {
     Expr::Literal(Literal {
-        datum: Datum::String(s.to_string()),
-        scalar_type: ScalarType::String,
+        datum: Datum::Text(s.to_string()),
+        scalar_type: ScalarType::Text,
     })
 }
 
@@ -239,7 +224,7 @@ impl CoercibleExpr {
     /// For other `CoercibleExpr`, we convert it into
     /// `ScalarType::String`.
     pub fn type_as_any(&self, ecx: &ExprContext) -> Result<Expr> {
-        self.coerce_type(ecx, &ScalarType::String)
+        self.coerce_type(ecx, &ScalarType::Text)
     }
 
     pub fn cast_to(&self, ecx: &ExprContext, ty: &ScalarType) -> Result<Expr> {
@@ -255,7 +240,7 @@ impl CoercibleExpr {
         let expr = match self {
             Self::Coerced(e) => e.clone(),
             Self::LiteralNull => literal_null(ty.clone()),
-            Self::LiteralString(s) => cast(&Datum::String(s.clone()), &ScalarType::String, ty)?,
+            Self::LiteralString(s) => cast(&Datum::Text(s.clone()), &ScalarType::Text, ty)?,
             Self::Parameter(n) => {
                 let prev = ecx.param_types().borrow_mut().insert(*n, ty.clone());
                 assert!(prev.is_none());
@@ -275,8 +260,6 @@ impl From<Expr> for CoercibleExpr {
 pub fn parse_sql_number(n: &str) -> Result<Expr> {
     let d = Decimal::from_str_exact(n)?;
     if let Ok(n) = d.try_into() {
-        Ok(literal_i32(n).into())
-    } else if let Ok(n) = d.try_into() {
         Ok(literal_i64(n).into())
     } else {
         Err(FloppyError::NotImplemented(format!(
@@ -288,18 +271,7 @@ pub fn parse_sql_number(n: &str) -> Result<Expr> {
 
 fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr> {
     match (datum, scalar_type, to) {
-        (Datum::String(s), ScalarType::String, ScalarType::Int32) => {
-            let d = Decimal::from_str_exact(s)?;
-            if let Ok(n) = d.try_into() {
-                Ok(literal_i32(n))
-            } else {
-                Err(FloppyError::Plan(format!(
-                    "cannot cast from String to Int32: {}",
-                    s
-                )))
-            }
-        }
-        (Datum::String(s), ScalarType::String, ScalarType::Int64) => {
+        (Datum::Text(s), ScalarType::Text, ScalarType::Int64) => {
             let d = Decimal::from_str_exact(s)?;
             if let Ok(n) = d.try_into() {
                 Ok(literal_i64(n))
@@ -310,7 +282,7 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
                 )))
             }
         }
-        (Datum::String(s), ScalarType::String, ScalarType::String) => Ok(literal_string(s)),
+        (Datum::Text(s), ScalarType::Text, ScalarType::Text) => Ok(literal_text(s)),
         _ => Err(FloppyError::NotImplemented(format!(
             "cast not implemented from datum: {} typ: {}, to : {}",
             datum, scalar_type, to
@@ -332,8 +304,8 @@ mod tests {
     fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
         let desc = RelationDesc::new(
             vec![
-                ColumnType::new(ScalarType::Int32, false),
-                ColumnType::new(ScalarType::Int32, false),
+                ColumnType::new(ScalarType::Int64, false),
+                ColumnType::new(ScalarType::Int64, false),
             ],
             vec!["c1".to_string(), "c2".to_string()],
             vec![],
@@ -357,17 +329,17 @@ mod tests {
             rel_desc: Arc::new(RelationDesc::empty()),
         };
 
-        let l1 = literal_i32(1);
+        let l1 = literal_i64(1);
         let l2 = l1.clone();
 
         // 1 + 1 = 2
         let l3 = add(&ecx, &l1, &l2)?;
-        assert_eq!(format!("{}", l3), "Int32(1) + Int32(1)");
+        assert_eq!(format!("{}", l3), "Int64(1) + Int64(1)");
         let d = l3.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "2");
 
         // (1 + 1) + 100 = 102
-        let l4 = literal_i32(100);
+        let l4 = literal_i64(100);
         let l5 = add(&ecx, &l3, &l4)?;
         let d = l5.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "102");
@@ -419,17 +391,17 @@ mod tests {
         assert_eq!(format!("{}", d), "FALSE");
 
         // 2 == 3
-        let l1 = literal_i32(2);
-        let l2 = literal_i32(3);
+        let l1 = literal_i64(2);
+        let l2 = literal_i64(3);
 
         let l3 = equal(&ecx, &l1, &l2)?;
         let d = l3.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "FALSE");
 
         // ((1 + 4) == 5) AND (6 > 3)
-        let l1 = add(&ecx, &literal_i32(1), &literal_i32(4))?;
-        let l2 = equal(&ecx, &l1, &literal_i32(5))?;
-        let l3 = gt(&ecx, &literal_i32(6), &literal_i32(3))?;
+        let l1 = add(&ecx, &literal_i64(1), &literal_i64(4))?;
+        let l2 = equal(&ecx, &l1, &literal_i64(5))?;
+        let l3 = gt(&ecx, &literal_i64(6), &literal_i64(3))?;
         let l4 = and(vec![l2, l3]);
         let d = l4.evaluate(&ecx, &Row::empty())?;
         assert_eq!(format!("{}", d), "TRUE");

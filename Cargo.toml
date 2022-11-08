@@ -1,3 +1,12 @@
+[package]
+name = "floppy"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+common = {path = "src/common"}
+sql = {path = "src/sql"}
+
 [workspace]
 members = [
     "src/common",
@@ -5,9 +14,6 @@ members = [
     "src/storage",
     "src/kv",
     "src/sql",
-    "src/pgrepr",
-    "src/pgwire",
-    "src/fp",
     "src/session",
     "src/test_util",
     "clients",
