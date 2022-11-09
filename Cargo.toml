@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 common = {path = "src/common"}
 sql = {path = "src/sql"}
+session = {path = "src/session"}
 
 [workspace]
 members = [

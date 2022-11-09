@@ -9,82 +9,26 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use storage::TableStore;
 
-/// A session holds per-connection state.
+/// A session to the database state.
 #[derive(Debug)]
 pub struct Session {
     conn_id: u32,
     catalog_store: Arc<dyn CatalogStore>,
     table_store: Arc<dyn TableStore>,
     prepared_statements: HashMap<String, PreparedStatement>,
-    portals: HashMap<String, Portal>,
-    txn_state: TransactionState,
 }
 
 impl Session {
-    pub fn new(conn_id: u32) -> Session {
-        unsafe {
-            Session {
-                conn_id,
-                catalog_store: catalog::global_catalog_store.as_ref().unwrap().clone(),
-                table_store: storage::global_table_store.as_ref().unwrap().clone(),
-                txn_state: TransactionState::Default,
-                prepared_statements: HashMap::new(),
-                portals: HashMap::new(),
-            }
-        }
-    }
-
-    /// Creates a new portal with prepared statement.
-    /// To creates the `PreparedStatement`, we need to
-    /// analyze the `Statement` to transform
-    /// it into a `LogicalPlan`. From the `LogicalPlan`, we
-    /// can get a `RelationDesc` and store it in
-    /// `PreparedStatement`.
-    pub fn declare_portal(
-        &mut self,
-        name: String,
-        stmt: Statement,
-        param_types: Vec<Option<ScalarType>>,
-    ) -> Result<()> {
+    pub fn open() -> Result<Self> {
         todo!()
     }
 
-    pub fn get_portal(&self, portal_name: &str) -> Option<&Portal> {
-        self.portals.get(portal_name)
-    }
-
-    pub fn txn(&self) -> &TransactionState {
-        &self.txn_state
-    }
-
-    pub fn is_aborted_txn(&self) -> bool {
-        matches!(self.txn_state, TransactionState::Failed(_))
-    }
-
-    pub async fn start_txn(&mut self, num_stmts: Option<usize>) {
-        println!("start txn: {:?}", num_stmts);
-    }
-
-    pub async fn commit_txn(&mut self) -> Result<()> {
+    pub fn prepare(sql: &str) -> Result<PreparedStatement> {
         todo!()
     }
 
-    pub async fn rollback_txn(&mut self) -> Result<()> {
-        todo!()
-    }
-
-    pub fn fail_txn(&mut self) {
-        match &self.txn_state {
-            TransactionState::Default => {
-                assert!(false)
-            }
-            TransactionState::Started(txn)
-            | TransactionState::InTransactionImplicit(txn)
-            | TransactionState::InTransaction(txn) => {
-                self.txn_state = TransactionState::Failed(txn.clone());
-            }
-            TransactionState::Failed(_) => {}
-        };
+    pub fn execute(sql: &str) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -93,30 +37,6 @@ impl Session {
 pub struct PreparedStatement {
     stmt: Option<Statement>,
     desc: StatementDesc,
-}
-
-/// A portal represents the execution state of a running or
-/// runnable query.
-#[derive(Debug)]
-pub struct Portal {
-    /// The statement that is bound to this portal.
-    pub stmt: Option<Statement>,
-    /// The statement description
-    pub desc: StatementDesc,
-    /// The bound values for the parameters in the prepared
-    /// statement, if any.
-    pub bound_params: Params,
-    /// The execution state of the portal.
-    pub state: PortalState,
-}
-
-/// Execution states of a portal.
-/// todo!
-#[derive(Debug)]
-pub enum PortalState {
-    NotStarted,
-    InProgress,
-    Completed,
 }
 
 /// The transaction status of a session.

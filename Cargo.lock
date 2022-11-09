@@ -130,6 +130,7 @@ name = "floppy"
 version = "0.0.1"
 dependencies = [
  "common",
+ "session",
  "sql",
 ]
 

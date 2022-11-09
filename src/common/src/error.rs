@@ -30,6 +30,7 @@ pub enum FloppyError {
     EvalExpr(String),
     Storage(String),
     Io(std::io::Error),
+    ExecuteReturnedResults,
     /// Errors originating from outside Floppy's codebase.
     External(String),
 }
@@ -156,6 +157,9 @@ impl fmt::Display for FloppyError {
             }
             FloppyError::Io(e) => {
                 write!(f, "Io error: {}", e)
+            }
+            FloppyError::ExecuteReturnedResults => {
+                write!(f, "Execute returned results")
             }
             FloppyError::External(e) => {
                 write!(f, "external error: {}", e)

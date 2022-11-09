@@ -1,7 +1,6 @@
-use common::error::Result;
+pub use common::error::Result;
+use session::Session;
 
-pub struct Db {}
-
-pub fn open() -> Result<Db> {
-    Ok(Db {})
+pub fn open() -> Result<Session> {
+    Session::open()
 }
