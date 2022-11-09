@@ -4,18 +4,9 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-common = {path = "src/common"}
-sql = {path = "src/sql"}
-session = {path = "src/session"}
-
-[workspace]
-members = [
-    "src/common",
-    "src/catalog",
-    "src/storage",
-    "src/kv",
-    "src/sql",
-    "src/session",
-    "src/test_util",
-    "clients",
-]
+sqlparser = {version = "0.18.0", features = ["serde"]}
+serde = {version = "1.0", features = ["derive"]}
+rust_decimal = "1.26"
+futures = "0.3"
+lazy_static = "1.4"
+tokio = {version = "1.0", features = ["full"]}
