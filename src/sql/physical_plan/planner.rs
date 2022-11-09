@@ -1,5 +1,5 @@
 use crate::catalog::names::FullObjectName;
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::Result;
 use crate::common::relation::{GlobalId, RelationDesc};
 use crate::sql::context::{ExprContext, StatementContext};
 use crate::sql::physical_plan::empty::EmptyExec;
@@ -25,9 +25,6 @@ pub(crate) fn plan(scx: &StatementContext, logical_plan: LogicalPlan) -> Result<
             rel_desc,
             name,
         } => plan_table(table_id, rel_desc, name),
-        _ => Err(FloppyError::NotImplemented(format!(
-            "physical sql not implemented"
-        ))),
     }
 }
 

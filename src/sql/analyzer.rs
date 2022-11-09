@@ -242,7 +242,6 @@ fn transform_binary_op(
     op: &BinaryOperator,
     right: &AstExpr,
 ) -> Result<CoercibleExpr> {
-    let rel_desc = ecx.rel_desc.clone();
     let left = transform_expr(ecx, left)?;
     let right = transform_expr(ecx, right)?;
     match op {
@@ -269,11 +268,12 @@ fn transform_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
         return Err(FloppyError::Plan(format!("invalid parameter: {}", p)));
     }
 
-    let n = param
-        .unwrap()
-        .parse::<i32>()
-        .map_err(|e| FloppyError::Plan(format!("parse parameter error: {}", p)))?
-        as usize;
+    let n = param.unwrap().parse::<i32>().map_err(|e| {
+        FloppyError::Plan(format!(
+            "parse parameter error, parameter {}, err: {}",
+            p, e
+        ))
+    })? as usize;
 
     if ecx.param_types().borrow().contains_key(&n) {
         Ok(Expr::Parameter(n).into())
@@ -308,9 +308,9 @@ fn transform_bop_plus(
 }
 
 fn transform_bop_minus(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
@@ -328,57 +328,57 @@ fn transform_bop_gt(
 }
 
 fn transform_bop_lt(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_gte(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_lte(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_eq(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_neq(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_and(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }
 
 fn transform_bop_or(
-    ecx: &ExprContext,
-    left: CoercibleExpr,
-    right: CoercibleExpr,
+    _ecx: &ExprContext,
+    _left: CoercibleExpr,
+    _right: CoercibleExpr,
 ) -> Result<CoercibleExpr> {
     unimplemented!()
 }

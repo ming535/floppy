@@ -1,7 +1,6 @@
 use crate::common::error::Result;
 use crate::common::relation::{GlobalId, IndexKeyDatums, IndexRange, RelationDesc, Row};
 use crate::storage::{RowIter, TableStore};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::RangeBounds;
 use std::sync::Mutex;

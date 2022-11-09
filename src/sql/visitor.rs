@@ -24,7 +24,7 @@ pub trait ExprVisitor<Node> {
     /// handled the same as the return value of
     /// `pre_visit`. The provided default implementation
     /// returns `Ok(true)`.
-    fn post_visit(&mut self, node: &Node) -> Result<bool, Self::Error> {
+    fn post_visit(&mut self, _node: &Node) -> Result<bool, Self::Error> {
         Ok(true)
     }
 }

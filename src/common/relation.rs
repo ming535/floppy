@@ -1,7 +1,9 @@
-use crate::common::error::{field_not_found, FloppyError, Result};
-use crate::common::scalar::{Datum, ScalarType};
-use std::cmp::Ordering;
-use std::ops::{Bound, Index, RangeBounds};
+use crate::common::{
+    error::{field_not_found, FloppyError, Result},
+    scalar::{Datum, ScalarType},
+};
+
+use std::ops::{Bound, RangeBounds};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ColumnType {
@@ -324,6 +326,7 @@ impl RangeBounds<IndexKeyDatums> for IndexRange {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::ops::Range;

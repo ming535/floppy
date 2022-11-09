@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fmt::Formatter;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Operator {
@@ -16,7 +15,7 @@ pub enum Operator {
 }
 
 impl fmt::Display for Operator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = match self {
             Self::Eq => "=",
             Self::NotEq => "!=",

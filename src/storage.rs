@@ -3,7 +3,7 @@
 use crate::common::error::Result;
 use crate::common::relation::{GlobalId, IndexRange, Row};
 use std::fmt;
-use std::ops::{Bound, RangeBounds};
+use std::ops::Bound;
 use std::sync::Arc;
 
 pub mod memory;

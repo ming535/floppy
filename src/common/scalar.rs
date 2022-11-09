@@ -1,8 +1,9 @@
-use crate::common::error::{FloppyError, Result};
-use crate::common::relation::ColumnType;
-use std::cmp::Ordering;
-use std::fmt::Formatter;
-use std::{fmt, ops};
+use crate::common::{
+    error::{FloppyError, Result},
+    relation::ColumnType,
+};
+use std::fmt::{self, Formatter};
+use std::ops;
 
 /// A single value.
 ///
@@ -131,6 +132,7 @@ impl fmt::Display for ScalarType {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -92,10 +92,9 @@ pub trait CatalogItem {
     fn create_sql(&self) -> &str;
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CatalogItemType {
     Table,
     Index,
 }
-
-pub static mut global_catalog_store: Option<Arc<dyn CatalogStore>> = None;

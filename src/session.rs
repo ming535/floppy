@@ -1,9 +1,6 @@
 use crate::catalog::CatalogStore;
 use crate::common::error::Result;
-use crate::common::relation::{Params, StatementDesc};
-use crate::common::scalar::ScalarType;
-use crate::sql::analyzer;
-use crate::sql::context::StatementContext;
+use crate::common::relation::StatementDesc;
 use crate::storage::TableStore;
 use sqlparser::ast::Statement;
 use std::collections::HashMap;
@@ -23,11 +20,11 @@ impl Session {
         todo!()
     }
 
-    pub fn prepare(sql: &str) -> Result<PreparedStatement> {
+    pub fn prepare(_sql: &str) -> Result<PreparedStatement> {
         todo!()
     }
 
-    pub fn execute(sql: &str) -> Result<()> {
+    pub fn execute(_sql: &str) -> Result<()> {
         Ok(())
     }
 }

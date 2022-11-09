@@ -48,7 +48,7 @@ impl Expr {
         match self {
             Self::Literal(Literal {
                 datum: Datum::Text(s),
-                scalar_type,
+                scalar_type: _,
             }) => match ty {
                 ScalarType::Int64 => Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?)),
                 _ => Err(FloppyError::NotImplemented(format!(

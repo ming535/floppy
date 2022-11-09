@@ -1,10 +1,14 @@
-use crate::catalog::names::{FullObjectName, PartialObjectName, QualifiedObjectName};
-use crate::catalog::{CatalogItem, CatalogItemType, CatalogStore};
-use crate::common;
-use crate::common::error::{CatalogError, FloppyError};
-use crate::common::relation::{GlobalId, RelationDesc};
+use crate::catalog::{
+    names::{FullObjectName, PartialObjectName, QualifiedObjectName},
+    CatalogItem, CatalogItemType, CatalogStore,
+};
+use crate::common::{
+    self,
+    error::{CatalogError, FloppyError},
+    relation::{GlobalId, RelationDesc},
+};
+
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// An in-memory catalog used in tests that requires a
@@ -32,6 +36,7 @@ impl CatalogStore for MemCatalog {
 }
 
 impl MemCatalog {
+    #[allow(dead_code)]
     pub fn insert_table(&mut self, name: &str, id: GlobalId, desc: RelationDesc) {
         let mut tmp = self.tables.clone();
         tmp.insert(

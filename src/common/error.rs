@@ -1,13 +1,10 @@
 use crate::common::relation::{GlobalId, RelationDesc};
 use rust_decimal;
 use sqlparser::parser::ParserError;
-use std::convert::Infallible;
-use std::fmt::Formatter;
-use std::{fmt, result};
 
 /// Result type for operations that could result in
 /// [FloppyError]
-pub type Result<T> = result::Result<T, FloppyError>;
+pub type Result<T> = std::result::Result<T, FloppyError>;
 
 /// Error type for generic operations that could result in
 /// FloppyError::External
@@ -71,8 +68,8 @@ pub fn table_not_found_in_storage(table_id: GlobalId) -> FloppyError {
     FloppyError::Storage(format!("table not found in storage: {}", table_id))
 }
 
-impl fmt::Display for CatalogError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TableNotFound(desc) => {
                 write!(f, "{}", desc)
@@ -129,8 +126,8 @@ impl From<rust_decimal::Error> for FloppyError {
     }
 }
 
-impl fmt::Display for FloppyError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for FloppyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FloppyError::NotImplemented(desc) => {
                 write!(f, "This feature is not implemented: {}", desc)
