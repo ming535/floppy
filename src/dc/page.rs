@@ -5,6 +5,11 @@ use std::{mem, slice};
 
 const PAGE_SIZE: usize = 4096;
 
+/// `PageId` is the identifier of a page in the tree.
+/// Pages inside the tree use `PageId` as a disk pointer
+/// to identify other pages.
+///
+/// `PageZero` is not used by the tree.
 struct PageId(u32);
 
 impl TryFrom<u32> for PageId {
@@ -12,7 +17,7 @@ impl TryFrom<u32> for PageId {
 
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
         if value == 0 {
-            Err(FloppyError::DC(format!("page id should not be zero")))
+            Err(FloppyError::DC("page id should not be zero".to_string()))
         } else {
             Ok(PageId(value))
         }
@@ -30,7 +35,7 @@ impl PagePtr {
         unsafe {
             let buf = alloc_zeroed(layout);
             if buf.is_null() {
-                return Err(FloppyError::External(format!("alloc mem failed")));
+                return Err(FloppyError::External("alloc mem failed".to_string()));
             }
             let buf = NonNull::new_unchecked(buf);
             Ok(Self {
@@ -58,20 +63,43 @@ impl Drop for PagePtr {
     }
 }
 
-/// PageOne
+/// PageZero is the first page of a data file. It contains information
+/// about the freelist pages.
 ///
 /// OFFSET  SIZE   DESCRIPTION
 /// 0       4      Page number of the first freelist pages.
 /// 4       4      Total number of freelist pages.
 ///
-struct PageOne {
+struct PageZero {
     page_ptr: PagePtr,
 }
 
-impl PageOne {
+impl PageZero {
     pub fn new() -> Result<Self> {
         let page_ptr = PagePtr::new()?;
         Ok(Self { page_ptr })
+    }
+
+    pub fn freelist_page_id(&self) -> Option<PageId> {
+        let data = self.page_ptr.data();
+        let page_id = u32::from_be_bytes(data[0..4].try_into().unwrap());
+        if page_id == 0 {
+            None
+        } else {
+            Some(PageId(page_id))
+        }
+    }
+
+    pub fn freelist_page_count(&self) -> u32 {
+        let data = self.page_ptr.data();
+        u32::from_be_bytes(data[4..8].try_into().unwrap())
+    }
+
+    pub fn set_freelist_page_id(&mut self, page_id: PageId) {
+        let data = self.page_ptr.data_mut();
+        data[0..4].copy_from_slice(&page_id.0.to_be_bytes());
+        let count = self.freelist_page_count();
+        data[4..8].copy_from_slice(&count.to_be_bytes());
     }
 }
 
