@@ -1,6 +1,7 @@
 use crate::common::relation::{GlobalId, RelationDesc};
 use rust_decimal;
 use sqlparser::parser::ParserError;
+use std::alloc::LayoutError;
 
 /// Result type for operations that could result in
 /// [FloppyError]
@@ -25,6 +26,7 @@ pub enum FloppyError {
     Catalog(CatalogError),
     /// Expression evaluation error
     EvalExpr(String),
+    DC(String),
     Storage(String),
     Io(std::io::Error),
     ExecuteReturnedResults,
@@ -126,6 +128,12 @@ impl From<rust_decimal::Error> for FloppyError {
     }
 }
 
+impl From<LayoutError> for FloppyError {
+    fn from(e: LayoutError) -> Self {
+        FloppyError::External(e.to_string())
+    }
+}
+
 impl std::fmt::Display for FloppyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -146,6 +154,7 @@ impl std::fmt::Display for FloppyError {
                 write!(f, "Expression evaluation error: {}", desc)
             }
             FloppyError::Storage(desc) => write!(f, "Storage error: {}", desc),
+            FloppyError::DC(desc) => write!(f, "DC error: {}", desc),
             FloppyError::Catalog(e) => {
                 write!(f, "Schema error: {}", e)
             }
