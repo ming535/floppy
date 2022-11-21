@@ -60,14 +60,14 @@ jobs:
           command: clippy
           args: -- -D warnings
 
-  asan:
-    name: Address Sanitizer
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      - run: ./asan.sh
+#  asan:
+#    name: Address Sanitizer
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v2
+#      - uses: actions-rs/toolchain@v1
+#        with:
+#          profile: minimal
+#          toolchain: nightly
+#          override: true
+#      - run: ./asan.sh
