@@ -49,14 +49,14 @@ impl PagePtr {
     }
 }
 
-impl Drop for PagePtr {
-    fn drop(&mut self) {
-        let layout = Layout::from_size_align(PAGE_SIZE, mem::size_of::<usize>()).unwrap();
-        unsafe {
-            dealloc(self.buf.as_ptr(), layout);
-        }
-    }
-}
+// impl Drop for PagePtr {
+//     fn drop(&mut self) {
+//         let layout = Layout::from_size_align(PAGE_SIZE, mem::size_of::<usize>()).unwrap();
+//         unsafe {
+//             dealloc(self.buf.as_ptr(), layout);
+//         }
+//     }
+// }
 
 /// PageOne
 ///
