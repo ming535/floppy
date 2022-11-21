@@ -103,6 +103,24 @@ impl PageZero {
     }
 }
 
+/// The b-tree page header is 8 bytes in size for leaf pages and 12 bytes
+/// in size for interior pages. It is composed of the following fields:
+///
+/// OFFSET  SIZE   DESCRIPTION
+/// 0       1      The one-byte flag at offset 0 indicating the b-tree page type.
+///                  - 0x01: root page
+///                  - 0x02: interior page
+///                  - 0x04: leaf page
+///                Any other value for the b-tree page type is an error.
+/// 1       2      The two-byte integer at offset 1 gives the start of the
+///                first freeblock on the page, or zero if there are no freeblocks.
+/// 3       2      The two-byte integer at offset 3 gives the number of slots on the page.
+/// 5       2      The two-byte integer at offset 5 designates the start of the slot content area.
+///                A zero value for this integer is interpreted as 65536.
+/// 7       1      The one-byte integer at offset 7 gives the number of fragmented free bytes within
+///                the slot content area.
+/// 8       4      The four-byte integer at offset 8 is the right-child pointer for interior and root pages.
+///                Leaf pages don't have this field.
 struct LeafPage {}
 
 struct InteriorPage {}
