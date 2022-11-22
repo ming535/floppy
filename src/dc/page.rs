@@ -10,7 +10,7 @@ const PAGE_SIZE: usize = 4096;
 /// to identify other pages.
 ///
 /// `PageZero` is not used by the tree.
-struct PageId(u32);
+pub(crate) struct PageId(u32);
 
 impl TryFrom<u32> for PageId {
     type Error = FloppyError;
@@ -24,9 +24,9 @@ impl TryFrom<u32> for PageId {
     }
 }
 
-struct PagePtr {
+pub(crate) struct PagePtr {
     buf: NonNull<u8>,
-    len: usize,
+    size: usize,
 }
 
 impl PagePtr {
@@ -40,17 +40,17 @@ impl PagePtr {
             let buf = NonNull::new_unchecked(buf);
             Ok(Self {
                 buf,
-                len: PAGE_SIZE,
+                size: PAGE_SIZE,
             })
         }
     }
 
     pub fn data<'a>(&self) -> &'a [u8] {
-        unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.len) }
+        unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.size) }
     }
 
     pub fn data_mut<'a>(&mut self) -> &'a mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.len) }
+        unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
 }
 
@@ -121,9 +121,9 @@ impl PageZero {
 ///                the slot content area.
 /// 8       4      The four-byte integer at offset 8 is the right-child pointer for interior and root pages.
 ///                Leaf pages don't have this field.
-struct LeafPage {}
-
 struct InteriorPage {}
+
+struct LeafPage {}
 
 struct RootPage {}
 
