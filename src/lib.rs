@@ -1,6 +1,9 @@
+#![feature(type_alias_impl_trait, io_error_more)]
+
 mod catalog;
 mod common;
 mod dc;
+mod env;
 mod session;
 mod sql;
 mod storage;

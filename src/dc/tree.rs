@@ -1,4 +1,5 @@
 use crate::common::error::Result;
+use crate::env::Env;
 use std::path::Path;
 
 pub struct Tree {}
@@ -6,7 +7,7 @@ pub struct Tree {}
 impl Tree {
     /// Open a tree from the given path.
     /// The root of the tree is stored in Page 1.
-    /// All index pages are read into buffer pool.
+    /// All interior pages are read into buffer pool.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         todo!()
     }
