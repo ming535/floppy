@@ -1,5 +1,5 @@
 use crate::common::error::Result;
-use crate::dc::buffer_pool::PageFrame;
+use crate::dc::buf_mgr::PageFrame;
 
 /// The b-tree page header is 8 bytes in size for leaf pages and 12 bytes
 /// in size for interior pages. It is composed of the following fields:

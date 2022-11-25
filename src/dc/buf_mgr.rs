@@ -1,8 +1,9 @@
 use crate::common::error::Result;
 use crate::dc::page::{PageId, PagePtr};
 use std::path::Path;
-
-struct BufferPool {}
+use std::ptr::NonNull;
+use tokio::fs::{File, OpenOptions};
+use tokio::io::AsyncWriteExt;
 
 /// BufferPool manages the in memory cache AND file usage of pages.
 ///
@@ -26,9 +27,27 @@ struct BufferPool {}
 /// 2. FlushList: The pages that
 /// have been modified and need to be flushed to disk.
 /// 3. LruList: The pages that are tracked by the LRU algorithm.
-impl BufferPool {
-    pub fn open<P: AsRef<Path>>(path: P, pool_size: usize) -> Result<Self> {
-        todo!()
+pub(crate) struct BufMgr {
+    file: File,
+}
+
+impl BufMgr {
+    pub async fn open<P: AsRef<Path>>(path: P, pool_size: usize) -> Result<Self> {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .await?;
+
+        let metadata = file.metadata().await?;
+        if metadata.len() == 0 {
+            // init page zero
+            let page_ptr = PagePtr::zero_content()?;
+            file.write_all(page_ptr.data()).await?;
+        }
+
+        Ok(Self { file })
     }
 
     /// Allocate a new page from buffer pool. This happens when a node in the
@@ -36,7 +55,7 @@ impl BufferPool {
     /// To allocate a page, we first check if there is a free page in the
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
-    pub fn alloc_page() -> Result<(PageId, PageFrame)> {
+    pub fn alloc_page() -> Result<PageFrame> {
         todo!()
     }
 

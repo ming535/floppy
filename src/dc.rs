@@ -1,4 +1,4 @@
-mod buffer_pool;
+mod buf_mgr;
 mod lru;
 mod page;
 mod page_wal;

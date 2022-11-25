@@ -3,8 +3,9 @@ use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::ptr::NonNull;
 use std::{mem, slice};
 
-const PAGE_SIZE: usize = 4096;
-const PAGE_ID_ZERO: u32 = 0;
+pub(crate) const PAGE_SIZE: usize = 4096;
+pub(crate) const PAGE_ID_ZERO: PageId = PageId(0);
+pub(crate) const PAGE_ID_ROOT: PageId = PageId(1);
 
 /// `PageId` is the identifier of a page in the tree.
 /// Pages inside the tree use `PageId` as a disk pointer
@@ -13,15 +14,9 @@ const PAGE_ID_ZERO: u32 = 0;
 /// `PageZero` is not used by the tree.
 pub(crate) struct PageId(u32);
 
-impl TryFrom<u32> for PageId {
-    type Error = FloppyError;
-
-    fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
-        if value == 0 {
-            Err(FloppyError::DC("page id should not be zero".to_string()))
-        } else {
-            Ok(PageId(value))
-        }
+impl From<u32> for PageId {
+    fn from(v: u32) -> Self {
+        PageId(v)
     }
 }
 
@@ -31,7 +26,7 @@ pub(crate) struct PagePtr {
 }
 
 impl PagePtr {
-    pub fn new() -> Result<Self> {
+    pub fn zero_content() -> Result<Self> {
         let layout = Layout::from_size_align(PAGE_SIZE, mem::size_of::<usize>())?;
         unsafe {
             let buf = alloc_zeroed(layout);
@@ -77,7 +72,7 @@ struct PageZero {
 
 impl PageZero {
     pub fn new() -> Result<Self> {
-        let page_ptr = PagePtr::new()?;
+        let page_ptr = PagePtr::zero_content()?;
         Ok(Self { page_ptr })
     }
 
@@ -109,13 +104,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn page_id_zero() {
-        assert!(PageId::try_from(0).is_err());
-    }
-
-    #[test]
     fn page_ptr_read_write() -> Result<()> {
-        let mut page = PagePtr::new()?;
+        let mut page = PagePtr::zero_content()?;
         page.data_mut()[0] = 1;
         assert_eq!(page.data()[0], 1);
         page.data_mut()[1] = 3;
