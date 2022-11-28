@@ -5,7 +5,7 @@ use crate::env::Env;
 use std::path::Path;
 
 pub struct Tree {
-    buffer_pool: BufMgr,
+    buf_mgr: BufMgr,
 }
 
 impl Tree {

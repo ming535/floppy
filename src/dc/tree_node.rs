@@ -36,9 +36,8 @@ const PAGE_TYPE_INTERIOR: u8 = 0x02;
 const PAGE_TYPE_LEAF: u8 = 0x04;
 
 impl<'a> Node<'a> {
-    pub fn new(page_frame: &'a PageFrame) -> Result<Self> {
-        let data = page_frame.data();
-        let page_type = u8::from_be_bytes(data[0..1].try_into().unwrap());
+    pub fn new(page_frame: &'a mut PageFrame) -> Result<Self> {
+        let page_type = page_frame.get_page_type();
         match page_type {
             PAGE_TYPE_LEAF => Ok(Self::Leaf(LeafNode::new(page_frame))),
             _ => todo!(),
@@ -46,12 +45,13 @@ impl<'a> Node<'a> {
     }
 }
 
+/// payload_length |
 struct LeafNode<'a> {
-    page_frame: &'a PageFrame,
+    page_frame: &'a mut PageFrame,
 }
 
 impl<'a> LeafNode<'a> {
-    pub fn new(page_frame: &'a PageFrame) -> Self {
+    pub fn new(page_frame: &'a mut PageFrame) -> Self {
         Self { page_frame }
     }
 
@@ -61,6 +61,41 @@ impl<'a> LeafNode<'a> {
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         todo!()
+    }
+
+    fn slot(&self, id: usize) -> &'a [u8] {
+        &self.page_frame.data()[id * 2..]
+    }
+
+    fn slot_content_size(&self, key: &[u8], value: &[u8]) -> usize {
+        // record_head (1 byte) | payload_size (2 byte) | key_size (2 byte) |
+        // key_content | value_size (2 byte)
+        7 + key.len() + value.len()
+    }
+
+    fn encode_slot_content(&self, key: &[u8], value: &[u8], buf: &mut [u8]) {
+        let payload_size = self.slot_content_size(key, value);
+        assert_eq!(buf.len(), payload_size);
+        let mut cur_offset = 0;
+
+        // record header
+        cur_offset += 1;
+
+        // payload size
+        let s = payload_size.to_be_bytes();
+        buf[cur_offset..cur_offset + 2].copy_from_slice(s.as_ref());
+        cur_offset += 2;
+
+        // key size | key
+        buf[cur_offset..cur_offset + 2].copy_from_slice(key.len().to_be_bytes().as_ref());
+        cur_offset += 2;
+        buf[cur_offset..cur_offset + key.len()].copy_from_slice(key);
+        cur_offset += key.len();
+
+        // value size / value
+        buf[cur_offset..cur_offset + 2].copy_from_slice(value.len().to_be_bytes().as_ref());
+        cur_offset += 2;
+        buf[cur_offset..].copy_from_slice(value);
     }
 }
 
