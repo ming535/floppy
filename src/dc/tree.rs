@@ -1,6 +1,7 @@
 use crate::common::error::Result;
 use crate::dc::buf_mgr::BufMgr;
 use crate::dc::page::PAGE_ID_ROOT;
+use crate::dc::{MAX_KEY_SIZE, MAX_VALUE_SIZE};
 use crate::env::Env;
 use std::path::Path;
 
@@ -23,10 +24,13 @@ impl Tree {
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        assert!(key.len() <= MAX_KEY_SIZE);
         todo!()
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        assert!(key.len() <= MAX_KEY_SIZE);
+        assert!(value.len() <= MAX_VALUE_SIZE);
         todo!()
     }
 }

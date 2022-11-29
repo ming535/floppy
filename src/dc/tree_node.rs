@@ -65,39 +65,35 @@ impl<'a> LeafNode<'a> {
         todo!()
     }
 
-    fn slot(&self, id: usize) -> &'a [u8] {
-        &self.page_frame.data()[id * 2..]
+    pub fn get_slot_content(&self, slot_id: usize) -> SlotContent {
+        assert!(slot_id < self.slot_count() as usize);
+
+        let slot_ptr = self.slot_array_ptr();
+        let data = &(slot_ptr[slot_id * 2..slot_id * 2 + 2]);
+        let offset = u16::from_be_bytes(data.try_into().unwrap());
+        let data = &self.page_frame.data()[offset as usize..];
+        let mut dec = Decoder::new(data);
+        unsafe { SlotContent::decode_from(&mut dec) }
     }
 
-    fn slot_content_size(&self, key: &[u8], value: &[u8]) -> usize {
-        // record_head (1 byte) | payload_size (2 byte) | key_size (2 byte) |
-        // key_content | value_size (2 byte)
-        7 + key.len() + value.len()
+    fn free_block(&self) -> u16 {
+        let data = &(self.page_frame.data()[0..2]);
+        u16::from_be_bytes(data.try_into().unwrap())
     }
 
-    fn encode_slot_content(&self, key: &[u8], value: &[u8], buf: &mut [u8]) {
-        let payload_size = self.slot_content_size(key, value);
-        assert_eq!(buf.len(), payload_size);
-        let mut cur_offset = 0;
+    fn slot_count(&self) -> u16 {
+        let data = &(self.page_frame.data()[2..4]);
+        u16::from_be_bytes(data.try_into().unwrap())
+    }
 
-        // record header
-        cur_offset += 1;
+    fn slot_content_start(&self) -> u16 {
+        let data = &(self.page_frame.data()[4..6]);
+        u16::from_be_bytes(data.try_into().unwrap())
+    }
 
-        // payload size
-        let s = payload_size.to_be_bytes();
-        buf[cur_offset..cur_offset + 2].copy_from_slice(s.as_ref());
-        cur_offset += 2;
-
-        // key size | key
-        buf[cur_offset..cur_offset + 2].copy_from_slice(key.len().to_be_bytes().as_ref());
-        cur_offset += 2;
-        buf[cur_offset..cur_offset + key.len()].copy_from_slice(key);
-        cur_offset += key.len();
-
-        // value size / value
-        buf[cur_offset..cur_offset + 2].copy_from_slice(value.len().to_be_bytes().as_ref());
-        cur_offset += 2;
-        buf[cur_offset..].copy_from_slice(value);
+    fn slot_array_ptr(&self) -> &[u8] {
+        let count = self.slot_count() as usize;
+        &self.page_frame.data()[6..6 + count]
     }
 }
 
@@ -129,6 +125,8 @@ impl Codec for &[u8] {
         dec.get_byte_slice(len)
     }
 }
+//
+struct NodeHeader {}
 
 struct SlotContent<'a> {
     flag: u8,
