@@ -1,5 +1,7 @@
 use crate::common::error::Result;
 use crate::dc::buf_mgr::PageFrame;
+use crate::dc::codec::{Codec, Decoder, Encoder};
+use std::mem;
 
 /// The b-tree page header is 8 bytes in size for leaf pages and 12 bytes
 /// in size for interior pages. It is composed of the following fields:
@@ -110,3 +112,45 @@ impl<'a> Iterator for LeafNode<'a> {
 struct InteriorNode {}
 
 struct RootNode {}
+
+impl Codec for &[u8] {
+    fn encode_size(&self) -> usize {
+        // 2 bytes for size
+        mem::size_of::<u16>() + self.len()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        enc.put_u16(self.len() as u16);
+        enc.put_byte_slice(self);
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let len = dec.get_u16() as usize;
+        dec.get_byte_slice(len)
+    }
+}
+
+struct SlotContent<'a> {
+    flag: u8,
+    key: &'a [u8],
+    value: &'a [u8],
+}
+
+impl<'a> Codec for SlotContent<'a> {
+    fn encode_size(&self) -> usize {
+        mem::size_of::<u8>() + self.key.encode_size() + self.value.encode_size()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        enc.put_u8(self.flag);
+        self.key.encode_to(enc);
+        self.value.encode_to(enc);
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let flag = dec.get_u8();
+        let key = <&[u8]>::decode_from(dec);
+        let value = <&[u8]>::decode_from(dec);
+        Self { flag, key, value }
+    }
+}
