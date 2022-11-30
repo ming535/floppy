@@ -67,6 +67,7 @@ impl Encoder {
 
     put_int!(put_u8, u8);
     put_int!(put_u16, u16);
+    put_int!(put_u32, u32);
     put_int!(put_u64, u64);
 
     pub unsafe fn put_byte_slice(&mut self, v: &[u8]) {
@@ -124,6 +125,7 @@ impl Decoder {
 
     get_int!(get_u8, u8);
     get_int!(get_u16, u16);
+    get_int!(get_u32, u32);
     get_int!(get_u64, u64);
 
     pub unsafe fn get_byte_slice<'a>(&mut self, len: usize) -> &'a [u8] {
