@@ -87,6 +87,13 @@ impl<'a> LeafNode<'a> {
         }
     }
 
+    pub fn iter(&self) -> NodeIterator {
+        NodeIterator {
+            node: self,
+            next_slot: 0,
+        }
+    }
+
     fn put_at(&mut self, slot: usize, key: &[u8], value: &[u8]) -> Result<()> {
         let slot_content = SlotContent {
             flag: 0,
@@ -194,6 +201,7 @@ impl<'a> Iterator for NodeIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_slot < self.node.header.num_slots {
             let slot_content = self.node.get_slot_content(self.next_slot as usize);
+            self.next_slot += 1;
             Some((slot_content.key, slot_content.value))
         } else {
             None
@@ -337,10 +345,18 @@ mod tests {
 
         assert!(b"key1".cmp(b"key2") == Ordering::Less);
 
-        node.put(b"key2", b"value2")?;
-        node.put(b"key1", b"value1")?;
-        assert_eq!(node.get(b"key1")?, b"vallue1");
-        assert_eq!(node.get(b"key2")?, b"value2");
+        node.put(b"2", b"2")?;
+        node.put(b"3", b"3")?;
+        node.put(b"1", b"1")?;
+
+        assert_eq!(node.get(b"1")?, b"1");
+        assert_eq!(node.get(b"2")?, b"2");
+
+        let mut iter = node.iter();
+        assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
+        assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
+        assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
+
         Ok(())
     }
 }
