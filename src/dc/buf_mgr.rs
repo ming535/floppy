@@ -91,7 +91,7 @@ pub(crate) struct PageFrame {
     dirty: bool,
 }
 
-const PAGE_FRAME_PAYLOAD_OFFSET: usize = 8;
+const PAGE_PAYLOAD_OFFSET: usize = 8;
 
 impl PageFrame {
     pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
@@ -105,14 +105,14 @@ impl PageFrame {
 
     pub fn get_page_lsn(&self) -> u64 {
         let data = self.payload();
-        u64::from_be_bytes(data[0..PAGE_FRAME_PAYLOAD_OFFSET].try_into().unwrap())
+        u64::from_le_bytes(data[0..PAGE_PAYLOAD_OFFSET].try_into().unwrap())
     }
 
     pub fn payload<'a>(&self) -> &'a [u8] {
-        &self.page_ptr.data()[PAGE_FRAME_PAYLOAD_OFFSET..]
+        &self.page_ptr.data()[PAGE_PAYLOAD_OFFSET..]
     }
 
     pub fn payload_mut<'a>(&mut self) -> &'a mut [u8] {
-        &mut self.page_ptr.data_mut()[PAGE_FRAME_PAYLOAD_OFFSET..]
+        &mut self.page_ptr.data_mut()[PAGE_PAYLOAD_OFFSET..]
     }
 }

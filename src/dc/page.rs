@@ -78,7 +78,7 @@ impl PageZero {
 
     pub fn freelist_page_id(&self) -> Option<PageId> {
         let data = self.page_ptr.data();
-        let page_id = u32::from_be_bytes(data[0..4].try_into().unwrap());
+        let page_id = u32::from_le_bytes(data[0..4].try_into().unwrap());
         if page_id == 0 {
             None
         } else {
@@ -88,14 +88,14 @@ impl PageZero {
 
     pub fn freelist_page_count(&self) -> u32 {
         let data = self.page_ptr.data();
-        u32::from_be_bytes(data[4..8].try_into().unwrap())
+        u32::from_le_bytes(data[4..8].try_into().unwrap())
     }
 
     pub fn set_freelist_page_id(&mut self, page_id: PageId) {
         let data = self.page_ptr.data_mut();
-        data[0..4].copy_from_slice(&page_id.0.to_be_bytes());
+        data[0..4].copy_from_slice(&page_id.0.to_le_bytes());
         let count = self.freelist_page_count();
-        data[4..8].copy_from_slice(&count.to_be_bytes());
+        data[4..8].copy_from_slice(&count.to_le_bytes());
     }
 }
 

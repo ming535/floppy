@@ -29,7 +29,7 @@ pub(crate) struct Encoder {
 macro_rules! put_int {
     ($name:ident, $t:ty) => {
         pub unsafe fn $name(&mut self, v: $t) {
-            let v = v.to_be();
+            let v = v.to_le();
             let ptr = &v as *const $t as *const u8;
             let len = mem::size_of::<$t>();
             self.take(len).copy_from_nonoverlapping(ptr, len);
@@ -90,7 +90,7 @@ macro_rules! get_int {
             let ptr = &mut v as *mut $t as *mut u8;
             let len = mem::size_of::<$t>();
             self.take(len).copy_to_nonoverlapping(ptr, len);
-            <$t>::from_be(v)
+            <$t>::from_le(v)
         }
     };
 }

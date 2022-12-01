@@ -40,7 +40,7 @@ const PAGE_TYPE_LEAF: u8 = 0x04;
 
 impl<'a> Node<'a> {
     pub fn new(page_frame: &'a mut PageFrame) -> Result<Self> {
-        let page_type = u8::from_be(page_frame.payload()[0]);
+        let page_type = u8::from_le(page_frame.payload()[0]);
         match page_type {
             PAGE_TYPE_LEAF => Ok(Self::Leaf(LeafNode::new(page_frame))),
             _ => todo!(),
@@ -51,20 +51,17 @@ impl<'a> Node<'a> {
 struct LeafNode<'a> {
     page_frame: &'a mut PageFrame,
     header: NodeHeader,
-    slot_array_ptrs: Vec<u16>,
+    slot_array_ptrs: SlotArrayPtr,
 }
 
 impl<'a> LeafNode<'a> {
     pub fn new(page_frame: &'a mut PageFrame) -> Self {
         let mut dec = Decoder::new(page_frame.payload());
         let header = unsafe { NodeHeader::decode_from(&mut dec) };
-        let mut slot_array_ptrs = vec![];
-        for _ in 0..header.num_slots {
-            unsafe {
-                let slot_ptr = dec.get_u16();
-                slot_array_ptrs.push(slot_ptr);
-            }
-        }
+        let slot_ptr_payload = &(page_frame.payload()
+            [header.encode_size()..header.encode_size() + header.num_slots as usize * 2]);
+        let mut dec = Decoder::new(slot_ptr_payload);
+        let slot_array_ptrs = unsafe { SlotArrayPtr::decode_from(&mut dec) };
 
         Self {
             header,
@@ -96,18 +93,39 @@ impl<'a> LeafNode<'a> {
             key,
             value,
         };
-        let slot_size = slot_content.encode_size();
+        let slot_content_size = slot_content.encode_size();
+        // we need to consider the space for slot pointer.
+        let slot_size = slot_content_size + 2;
         let slot_offset = if slot_size <= self.unallocatd_space() {
             if self.header.slot_content_start == 0 {
-                (self.page_frame.payload().encode_size() - slot_size) as u16
+                (self.page_frame.payload().len() - slot_content_size) as u16
             } else {
-                self.header.slot_content_start - slot_size as u16
+                self.header.slot_content_start - slot_content_size as u16
             }
         } else {
             // find freeblocks
             todo!()
         };
-        self.slot_array_ptrs.insert(slot, slot_offset);
+
+        let buf = self.page_frame.payload_mut()[slot_offset as usize..].as_mut();
+        let mut enc = Encoder::new(buf);
+        unsafe {
+            slot_content.encode_to(&mut enc);
+        }
+
+        // change slot array ptr, node header, and put those changes into page.
+        self.slot_array_ptrs.0.insert(slot, slot_offset);
+        self.header.num_slots += 1;
+        self.header.slot_content_start = slot_offset;
+        let header_size = self.header.encode_size();
+        let mut header_enc = Encoder::new(&mut self.page_frame.payload_mut()[0..header_size]);
+        let slot_ptr_buf = &mut (self.page_frame.payload_mut()
+            [header_size..header_size + self.header.num_slots as usize * 2]);
+        let mut slot_ptr_enc = Encoder::new(slot_ptr_buf);
+        unsafe {
+            self.header.encode_to(&mut header_enc);
+            self.slot_array_ptrs.encode_to(&mut slot_ptr_enc);
+        }
         Ok(())
     }
 
@@ -128,19 +146,22 @@ impl<'a> LeafNode<'a> {
             let slot_content = self.get_slot_content(mid);
             let cmp = slot_content.key.cmp(target);
             if cmp == Ordering::Less {
+                // mid < target
                 left = mid + 1;
             } else if cmp == Ordering::Greater {
+                // mid > target
                 right = mid;
             } else {
                 return Ok(mid);
             }
+            size = right - left;
         }
         Err(left)
     }
 
     fn get_slot_content(&self, slot_id: usize) -> SlotContent {
         assert!(slot_id < self.header.num_slots as usize);
-        let offset = self.slot_array_ptrs[slot_id];
+        let offset = self.slot_array_ptrs.0[slot_id];
         let data = &self.page_frame.payload()[offset as usize..];
         let mut dec = Decoder::new(data);
         unsafe { SlotContent::decode_from(&mut dec) }
@@ -162,11 +183,21 @@ impl<'a> LeafNode<'a> {
     }
 }
 
-impl<'a> Iterator for LeafNode<'a> {
+struct NodeIterator<'a> {
+    node: &'a LeafNode<'a>,
+    next_slot: u16,
+}
+
+impl<'a> Iterator for NodeIterator<'a> {
     type Item = (&'a [u8], &'a [u8]);
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        if self.next_slot < self.node.header.num_slots {
+            let slot_content = self.node.get_slot_content(self.next_slot as usize);
+            Some((slot_content.key, slot_content.value))
+        } else {
+            None
+        }
     }
 }
 
@@ -227,6 +258,28 @@ impl Codec for NodeHeader {
     }
 }
 
+struct SlotArrayPtr(Vec<u16>);
+
+impl Codec for SlotArrayPtr {
+    fn encode_size(&self) -> usize {
+        self.0.len() * 2
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        for ptr in &self.0 {
+            enc.put_u16(*ptr);
+        }
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let mut vec = Vec::new();
+        while dec.remaining() > 0 {
+            vec.push(dec.get_u16());
+        }
+        Self(vec)
+    }
+}
+
 impl Codec for &[u8] {
     fn encode_size(&self) -> usize {
         // 2 bytes for size
@@ -266,5 +319,28 @@ impl<'a> Codec for SlotContent<'a> {
         let key = <&[u8]>::decode_from(dec);
         let value = <&[u8]>::decode_from(dec);
         Self { flag, key, value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::error::Result;
+    use crate::dc::page::PagePtr;
+
+    #[test]
+    fn test_simple_put() -> Result<()> {
+        let page_ptr = PagePtr::zero_content()?;
+        let mut page_frame = PageFrame::new(1.into(), page_ptr);
+        page_frame.payload_mut()[0] = PAGE_TYPE_LEAF;
+        let mut node = LeafNode::new(&mut page_frame);
+
+        assert!(b"key1".cmp(b"key2") == Ordering::Less);
+
+        node.put(b"key2", b"value2")?;
+        node.put(b"key1", b"value1")?;
+        assert_eq!(node.get(b"key1")?, b"vallue1");
+        assert_eq!(node.get(b"key2")?, b"value2");
+        Ok(())
     }
 }
