@@ -26,7 +26,7 @@ pub enum FloppyError {
     Catalog(CatalogError),
     /// Expression evaluation error
     EvalExpr(String),
-    DC(String),
+    DC(DCError),
     Storage(String),
     Io(std::io::Error),
     ExecuteReturnedResults,
@@ -43,6 +43,13 @@ pub enum CatalogError {
         name: String,
         valid_fields: Option<Vec<String>>,
     },
+}
+
+#[derive(Debug)]
+pub enum DCError {
+    SpaceExhaustedInPage(String),
+    KeyNotFound(String),
+    KeyAlreadyExists(String),
 }
 
 /// Create a "field not found" Floppy::SchemaError
@@ -154,7 +161,7 @@ impl std::fmt::Display for FloppyError {
                 write!(f, "Expression evaluation error: {}", desc)
             }
             FloppyError::Storage(desc) => write!(f, "Storage error: {}", desc),
-            FloppyError::DC(desc) => write!(f, "DC error: {}", desc),
+            FloppyError::DC(e) => write!(f, "DC error: {:?}", e),
             FloppyError::Catalog(e) => {
                 write!(f, "Schema error: {}", e)
             }

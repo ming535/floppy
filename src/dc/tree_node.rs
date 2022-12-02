@@ -1,4 +1,4 @@
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::buf_mgr::PageFrame;
 use crate::dc::codec::{Codec, Decoder, Encoder};
 use std::cmp::Ordering;
@@ -76,13 +76,19 @@ impl<'a> LeafNode<'a> {
                 let slot = self.get_slot_content(slot);
                 Ok(slot.value.into())
             }
-            Err(_) => Err(FloppyError::DC(format!("Key {:?} not found", key))),
+            Err(_) => Err(FloppyError::DC(DCError::KeyNotFound(format!(
+                "Key {:?} not found",
+                key
+            )))),
         }
     }
 
     pub fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         match self.binary_search(key) {
-            Ok(_) => Err(FloppyError::DC(format!("Key {:?} already exists", key))),
+            Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "Key {:?} already exists",
+                key
+            )))),
             Err(slot) => self.put_at(slot, key, value),
         }
     }
@@ -103,6 +109,13 @@ impl<'a> LeafNode<'a> {
         let slot_content_size = slot_content.encode_size();
         // we need to consider the space for slot pointer.
         let slot_size = slot_content_size + 2;
+        if slot_size > self.free_space() {
+            return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
+                "No enough space to insert key {:?}",
+                key
+            ))));
+        }
+
         let slot_offset = if slot_size <= self.unallocatd_space() {
             if self.header.slot_content_start == 0 {
                 (self.page_frame.payload().len() - slot_content_size) as u16
@@ -174,6 +187,10 @@ impl<'a> LeafNode<'a> {
         unsafe { SlotContent::decode_from(&mut dec) }
     }
 
+    fn free_space(&self) -> usize {
+        // todo! add free block's space
+        self.unallocatd_space()
+    }
     fn unallocatd_space(&self) -> usize {
         let slot_content_start = self.header.slot_content_start as usize;
         if slot_content_start == 0 {
@@ -356,7 +373,15 @@ mod tests {
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
         assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
+        assert_eq!(iter.next(), None);
 
+        // build a new node and test
+        let mut node = LeafNode::new(&mut page_frame);
+        let mut iter = node.iter();
+        assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
+        assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
+        assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
+        assert_eq!(iter.next(), None);
         Ok(())
     }
 }
