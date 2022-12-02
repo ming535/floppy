@@ -1,9 +1,10 @@
 use crate::common::error::Result;
 use crate::dc::page::{PageId, PagePtr};
 use std::path::Path;
-use std::ptr::NonNull;
-use tokio::fs::{File, OpenOptions};
-use tokio::io::AsyncWriteExt;
+use tokio::{
+    fs::{File, OpenOptions},
+    io::AsyncWriteExt,
+};
 
 /// BufferPool manages the in memory cache AND file usage of pages.
 ///
@@ -32,6 +33,8 @@ pub(crate) struct BufMgr {
 }
 
 impl BufMgr {
+    /// Open the file at the given path. If the file does not exist, create it.
+    /// Page 0 is initialized with an empty freelist page header.
     pub async fn open<P: AsRef<Path>>(path: P, pool_size: usize) -> Result<Self> {
         let mut file = OpenOptions::new()
             .read(true)
@@ -45,6 +48,7 @@ impl BufMgr {
             // init page zero
             let page_ptr = PagePtr::zero_content()?;
             file.write_all(page_ptr.data()).await?;
+            file.sync_all().await?;
         }
 
         Ok(Self { file })

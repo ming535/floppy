@@ -4,8 +4,8 @@ use std::ptr::NonNull;
 use std::{mem, slice};
 
 pub(crate) const PAGE_SIZE: usize = 4096;
-pub(crate) const PAGE_ID_ZERO: PageId = PageId(0);
-pub(crate) const PAGE_ID_ROOT: PageId = PageId(1);
+pub(super) const PAGE_ID_ZERO: PageId = PageId(0);
+pub(super) const PAGE_ID_ROOT: PageId = PageId(1);
 
 /// `PageId` is the identifier of a page in the tree.
 /// Pages inside the tree use `PageId` as a disk pointer

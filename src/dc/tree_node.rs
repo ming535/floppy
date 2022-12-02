@@ -1,6 +1,8 @@
 use crate::common::error::{DCError, FloppyError, Result};
-use crate::dc::buf_mgr::PageFrame;
-use crate::dc::codec::{Codec, Decoder, Encoder};
+use crate::dc::{
+    buf_mgr::PageFrame,
+    codec::{Codec, Decoder, Encoder},
+};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
@@ -38,7 +40,7 @@ pub(crate) trait NodeKey: Codec + Ord + Clone + fmt::Debug {}
 
 pub(crate) trait NodeValue: Codec + Clone {}
 
-struct TreeNode<'a, K, V> {
+pub(crate) struct TreeNode<'a, K, V> {
     page_frame: &'a mut PageFrame,
     header: NodeHeader,
     slot_array_ptrs: SlotArrayPtr,
@@ -212,7 +214,7 @@ where
     }
 }
 
-struct NodeIterator<'a, K, V> {
+pub struct NodeIterator<'a, K, V> {
     node: &'a TreeNode<'a, K, V>,
     next_slot: u16,
     _marker: PhantomData<(K, V)>,
@@ -373,8 +375,6 @@ mod tests {
         let mut page_frame = PageFrame::new(1.into(), page_ptr);
         page_frame.payload_mut()[0] = PAGE_TYPE_LEAF;
         let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut page_frame);
-
-        assert!(b"key1".cmp(b"key2") == Ordering::Less);
 
         node.put(b"2", b"2")?;
         node.put(b"3", b"3")?;
