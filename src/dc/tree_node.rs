@@ -1,8 +1,10 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::buf_mgr::PageFrame;
 use crate::dc::codec::{Codec, Decoder, Encoder};
+use std::borrow::Borrow;
 use std::cmp::Ordering;
-use std::mem;
+use std::marker::PhantomData;
+use std::{fmt, mem};
 
 /// The b-tree node header is 12 bytes. It is composed of the following fields:
 ///
@@ -27,34 +29,27 @@ use std::mem;
 /// 8       4      The four-byte integer at offset 8 is the right-child pointer
 ///                for interior and root nodes.
 ///                Leaf nodes don't have this field filled with 0 for
-/// simplicity.
-enum Node<'a> {
-    Leaf(LeafNode<'a>),
-    Interior(InteriorNode),
-    Root(RootNode),
-}
-
+///                simplicity.
 const PAGE_TYPE_ROOT: u8 = 0x01;
 const PAGE_TYPE_INTERIOR: u8 = 0x02;
 const PAGE_TYPE_LEAF: u8 = 0x04;
 
-impl<'a> Node<'a> {
-    pub fn new(page_frame: &'a mut PageFrame) -> Result<Self> {
-        let page_type = u8::from_le(page_frame.payload()[0]);
-        match page_type {
-            PAGE_TYPE_LEAF => Ok(Self::Leaf(LeafNode::new(page_frame))),
-            _ => todo!(),
-        }
-    }
-}
+pub(crate) trait NodeKey: Codec + Ord + Clone + fmt::Debug {}
 
-struct LeafNode<'a> {
+pub(crate) trait NodeValue: Codec + Clone {}
+
+struct TreeNode<'a, K, V> {
     page_frame: &'a mut PageFrame,
     header: NodeHeader,
     slot_array_ptrs: SlotArrayPtr,
+    _marker: PhantomData<(K, V)>,
 }
 
-impl<'a> LeafNode<'a> {
+impl<'a, K, V> TreeNode<'a, K, V>
+where
+    K: NodeKey,
+    V: NodeValue,
+{
     pub fn new(page_frame: &'a mut PageFrame) -> Self {
         let mut dec = Decoder::new(page_frame.payload());
         let header = unsafe { NodeHeader::decode_from(&mut dec) };
@@ -67,11 +62,16 @@ impl<'a> LeafNode<'a> {
             header,
             page_frame,
             slot_array_ptrs,
+            _marker: PhantomData,
         }
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<Vec<u8>> {
-        match self.binary_search(key) {
+    pub fn node_type(&self) -> u8 {
+        self.header.node_type
+    }
+
+    pub fn get(&self, key: K) -> Result<V> {
+        match self.binary_search(&key) {
             Ok(slot) => {
                 let slot = self.get_slot_content(slot);
                 Ok(slot.value.into())
@@ -83,8 +83,8 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
-        match self.binary_search(key) {
+    pub fn put(&mut self, key: K, value: V) -> Result<()> {
+        match self.binary_search(&key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
                 key
@@ -93,14 +93,15 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn iter(&self) -> NodeIterator {
+    pub fn iter(&self) -> NodeIterator<K, V> {
         NodeIterator {
             node: self,
             next_slot: 0,
+            _marker: PhantomData,
         }
     }
 
-    fn put_at(&mut self, slot: usize, key: &[u8], value: &[u8]) -> Result<()> {
+    fn put_at(&mut self, slot: usize, key: K, value: V) -> Result<()> {
         let slot_content = SlotContent {
             flag: 0,
             key,
@@ -112,7 +113,7 @@ impl<'a> LeafNode<'a> {
         if slot_size > self.free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
                 "No enough space to insert key {:?}",
-                key
+                slot_content.key
             ))));
         }
 
@@ -157,14 +158,18 @@ impl<'a> LeafNode<'a> {
     /// If key is not found then [`Result::Err`] is returned, containing
     /// the index where a matching element could be inserted while maintaining
     /// the sorted order.
-    fn binary_search(&self, target: &[u8]) -> std::result::Result<usize, usize> {
+    fn binary_search<Q: ?Sized>(&self, target: &Q) -> std::result::Result<usize, usize>
+    where
+        K: Borrow<Q>,
+        Q: Ord,
+    {
         let mut size = self.header.num_slots as usize;
         let mut left = 0;
         let mut right = size;
         while left < right {
             let mid = left + size / 2;
             let slot_content = self.get_slot_content(mid);
-            let cmp = slot_content.key.cmp(target);
+            let cmp = slot_content.key.borrow().cmp(target);
             if cmp == Ordering::Less {
                 // mid < target
                 left = mid + 1;
@@ -179,7 +184,7 @@ impl<'a> LeafNode<'a> {
         Err(left)
     }
 
-    fn get_slot_content(&self, slot_id: usize) -> SlotContent {
+    fn get_slot_content(&self, slot_id: usize) -> SlotContent<K, V> {
         assert!(slot_id < self.header.num_slots as usize);
         let offset = self.slot_array_ptrs.0[slot_id];
         let data = &self.page_frame.payload()[offset as usize..];
@@ -207,13 +212,18 @@ impl<'a> LeafNode<'a> {
     }
 }
 
-struct NodeIterator<'a> {
-    node: &'a LeafNode<'a>,
+struct NodeIterator<'a, K, V> {
+    node: &'a TreeNode<'a, K, V>,
     next_slot: u16,
+    _marker: PhantomData<(K, V)>,
 }
 
-impl<'a> Iterator for NodeIterator<'a> {
-    type Item = (&'a [u8], &'a [u8]);
+impl<'a, K, V> Iterator for NodeIterator<'a, K, V>
+where
+    K: NodeKey,
+    V: NodeValue,
+{
+    type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_slot < self.node.header.num_slots {
@@ -226,12 +236,8 @@ impl<'a> Iterator for NodeIterator<'a> {
     }
 }
 
-struct InteriorNode {}
-
-struct RootNode {}
-
 struct NodeHeader {
-    page_type: u8,
+    node_type: u8,
     freeblock: u16,
     num_slots: u16,
     slot_content_start: u16,
@@ -245,12 +251,12 @@ impl Codec for NodeHeader {
     }
 
     unsafe fn encode_to(&self, enc: &mut Encoder) {
-        enc.put_u8(self.page_type);
+        enc.put_u8(self.node_type);
         enc.put_u16(self.freeblock);
         enc.put_u16(self.num_slots);
         enc.put_u16(self.slot_content_start);
         enc.put_u8(self.fragmented_free_bytes);
-        if self.page_type == PAGE_TYPE_LEAF {
+        if self.node_type == PAGE_TYPE_LEAF {
             assert_eq!(self.right_child, 0);
         } else {
             assert!(self.right_child > 0);
@@ -273,7 +279,7 @@ impl Codec for NodeHeader {
         }
 
         Self {
-            page_type,
+            node_type: page_type,
             freeblock,
             num_slots,
             slot_content_start,
@@ -322,13 +328,21 @@ impl Codec for &[u8] {
     }
 }
 
-struct SlotContent<'a> {
+impl NodeKey for &[u8] {}
+
+impl NodeValue for &[u8] {}
+
+struct SlotContent<K, V> {
     flag: u8,
-    key: &'a [u8],
-    value: &'a [u8],
+    key: K,
+    value: V,
 }
 
-impl<'a> Codec for SlotContent<'a> {
+impl<K, V> Codec for SlotContent<K, V>
+where
+    K: NodeKey,
+    V: NodeValue,
+{
     fn encode_size(&self) -> usize {
         mem::size_of::<u8>() + self.key.encode_size() + self.value.encode_size()
     }
@@ -341,8 +355,8 @@ impl<'a> Codec for SlotContent<'a> {
 
     unsafe fn decode_from(dec: &mut Decoder) -> Self {
         let flag = dec.get_u8();
-        let key = <&[u8]>::decode_from(dec);
-        let value = <&[u8]>::decode_from(dec);
+        let key = K::decode_from(dec);
+        let value = V::decode_from(dec);
         Self { flag, key, value }
     }
 }
@@ -358,7 +372,7 @@ mod tests {
         let page_ptr = PagePtr::zero_content()?;
         let mut page_frame = PageFrame::new(1.into(), page_ptr);
         page_frame.payload_mut()[0] = PAGE_TYPE_LEAF;
-        let mut node = LeafNode::new(&mut page_frame);
+        let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut page_frame);
 
         assert!(b"key1".cmp(b"key2") == Ordering::Less);
 
@@ -376,7 +390,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut node = LeafNode::new(&mut page_frame);
+        let mut node = TreeNode::new(&mut page_frame);
         let mut iter = node.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
