@@ -1,9 +1,11 @@
 use crate::common::error::Result;
-use crate::dc::page::{PageId, PagePtr};
+use crate::dc::page::{PageId, PagePtr, PAGE_SIZE};
+use crate::env::Env;
+use std::io::SeekFrom;
 use std::path::Path;
 use tokio::{
     fs::{File, OpenOptions},
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
 
 /// BufferPool manages the in memory cache AND file usage of pages.
@@ -28,30 +30,32 @@ use tokio::{
 /// 2. FlushList: The pages that
 /// have been modified and need to be flushed to disk.
 /// 3. LruList: The pages that are tracked by the LRU algorithm.
-pub(crate) struct BufMgr {
-    file: File,
+pub(crate) struct BufMgr<E: Env> {
+    env: E,
 }
 
-impl BufMgr {
+impl<E> BufMgr<E>
+where
+    E: Env,
+{
     /// Open the file at the given path. If the file does not exist, create it.
     /// Page 0 is initialized with an empty freelist page header.
     pub async fn open<P: AsRef<Path>>(path: P, pool_size: usize) -> Result<Self> {
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(path)
-            .await?;
-
-        let metadata = file.metadata().await?;
-        if metadata.len() == 0 {
-            // init page zero
-            let page_ptr = PagePtr::zero_content()?;
-            file.write_all(page_ptr.data()).await?;
-            file.sync_all().await?;
-        }
-
-        Ok(Self { file })
+        // let mut file = OpenOptions::new()
+        //     .read(true)
+        //     .write(true)
+        //     .create(true)
+        //     .open(path)
+        //     .await?;
+        //
+        // let metadata = file.metadata().await?;
+        // if metadata.len() == 0 {
+        //     // init page zero
+        //     let page_ptr = PagePtr::zero_content()?;
+        //     file.write_all(page_ptr.data()).await?;
+        //     file.sync_all().await?;
+        // }
+        todo!()
     }
 
     /// Allocate a new page from buffer pool. This happens when a node in the
@@ -79,6 +83,8 @@ impl BufMgr {
     /// Get a page from the buffer pool. If the page is not in the buffer pool,
     /// we read it from disk
     pub fn get_and_pin(&self, page_id: PageId) -> Result<PageFrame> {
+        // let offset = page_id as u64 * PAGE_SIZE as usize;
+
         todo!()
     }
 

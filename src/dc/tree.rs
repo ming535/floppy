@@ -3,18 +3,22 @@ use crate::dc::{
     buf_mgr::BufMgr, page::PAGE_ID_ROOT, tree_node::TreeNode, MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
+use crate::env::Env;
 use std::path::Path;
 
-pub struct Tree {
-    buf_mgr: BufMgr,
+pub struct Tree<E: Env> {
+    buf_mgr: BufMgr<E>,
 }
 
-impl Tree {
+impl<E> Tree<E>
+where
+    E: Env,
+{
     /// Open a tree from the given path.
     /// The root of the tree is stored in Page 1.
     /// All interior pages are read into buffer pool.
     pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let buf_mgr = BufMgr::open(path, 1000).await?;
+        let buf_mgr = BufMgr::<E>::open(path, 1000).await?;
         // get_and_pin will extend the file if the page does not exist.
         let root = buf_mgr.get_and_pin(PAGE_ID_ROOT)?;
         todo!()
