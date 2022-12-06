@@ -1,5 +1,4 @@
 use super::*;
-use std::sync::Mutex;
 use std::{
     fs::ReadDir,
     pin::Pin,
@@ -7,6 +6,7 @@ use std::{
     task::{Context, Poll},
     thread,
 };
+use tokio::sync::Mutex;
 
 /// An implementation of [`Env`] based on simulation.
 #[derive(Clone, Debug)]
@@ -42,7 +42,7 @@ impl Env for SimEnv {
     }
 
     async fn remove_file<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     async fn create_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
@@ -78,7 +78,7 @@ impl super::PositionalWriter for SimMem {
                 return Ok(0);
             }
 
-            let mut data = self.0.lock().unwrap();
+            let mut data = self.0.lock().await;
             if offset + buf.len() as u64 > data.len() as u64 {
                 data.resize(offset as usize + buf.len(), 0);
             }
@@ -102,7 +102,8 @@ impl PositionalReader for SimMem {
 
     fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
         async move {
-            let data = &self.0.lock().unwrap();
+            let data = &self.0.lock().await;
+            println!("read_at 1: offset: {}, data len: {}", offset, data.len());
             if offset > data.len() as u64 {
                 return Ok(0);
             }
@@ -141,6 +142,39 @@ pub struct SimDir;
 #[async_trait]
 impl super::Directory for SimDir {
     async fn sync_all(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_file_write() -> Result<()> {
+        let env = SimEnv;
+        // 100 KB
+        let offset = 100 * 1024;
+        let path = "tmp_test_file";
+
+        let mut file = env.open_file(path).await.unwrap();
+        file.write_at(b"hello", offset).await.unwrap();
+        file.sync_all().await.unwrap();
+
+        let mut buf = [0u8; 5];
+        file.read_at(&mut buf, offset).await.unwrap();
+        assert_eq!(&buf, b"hello");
+
+        // pos 0 content should be zero.
+        file.read_exact_at(&mut buf, 0).await.unwrap();
+        assert_eq!(&buf, &[0u8; 5]);
+
+        // pos 200 content should be zero.
+        let mut buf = [0u8; 100];
+        file.read_exact_at(&mut buf, 200).await.unwrap();
+        assert_eq!(&buf, &[0u8; 100]);
+
+        env.remove_file(path).await.unwrap();
         Ok(())
     }
 }
