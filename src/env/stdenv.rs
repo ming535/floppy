@@ -19,6 +19,8 @@ pub struct Std;
 #[async_trait]
 impl Env for Std {
     type PositionalReader = PositionalReader;
+    type PositionalWriter = PositionalReaderWriter;
+    type PositionalReaderWriter = PositionalReaderWriter;
     type SequentialWriter = SequentialWriter;
     type JoinHandle<T: Send> = JoinHandle<T>;
     type Directory = Directory;
@@ -35,6 +37,23 @@ impl Env for Std {
         P: AsRef<Path> + Send,
     {
         Ok(SequentialWriter(File::create(path)?))
+    }
+
+    async fn open_positional_writer<P>(&self, path: P) -> Result<Self::PositionalWriter>
+    where
+        P: AsRef<Path> + Send,
+    {
+        Ok(PositionalReaderWriter(File::open(path)?))
+    }
+
+    async fn open_positional_reader_writer<P>(
+        &self,
+        path: P,
+    ) -> Result<Self::PositionalReaderWriter>
+    where
+        P: AsRef<Path> + Send,
+    {
+        Ok(PositionalReaderWriter(File::open(path)?))
     }
 
     fn spawn_background<F>(&self, f: F) -> JoinHandle<F::Output>
@@ -102,6 +121,38 @@ pub struct PositionalReader(File);
 
 #[async_trait]
 impl super::PositionalReader for PositionalReader {
+    type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
+
+    #[cfg(unix)]
+    fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
+        use std::os::unix::fs::FileExt;
+        async move { self.0.read_at(buf, offset) }
+    }
+
+    fn direct_io_ify(&self) -> Result<()> {
+        super::direct_io_ify(self.0.as_raw_fd())
+    }
+}
+
+pub struct PositionalReaderWriter(File);
+
+#[async_trait]
+impl super::PositionalWriter for PositionalReaderWriter {
+    type WriteAt<'a> = impl Future<Output = Result<usize>> + 'a;
+
+    #[cfg(unix)]
+    fn write_at<'a>(&'a self, buf: &'a [u8], offset: u64) -> Self::WriteAt<'a> {
+        use std::os::unix::fs::FileExt;
+        async move { self.0.write_at(buf, offset) }
+    }
+
+    fn direct_io_ify(&self) -> Result<()> {
+        super::direct_io_ify(self.0.as_raw_fd())
+    }
+}
+
+#[async_trait]
+impl super::PositionalReader for PositionalReaderWriter {
     type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
 
     #[cfg(unix)]

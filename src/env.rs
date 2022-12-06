@@ -12,6 +12,10 @@ pub use async_trait::async_trait;
 pub trait Env: Clone + Send + Sync + 'static {
     /// Positional readers returned by the environment.
     type PositionalReader: PositionalReader;
+    /// Positional writers returned by the environment.
+    type PositionalWriter: PositionalWriter;
+    /// Positional writer and reader returned by the environment.
+    type PositionalReaderWriter: PositionalReader + PositionalWriter;
     /// Sequential writers returned by the environment.
     type SequentialWriter: SequentialWriter;
     /// Handles to await tasks spawned by the environment.
@@ -21,6 +25,17 @@ pub trait Env: Clone + Send + Sync + 'static {
 
     /// Opens a file for positional reads.
     async fn open_positional_reader<P>(&self, path: P) -> Result<Self::PositionalReader>
+    where
+        P: AsRef<Path> + Send;
+
+    async fn open_positional_writer<P>(&self, path: P) -> Result<Self::PositionalWriter>
+    where
+        P: AsRef<Path> + Send;
+
+    async fn open_positional_reader_writer<P>(
+        &self,
+        path: P,
+    ) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send;
 
@@ -111,6 +126,59 @@ where
                     Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
                     Ok(n) => {
                         buf = &mut buf[n..];
+                        pos += n as u64;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// A writer that allows positional writes.
+#[async_trait]
+pub trait PositionalWriter: Send + Sync + 'static {
+    /// A future that resolves to the result of [`Self::write_at`].
+    type WriteAt<'a>: Future<Output = Result<usize>> + 'a + Send
+    where
+        Self: 'a;
+
+    /// Writes some bytes to this object at `pos` from `buf`.
+    ///
+    /// Returns the number of bytes written.
+    fn write_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteAt<'a>;
+
+    /// Enable direct_io for the writer.
+    /// return error if direct_io unsupported.
+    fn direct_io_ify(&self) -> Result<()>;
+}
+
+/// Extension methods for [`PositionalWriter`].
+pub trait PositionalWriterExt {
+    type WriteExactAt<'a>: Future<Output = Result<()>> + 'a
+    where
+        Self: 'a;
+
+    fn write_exact_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteExactAt<'a>;
+}
+
+impl<T> PositionalWriterExt for T
+where
+    T: PositionalWriter,
+{
+    type WriteExactAt<'a>  = impl Future<Output = Result<()>> + 'a where Self: 'a;
+
+    fn write_exact_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteExactAt<'a> {
+        async move {
+            let mut buf = buf;
+            let mut pos = pos;
+            while !buf.is_empty() {
+                match self.write_at(buf, pos).await {
+                    Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
+                    Ok(n) => {
+                        buf = &buf[n..];
                         pos += n as u64;
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
