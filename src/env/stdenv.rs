@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     future::Future,
     io::Result,
     os::fd::AsRawFd,
@@ -14,22 +14,25 @@ use super::*;
 
 /// An implementation of [`Env`] based on [`std`].
 #[derive(Clone, Debug)]
-pub struct Std;
+pub struct StdEnv;
 
 #[async_trait]
-impl Env for Std {
+impl Env for StdEnv {
     type PositionalReaderWriter = PositionalReaderWriter;
     type JoinHandle<T: Send> = JoinHandle<T>;
     type Directory = Directory;
 
-    async fn open_positional_reader_writer<P>(
-        &self,
-        path: P,
-    ) -> Result<Self::PositionalReaderWriter>
+    async fn open_file<P>(&self, path: P) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send,
     {
-        Ok(PositionalReaderWriter(File::open(path)?))
+        Ok(PositionalReaderWriter(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(path)?,
+        ))
     }
 
     fn spawn_background<F>(&self, f: F) -> JoinHandle<F::Output>
@@ -152,5 +155,29 @@ pub struct Directory(File);
 impl super::Directory for Directory {
     async fn sync_all(&self) -> Result<()> {
         self.0.sync_all()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_file_write() -> Result<()> {
+        let env = StdEnv;
+        // 100 KB
+        let offset = 100 * 1024;
+        let path = "tmp_test_file";
+
+        let mut file = env.open_file(path).await.unwrap();
+        file.write_at(b"hello", offset).await.unwrap();
+        file.sync_all().await.unwrap();
+
+        let file = env.open_file(path).await.unwrap();
+        let mut buf = [0u8; 5];
+        file.read_at(&mut buf, offset).await.unwrap();
+        assert_eq!(&buf, b"hello");
+        env.remove_file(path).await.unwrap();
+        Ok(())
     }
 }

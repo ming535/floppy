@@ -18,10 +18,7 @@ pub trait Env: Clone + Send + Sync + 'static {
     type Directory: Directory + Send + Sync + 'static;
 
     /// Opens a file for positional read and write
-    async fn open_positional_reader_writer<P>(
-        &self,
-        path: P,
-    ) -> Result<Self::PositionalReaderWriter>
+    async fn open_file<P>(&self, path: P) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send;
 
