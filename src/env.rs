@@ -10,37 +10,18 @@ pub use async_trait::async_trait;
 /// Provides an environment to interact with a specific platform.
 #[async_trait]
 pub trait Env: Clone + Send + Sync + 'static {
-    /// Positional readers returned by the environment.
-    type PositionalReader: PositionalReader;
-    /// Positional writers returned by the environment.
-    type PositionalWriter: PositionalWriter;
     /// Positional writer and reader returned by the environment.
-    type PositionalReaderWriter: PositionalReader + PositionalWriter;
-    /// Sequential writers returned by the environment.
-    type SequentialWriter: SequentialWriter;
+    type PositionalReaderWriter: PositionalReader + PositionalWriter + DioEnabler;
     /// Handles to await tasks spawned by the environment.
     type JoinHandle<T: Send>: Future<Output = T> + Send;
     /// Directories returned by the environment.
     type Directory: Directory + Send + Sync + 'static;
 
-    /// Opens a file for positional reads.
-    async fn open_positional_reader<P>(&self, path: P) -> Result<Self::PositionalReader>
-    where
-        P: AsRef<Path> + Send;
-
-    async fn open_positional_writer<P>(&self, path: P) -> Result<Self::PositionalWriter>
-    where
-        P: AsRef<Path> + Send;
-
+    /// Opens a file for positional read and write
     async fn open_positional_reader_writer<P>(
         &self,
         path: P,
     ) -> Result<Self::PositionalReaderWriter>
-    where
-        P: AsRef<Path> + Send;
-
-    /// Opens a file for sequential writes.
-    async fn open_sequential_writer<P>(&self, path: P) -> Result<Self::SequentialWriter>
     where
         P: AsRef<Path> + Send;
 
@@ -96,10 +77,6 @@ pub trait PositionalReader: Send + Sync + 'static {
     ///
     /// Returns the number of bytes read.
     fn read_at<'a>(&'a self, buf: &'a mut [u8], pos: u64) -> Self::ReadAt<'a>;
-
-    /// Enable direct_io for the reader.
-    /// return error if direct_io unsupported.
-    fn direct_io_ify(&self) -> Result<()>;
 }
 
 /// Extension methods for [`PositionalReader`].
@@ -150,9 +127,16 @@ pub trait PositionalWriter: Send + Sync + 'static {
     /// Returns the number of bytes written.
     fn write_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteAt<'a>;
 
-    /// Enable direct_io for the writer.
-    /// return error if direct_io unsupported.
-    fn direct_io_ify(&self) -> Result<()>;
+    /// Synchronizes all modified content but without metadata of this file to
+    /// disk.
+    ///
+    /// Returns Ok when success.
+    async fn sync_data(&mut self) -> Result<()>;
+
+    /// Synchronizes all modified content and metadata of this file to disk.
+    ///
+    /// Returns Ok when success.
+    async fn sync_all(&mut self) -> Result<()>;
 }
 
 /// Extension methods for [`PositionalWriter`].
@@ -190,71 +174,6 @@ where
     }
 }
 
-/// A writer that allows sequential writes.
-#[async_trait]
-pub trait SequentialWriter: Send + Sync + 'static {
-    /// A future that resolves to the result of [`Self::write`].
-    type Write<'a>: Future<Output = Result<usize>> + 'a + Send
-    where
-        Self: 'a;
-
-    /// Writes some bytes from `buf` into this object.
-    ///
-    /// Returns the number of bytes written.
-    fn write<'a>(&'a mut self, buf: &'a [u8]) -> Self::Write<'a>;
-
-    ///  Synchronizes all modified content but without metadata of this file to
-    /// disk.
-    ///
-    /// Returns Ok when success.
-    async fn sync_data(&mut self) -> Result<()>;
-
-    /// Returns Ok when success.
-    async fn sync_all(&mut self) -> Result<()>;
-
-    /// Truncate the writtern file to a specified length.
-    async fn truncate(&self, len: u64) -> Result<()>;
-
-    /// Enable direct_io for the writer.
-    /// return error if direct_io unsupported.
-    fn direct_io_ify(&self) -> Result<()>;
-}
-
-/// Provides extension methods for [`SequentialWriter`].
-pub trait SequentialWriterExt {
-    /// A future that resolves to the result of [`Self::write_all`].
-    type WriteAll<'a>: Future<Output = Result<()>> + 'a
-    where
-        Self: 'a;
-
-    /// Writes all bytes from `buf` into this object.
-    fn write_all<'a>(&'a mut self, buf: &'a [u8]) -> Self::WriteAll<'a>;
-}
-
-/// Extension methods for [`SequentialWriter`].
-impl<T> SequentialWriterExt for T
-where
-    T: SequentialWriter,
-{
-    type WriteAll<'a> = impl Future<Output = Result<()>> + 'a
-    where
-    Self: 'a;
-
-    fn write_all<'a>(&'a mut self, mut buf: &'a [u8]) -> Self::WriteAll<'a> {
-        async move {
-            while !buf.is_empty() {
-                match self.write(buf).await {
-                    Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
-                    Ok(n) => buf = &buf[n..],
-                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                    Err(e) => return Err(e),
-                }
-            }
-            Ok(())
-        }
-    }
-}
-
 /// Metadata information about a file.
 #[allow(clippy::len_without_is_empty)]
 pub struct Metadata {
@@ -263,6 +182,12 @@ pub struct Metadata {
 
     /// Is this metadata for a directory.
     pub is_dir: bool,
+}
+
+pub trait DioEnabler {
+    /// Enable direct_io for this file.
+    /// Returns error if direct_io is not supported.
+    fn direct_io_ify(&self) -> Result<()>;
 }
 
 #[cfg(target_os = "linux")]

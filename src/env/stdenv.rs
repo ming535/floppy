@@ -18,33 +18,9 @@ pub struct Std;
 
 #[async_trait]
 impl Env for Std {
-    type PositionalReader = PositionalReader;
-    type PositionalWriter = PositionalReaderWriter;
     type PositionalReaderWriter = PositionalReaderWriter;
-    type SequentialWriter = SequentialWriter;
     type JoinHandle<T: Send> = JoinHandle<T>;
     type Directory = Directory;
-
-    async fn open_positional_reader<P>(&self, path: P) -> Result<Self::PositionalReader>
-    where
-        P: AsRef<Path> + Send,
-    {
-        Ok(PositionalReader(File::open(path)?))
-    }
-
-    async fn open_sequential_writer<P>(&self, path: P) -> Result<Self::SequentialWriter>
-    where
-        P: AsRef<Path> + Send,
-    {
-        Ok(SequentialWriter(File::create(path)?))
-    }
-
-    async fn open_positional_writer<P>(&self, path: P) -> Result<Self::PositionalWriter>
-    where
-        P: AsRef<Path> + Send,
-    {
-        Ok(PositionalReaderWriter(File::open(path)?))
-    }
 
     async fn open_positional_reader_writer<P>(
         &self,
@@ -117,37 +93,23 @@ impl Env for Std {
     }
 }
 
-pub struct PositionalReader(File);
-
-#[async_trait]
-impl super::PositionalReader for PositionalReader {
-    type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
-
-    #[cfg(unix)]
-    fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
-        use std::os::unix::fs::FileExt;
-        async move { self.0.read_at(buf, offset) }
-    }
-
-    fn direct_io_ify(&self) -> Result<()> {
-        super::direct_io_ify(self.0.as_raw_fd())
-    }
-}
-
 pub struct PositionalReaderWriter(File);
 
 #[async_trait]
 impl super::PositionalWriter for PositionalReaderWriter {
     type WriteAt<'a> = impl Future<Output = Result<usize>> + 'a;
 
-    #[cfg(unix)]
     fn write_at<'a>(&'a self, buf: &'a [u8], offset: u64) -> Self::WriteAt<'a> {
         use std::os::unix::fs::FileExt;
         async move { self.0.write_at(buf, offset) }
     }
 
-    fn direct_io_ify(&self) -> Result<()> {
-        super::direct_io_ify(self.0.as_raw_fd())
+    async fn sync_data(&mut self) -> Result<()> {
+        async move { self.0.sync_data() }.await
+    }
+
+    async fn sync_all(&mut self) -> Result<()> {
+        async move { self.0.sync_all() }.await
     }
 }
 
@@ -160,35 +122,9 @@ impl super::PositionalReader for PositionalReaderWriter {
         use std::os::unix::fs::FileExt;
         async move { self.0.read_at(buf, offset) }
     }
-
-    fn direct_io_ify(&self) -> Result<()> {
-        super::direct_io_ify(self.0.as_raw_fd())
-    }
 }
 
-pub struct SequentialWriter(File);
-
-#[async_trait]
-impl super::SequentialWriter for SequentialWriter {
-    type Write<'a> = impl Future<Output = Result<usize>> + 'a + Send;
-
-    fn write<'a>(&'a mut self, buf: &'a [u8]) -> Self::Write<'a> {
-        use std::io::Write as _;
-        async move { self.0.write(buf) }
-    }
-
-    async fn sync_data(&mut self) -> Result<()> {
-        async move { self.0.sync_data() }.await
-    }
-
-    async fn sync_all(&mut self) -> Result<()> {
-        async move { self.0.sync_all() }.await
-    }
-
-    async fn truncate(&self, len: u64) -> Result<()> {
-        async move { self.0.set_len(len) }.await
-    }
-
+impl super::DioEnabler for PositionalReaderWriter {
     fn direct_io_ify(&self) -> Result<()> {
         super::direct_io_ify(self.0.as_raw_fd())
     }
