@@ -177,6 +177,16 @@ mod tests {
         let mut buf = [0u8; 5];
         file.read_at(&mut buf, offset).await.unwrap();
         assert_eq!(&buf, b"hello");
+
+        // pos 0 content should be zero.
+        file.read_exact_at(&mut buf, 0).await.unwrap();
+        assert_eq!(&buf, &[0u8; 5]);
+
+        // pos 200 content should be zero.
+        let mut buf = [0u8; 100];
+        file.read_exact_at(&mut buf, 200).await.unwrap();
+        assert_eq!(&buf, &[0u8; 100]);
+
         env.remove_file(path).await.unwrap();
         Ok(())
     }

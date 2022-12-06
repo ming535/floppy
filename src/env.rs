@@ -1,6 +1,7 @@
 //! Environments for Floppy to interact with different runtimes and platforms.
 //! `Env` code is copied from photondb, with some modifications.
 
+mod sim;
 mod stdenv;
 
 use std::{future::Future, io::Result, path::Path};
