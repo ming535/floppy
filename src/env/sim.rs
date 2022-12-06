@@ -22,6 +22,7 @@ impl Env for SimEnv {
     where
         P: AsRef<Path> + Send,
     {
+        assert_eq!(path.as_ref(), Path::new("sim"));
         Ok(SimMem(Mutex::new(vec![])))
     }
 
@@ -103,7 +104,6 @@ impl PositionalReader for SimMem {
     fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
         async move {
             let data = &self.0.lock().await;
-            println!("read_at 1: offset: {}, data len: {}", offset, data.len());
             if offset > data.len() as u64 {
                 return Ok(0);
             }
@@ -155,7 +155,7 @@ mod tests {
         let env = SimEnv;
         // 100 KB
         let offset = 100 * 1024;
-        let path = "tmp_test_file";
+        let path = "sim";
 
         let mut file = env.open_file(path).await.unwrap();
         file.write_at(b"hello", offset).await.unwrap();
