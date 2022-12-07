@@ -12,7 +12,8 @@ pub(super) const PAGE_ID_ROOT: PageId = PageId(1);
 /// to identify other pages.
 ///
 /// `PageZero` is not used by the tree.
-pub(crate) struct PageId(u32);
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PageId(pub(crate) u32);
 
 impl From<u32> for PageId {
     fn from(v: u32) -> Self {

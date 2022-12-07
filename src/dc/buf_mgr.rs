@@ -82,7 +82,7 @@ where
 
     /// Get a page from the buffer pool. If the page is not in the buffer pool,
     /// we read it from disk
-    pub fn get_and_pin(&self, page_id: PageId) -> Result<BufferFrame> {
+    pub fn get_and_pin(&self, page_id: PageId) -> Result<&mut BufferFrame> {
         // let offset = page_id as u64 * PAGE_SIZE as usize;
 
         todo!()

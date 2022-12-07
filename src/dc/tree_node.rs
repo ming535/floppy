@@ -2,6 +2,7 @@ use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
     buf_mgr::BufferFrame,
     codec::{Codec, Decoder, Encoder},
+    page::PageId,
 };
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -334,6 +335,22 @@ impl NodeKey for &[u8] {}
 
 impl NodeValue for &[u8] {}
 
+impl Codec for PageId {
+    fn encode_size(&self) -> usize {
+        mem::size_of::<u32>()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        enc.put_u32(self.0)
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        PageId(dec.get_u32())
+    }
+}
+
+impl NodeValue for PageId {}
+
 struct SlotContent<K, V> {
     flag: u8,
     key: K,
@@ -372,9 +389,9 @@ mod tests {
     #[test]
     fn test_simple_put() -> Result<()> {
         let page_ptr = PagePtr::zero_content()?;
-        let mut page_frame = BufferFrame::new(1.into(), page_ptr);
-        page_frame.payload_mut()[0] = PAGE_TYPE_LEAF;
-        let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut page_frame);
+        let mut frame = BufferFrame::new(1.into(), page_ptr);
+        frame.payload_mut()[0] = PAGE_TYPE_LEAF;
+        let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut frame);
 
         node.put(b"2", b"2")?;
         node.put(b"3", b"3")?;
@@ -390,7 +407,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut node = TreeNode::new(&mut page_frame);
+        let mut node = TreeNode::new(&mut frame);
         let mut iter = node.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));

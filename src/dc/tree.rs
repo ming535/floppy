@@ -1,6 +1,9 @@
 use crate::common::error::Result;
 use crate::dc::{
-    buf_mgr::BufMgr, page::PAGE_ID_ROOT, tree_node::TreeNode, MAX_KEY_SIZE, MAX_VALUE_SIZE,
+    buf_mgr::BufMgr,
+    page::{PageId, PAGE_ID_ROOT},
+    tree_node::TreeNode,
+    MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
 use crate::env::Env;
@@ -21,6 +24,7 @@ where
         let buf_mgr = BufMgr::<E>::open(path, 1000).await?;
         // get_and_pin will extend the file if the page does not exist.
         let root = buf_mgr.get_and_pin(PAGE_ID_ROOT)?;
+        let root_node = TreeNode::<&[u8], PageId>::new(root);
         todo!()
         // load all interior node into buffer pool.
     }
@@ -41,6 +45,10 @@ where
     }
 
     fn find_leaf(&self, key: &[u8]) -> Result<TreeNode<&[u8], &[u8]>> {
+        let frame = self.buf_mgr.get_and_pin(PAGE_ID_ROOT)?;
+        let root = TreeNode::<&[u8], PageId>::new(frame);
+
+        loop {}
         todo!()
     }
 }
