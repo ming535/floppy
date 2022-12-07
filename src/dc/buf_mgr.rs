@@ -63,7 +63,7 @@ where
     /// To allocate a page, we first check if there is a free page in the
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
-    pub fn alloc_page() -> Result<PageFrame> {
+    pub fn alloc_page() -> Result<BufferFrame> {
         todo!()
     }
 
@@ -82,7 +82,7 @@ where
 
     /// Get a page from the buffer pool. If the page is not in the buffer pool,
     /// we read it from disk
-    pub fn get_and_pin(&self, page_id: PageId) -> Result<PageFrame> {
+    pub fn get_and_pin(&self, page_id: PageId) -> Result<BufferFrame> {
         // let offset = page_id as u64 * PAGE_SIZE as usize;
 
         todo!()
@@ -94,7 +94,7 @@ where
     }
 }
 
-pub(crate) struct PageFrame {
+pub(crate) struct BufferFrame {
     page_id: PageId,
     page_ptr: PagePtr,
     pin_count: usize,
@@ -103,7 +103,7 @@ pub(crate) struct PageFrame {
 
 const PAGE_PAYLOAD_OFFSET: usize = 8;
 
-impl PageFrame {
+impl BufferFrame {
     pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
         Self {
             page_id: page_id,

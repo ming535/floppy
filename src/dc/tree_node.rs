@@ -1,6 +1,6 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_mgr::PageFrame,
+    buf_mgr::BufferFrame,
     codec::{Codec, Decoder, Encoder},
 };
 use std::borrow::Borrow;
@@ -41,7 +41,7 @@ pub(crate) trait NodeKey: Codec + Ord + Clone + fmt::Debug {}
 pub(crate) trait NodeValue: Codec + Clone {}
 
 pub(crate) struct TreeNode<'a, K, V> {
-    page_frame: &'a mut PageFrame,
+    page_frame: &'a mut BufferFrame,
     header: NodeHeader,
     slot_array_ptrs: SlotArrayPtr,
     _marker: PhantomData<(K, V)>,
@@ -52,7 +52,7 @@ where
     K: NodeKey,
     V: NodeValue,
 {
-    pub fn new(page_frame: &'a mut PageFrame) -> Self {
+    pub fn new(page_frame: &'a mut BufferFrame) -> Self {
         let mut dec = Decoder::new(page_frame.payload());
         let header = unsafe { NodeHeader::decode_from(&mut dec) };
         let slot_ptr_payload = &(page_frame.payload()
@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn test_simple_put() -> Result<()> {
         let page_ptr = PagePtr::zero_content()?;
-        let mut page_frame = PageFrame::new(1.into(), page_ptr);
+        let mut page_frame = BufferFrame::new(1.into(), page_ptr);
         page_frame.payload_mut()[0] = PAGE_TYPE_LEAF;
         let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut page_frame);
 
