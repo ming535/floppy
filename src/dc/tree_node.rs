@@ -53,7 +53,7 @@ impl<'a> LeafNode<'a> {
         self.0.get(key)
     }
 
-    pub fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(&mut self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
         self.0.put(key, value)
     }
 
@@ -70,8 +70,8 @@ impl<'a> InteriorNode<'a> {
         let payload_len = frame.payload().len();
         let slot_end = payload_len - 4;
         let payload = frame.payload_mut();
-        let slot_array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
         let right_child = u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap());
+        let slot_array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
         Self(slot_array, right_child)
     }
 
@@ -79,7 +79,7 @@ impl<'a> InteriorNode<'a> {
         self.0.get(key)
     }
 
-    pub fn put(&mut self, key: &[u8], value: PageId) -> Result<()> {
+    pub fn put(&mut self, key: &'a [u8], value: PageId) -> Result<()> {
         self.0.put(key, value)
     }
 
@@ -148,36 +148,36 @@ where
     }
 
     fn put_at(&mut self, slot: usize, key: K, value: V) -> Result<()> {
-        let slot_content = SlotContent {
+        let record = Record {
             flag: 0,
             key,
             value,
         };
-        let slot_content_size = slot_content.encode_size();
+        let record_size = record.encode_size();
         // we need to consider the space for slot pointer.
-        let slot_size = slot_content_size + 2;
+        let slot_size = record_size + 2;
         if slot_size > self.free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
                 "No enough space to insert key {:?}",
-                slot_content.key
+                record.key
             ))));
         }
 
         let slot_offset = if slot_size <= self.unallocatd_space() {
             if self.header.slot_content_start == 0 {
-                (self.data.len() - slot_content_size) as u16
+                (self.data.len() - record_size) as u16
             } else {
-                self.header.slot_content_start - slot_content_size as u16
+                self.header.slot_content_start - record_size as u16
             }
         } else {
             // find freeblocks
             todo!()
         };
 
-        let buf = self.data[slot_offset as usize..].as_mut();
+        let buf = self.data[slot_offset as usize..slot_offset as usize + record_size].as_mut();
         let mut enc = Encoder::new(buf);
         unsafe {
-            slot_content.encode_to(&mut enc);
+            record.encode_to(&mut enc);
         }
 
         // change slot array ptr, node header, and put those changes into page.
@@ -230,31 +230,32 @@ where
         Err(left)
     }
 
-    fn get_slot_content(&self, slot_id: usize) -> SlotContent<K, V> {
+    fn get_slot_content(&self, slot_id: usize) -> Record<K, V> {
         assert!(slot_id < self.header.num_slots as usize);
         let offset = self.slot_ptrs.0[slot_id];
         let data = &self.data[offset as usize..];
         let mut dec = Decoder::new(data);
-        unsafe { SlotContent::decode_from(&mut dec) }
+        unsafe { Record::decode_from(&mut dec) }
     }
 
     fn free_space(&self) -> usize {
         // todo! add free block's space
         self.unallocatd_space()
     }
+
     fn unallocatd_space(&self) -> usize {
         let slot_content_start = self.header.slot_content_start as usize;
         if slot_content_start == 0 {
             // This node haven't been used yet.
-            self.data.len() - self.header.encode_size() - self.slot_ptr_array_size()
+            self.data.len() - self.header.encode_size() - self.ptrs_size()
         } else {
-            assert!(slot_content_start > self.header.encode_size() + self.slot_ptr_array_size());
-            slot_content_start - self.header.encode_size() - self.slot_ptr_array_size()
+            assert!(slot_content_start > self.header.encode_size() + self.ptrs_size());
+            slot_content_start - self.header.encode_size() - self.ptrs_size()
         }
     }
 
-    fn slot_ptr_array_size(&self) -> usize {
-        7 * self.header.num_slots as usize
+    fn ptrs_size(&self) -> usize {
+        2 * self.header.num_slots as usize
     }
 }
 
@@ -375,13 +376,13 @@ impl Codec for PageId {
 
 impl NodeValue for PageId {}
 
-struct SlotContent<K, V> {
+struct Record<K, V> {
     flag: u8,
     key: K,
     value: V,
 }
 
-impl<K, V> Codec for SlotContent<K, V>
+impl<K, V> Codec for Record<K, V>
 where
     K: NodeKey,
     V: NodeValue,

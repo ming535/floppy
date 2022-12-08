@@ -3,7 +3,6 @@ use crate::dc::{
     buf_frame::BufferFrame,
     buf_mgr::BufMgr,
     page::{PageId, PAGE_ID_ROOT},
-    tree_node::SlotArray,
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
@@ -51,7 +50,7 @@ where
     fn find_leaf(&self, key: &[u8]) -> Result<&BufferFrame> {
         let mut page_id = PAGE_ID_ROOT;
         loop {
-            let mut frame = self.buf_mgr.get_and_pin(page_id)?;
+            let frame = self.buf_mgr.get_and_pin(page_id)?;
             if frame.get_page_type() == PAGE_TYPE_LEAF {
                 return Ok(frame);
             } else {
