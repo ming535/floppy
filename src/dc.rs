@@ -1,3 +1,4 @@
+mod buf_frame;
 mod buf_mgr;
 mod codec;
 mod lru;

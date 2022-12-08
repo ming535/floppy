@@ -1,4 +1,5 @@
 use crate::common::error::Result;
+use crate::dc::buf_frame::BufferFrame;
 use crate::dc::page::{PageId, PagePtr, PAGE_SIZE};
 use crate::env::Env;
 use std::io::SeekFrom;
@@ -91,38 +92,5 @@ where
     /// Unpin a page, so that it can be evicted from the buffer pool.
     pub fn unpin(&self, page_id: PageId) -> Result<()> {
         todo!()
-    }
-}
-
-pub(crate) struct BufferFrame {
-    page_id: PageId,
-    page_ptr: PagePtr,
-    pin_count: usize,
-    dirty: bool,
-}
-
-const PAGE_PAYLOAD_OFFSET: usize = 8;
-
-impl BufferFrame {
-    pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
-        Self {
-            page_id: page_id,
-            page_ptr,
-            pin_count: 0,
-            dirty: false,
-        }
-    }
-
-    pub fn get_page_lsn(&self) -> u64 {
-        let data = self.payload();
-        u64::from_le_bytes(data[0..PAGE_PAYLOAD_OFFSET].try_into().unwrap())
-    }
-
-    pub fn payload<'a>(&self) -> &'a [u8] {
-        &self.page_ptr.data()[PAGE_PAYLOAD_OFFSET..]
-    }
-
-    pub fn payload_mut<'a>(&mut self) -> &'a mut [u8] {
-        &mut self.page_ptr.data_mut()[PAGE_PAYLOAD_OFFSET..]
     }
 }

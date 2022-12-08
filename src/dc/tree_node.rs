@@ -1,6 +1,5 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_mgr::BufferFrame,
     codec::{Codec, Decoder, Encoder},
     page::PageId,
 };
@@ -33,44 +32,44 @@ use std::{fmt, mem};
 ///                for interior and root nodes.
 ///                Leaf nodes don't have this field filled with 0 for
 ///                simplicity.
-const PAGE_TYPE_ROOT: u8 = 0x01;
-const PAGE_TYPE_INTERIOR: u8 = 0x02;
-const PAGE_TYPE_LEAF: u8 = 0x04;
+pub(crate) const PAGE_TYPE_ROOT: u8 = 0x01;
+pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
+pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
 
 pub(crate) trait NodeKey: Codec + Ord + fmt::Debug {}
 
 pub(crate) trait NodeValue: Codec {}
 
-pub(crate) struct TreeNode<'a, K, V> {
-    frame: &'a mut BufferFrame,
-    header: NodeHeader,
-    slot_array_ptrs: SlotArrayPtr,
+struct LeafNode<'a>(SlotArray<'a, &'a [u8], &'a [u8]>);
+
+struct InteriorNode<'a>(SlotArray<'a, &'a [u8], PageId>);
+
+pub(crate) struct SlotArray<'a, K, V> {
+    data: &'a mut [u8],
+    header: ArrayHeader,
+    slot_ptrs: SlotPtrs,
     _marker: PhantomData<(K, V)>,
 }
 
-impl<'a, K, V> TreeNode<'a, K, V>
+impl<'a, K, V> SlotArray<'a, K, V>
 where
     K: NodeKey,
     V: NodeValue,
 {
-    pub fn new(frame: &'a mut BufferFrame) -> Self {
-        let mut dec = Decoder::new(frame.payload());
-        let header = unsafe { NodeHeader::decode_from(&mut dec) };
-        let slot_ptr_payload = &(frame.payload()
-            [header.encode_size()..header.encode_size() + header.num_slots as usize * 2]);
-        let mut dec = Decoder::new(slot_ptr_payload);
-        let slot_array_ptrs = unsafe { SlotArrayPtr::decode_from(&mut dec) };
+    pub fn new(data: &'a mut [u8]) -> Self {
+        let mut dec = Decoder::new(data);
+        let header = unsafe { ArrayHeader::decode_from(&mut dec) };
+        let slot_ptr_data =
+            &(data[header.encode_size()..header.encode_size() + header.num_slots as usize * 2]);
+        let mut dec = Decoder::new(slot_ptr_data);
+        let slot_ptrs = unsafe { SlotPtrs::decode_from(&mut dec) };
 
         Self {
+            data,
             header,
-            frame,
-            slot_array_ptrs,
+            slot_ptrs,
             _marker: PhantomData,
         }
-    }
-
-    pub fn node_type(&self) -> u8 {
-        self.header.node_type
     }
 
     pub fn get(&self, key: K) -> Result<V> {
@@ -122,7 +121,7 @@ where
 
         let slot_offset = if slot_size <= self.unallocatd_space() {
             if self.header.slot_content_start == 0 {
-                (self.frame.payload().len() - slot_content_size) as u16
+                (self.data.len() - slot_content_size) as u16
             } else {
                 self.header.slot_content_start - slot_content_size as u16
             }
@@ -131,24 +130,24 @@ where
             todo!()
         };
 
-        let buf = self.frame.payload_mut()[slot_offset as usize..].as_mut();
+        let buf = self.data[slot_offset as usize..].as_mut();
         let mut enc = Encoder::new(buf);
         unsafe {
             slot_content.encode_to(&mut enc);
         }
 
         // change slot array ptr, node header, and put those changes into page.
-        self.slot_array_ptrs.0.insert(slot, slot_offset);
+        self.slot_ptrs.0.insert(slot, slot_offset);
         self.header.num_slots += 1;
         self.header.slot_content_start = slot_offset;
         let header_size = self.header.encode_size();
-        let mut header_enc = Encoder::new(&mut self.frame.payload_mut()[0..header_size]);
-        let slot_ptr_buf = &mut (self.frame.payload_mut()
-            [header_size..header_size + self.header.num_slots as usize * 2]);
+        let mut header_enc = Encoder::new(&mut self.data[0..header_size]);
+        let slot_ptr_buf =
+            &mut (self.data[header_size..header_size + self.header.num_slots as usize * 2]);
         let mut slot_ptr_enc = Encoder::new(slot_ptr_buf);
         unsafe {
             self.header.encode_to(&mut header_enc);
-            self.slot_array_ptrs.encode_to(&mut slot_ptr_enc);
+            self.slot_ptrs.encode_to(&mut slot_ptr_enc);
         }
         Ok(())
     }
@@ -189,8 +188,8 @@ where
 
     fn get_slot_content(&self, slot_id: usize) -> SlotContent<K, V> {
         assert!(slot_id < self.header.num_slots as usize);
-        let offset = self.slot_array_ptrs.0[slot_id];
-        let data = &self.frame.payload()[offset as usize..];
+        let offset = self.slot_ptrs.0[slot_id];
+        let data = &self.data[offset as usize..];
         let mut dec = Decoder::new(data);
         unsafe { SlotContent::decode_from(&mut dec) }
     }
@@ -203,7 +202,7 @@ where
         let slot_content_start = self.header.slot_content_start as usize;
         if slot_content_start == 0 {
             // This node haven't been used yet.
-            self.frame.payload().len() - self.header.encode_size() - self.slot_ptr_array_size()
+            self.data.len() - self.header.encode_size() - self.slot_ptr_array_size()
         } else {
             assert!(slot_content_start > self.header.encode_size() + self.slot_ptr_array_size());
             slot_content_start - self.header.encode_size() - self.slot_ptr_array_size()
@@ -216,7 +215,7 @@ where
 }
 
 pub struct NodeIterator<'a, K, V> {
-    node: &'a TreeNode<'a, K, V>,
+    node: &'a SlotArray<'a, K, V>,
     next_slot: u16,
     _marker: PhantomData<(K, V)>,
 }
@@ -239,8 +238,7 @@ where
     }
 }
 
-struct NodeHeader {
-    node_type: u8,
+struct ArrayHeader {
     freeblock: u16,
     num_slots: u16,
     slot_content_start: u16,
@@ -248,41 +246,27 @@ struct NodeHeader {
     right_child: u32,
 }
 
-impl Codec for NodeHeader {
+impl Codec for ArrayHeader {
     fn encode_size(&self) -> usize {
-        12
+        11
     }
 
     unsafe fn encode_to(&self, enc: &mut Encoder) {
-        enc.put_u8(self.node_type);
         enc.put_u16(self.freeblock);
         enc.put_u16(self.num_slots);
         enc.put_u16(self.slot_content_start);
         enc.put_u8(self.fragmented_free_bytes);
-        if self.node_type == PAGE_TYPE_LEAF {
-            assert_eq!(self.right_child, 0);
-        } else {
-            assert!(self.right_child > 0);
-        }
         enc.put_u32(self.right_child);
     }
 
     unsafe fn decode_from(dec: &mut Decoder) -> Self {
-        let page_type = dec.get_u8();
         let freeblock = dec.get_u16();
         let num_slots = dec.get_u16();
         let slot_content_start = dec.get_u16();
         let fragmented_free_bytes = dec.get_u8();
         let right_child = dec.get_u32();
 
-        if page_type == PAGE_TYPE_LEAF {
-            assert_eq!(right_child, 0);
-        } else {
-            assert!(right_child > 0);
-        }
-
         Self {
-            node_type: page_type,
             freeblock,
             num_slots,
             slot_content_start,
@@ -292,9 +276,9 @@ impl Codec for NodeHeader {
     }
 }
 
-struct SlotArrayPtr(Vec<u16>);
+struct SlotPtrs(Vec<u16>);
 
-impl Codec for SlotArrayPtr {
+impl Codec for SlotPtrs {
     fn encode_size(&self) -> usize {
         self.0.len() * 2
     }
@@ -391,7 +375,7 @@ mod tests {
         let page_ptr = PagePtr::zero_content()?;
         let mut frame = BufferFrame::new(1.into(), page_ptr);
         frame.payload_mut()[0] = PAGE_TYPE_LEAF;
-        let mut node: TreeNode<&[u8], &[u8]> = TreeNode::new(&mut frame);
+        let mut node: SlotArray<&[u8], &[u8]> = SlotArray::new(&mut frame);
 
         node.put(b"2", b"2")?;
         node.put(b"3", b"3")?;
@@ -407,7 +391,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut node = TreeNode::new(&mut frame);
+        let mut node = SlotArray::new(&mut frame);
         let mut iter = node.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
