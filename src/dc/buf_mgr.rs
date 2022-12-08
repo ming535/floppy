@@ -2,13 +2,12 @@ use crate::common::error::Result;
 use crate::dc::buf_frame::BufferFrame;
 use crate::dc::page::{PageId, PagePtr, PAGE_SIZE};
 use crate::env::Env;
-use std::io::SeekFrom;
+use dashmap::DashMap;
 use std::path::Path;
 use tokio::{
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
-
 /// BufferPool manages the in memory cache AND file usage of pages.
 ///
 /// Every on disk page belongs to one of the following categories:
@@ -33,6 +32,7 @@ use tokio::{
 /// 3. LruList: The pages that are tracked by the LRU algorithm.
 pub(crate) struct BufMgr<E: Env> {
     env: E,
+    page_map: DashMap<PageId, BufferFrame>,
 }
 
 impl<E> BufMgr<E>
@@ -85,7 +85,7 @@ where
     /// we read it from disk
     pub fn get_and_pin(&self, page_id: PageId) -> Result<&mut BufferFrame> {
         // let offset = page_id as u64 * PAGE_SIZE as usize;
-
+        let entry = self.page_map.get(&page_id);
         todo!()
     }
 

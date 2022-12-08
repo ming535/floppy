@@ -32,7 +32,7 @@ use std::{fmt, mem};
 /// 8       4092   slotted array area.
 /// 4096    4      The four-byte integer at the end of a page is the right-child
 ///                pointer for interior and root nodes.
-pub(crate) const PAGE_TYPE_ROOT: u8 = 0x01;
+// pub(crate) const PAGE_TYPE_ROOT: u8 = 0x01;
 pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
 pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
 
@@ -57,7 +57,7 @@ impl<'a> LeafNode<'a> {
         self.0.put(key, value)
     }
 
-    pub fn iter(&self) -> NodeIterator<&[u8], &[u8]> {
+    pub fn iter(&self) -> SlotArrayIterator<&[u8], &[u8]> {
         self.0.iter()
     }
 }
@@ -139,8 +139,8 @@ where
         }
     }
 
-    pub fn iter(&self) -> NodeIterator<K, V> {
-        NodeIterator {
+    pub fn iter(&self) -> SlotArrayIterator<K, V> {
+        SlotArrayIterator {
             node: self,
             next_slot: 0,
             _marker: PhantomData,
@@ -259,13 +259,13 @@ where
     }
 }
 
-pub struct NodeIterator<'a, K, V> {
+pub struct SlotArrayIterator<'a, K, V> {
     node: &'a SlotArray<'a, K, V>,
     next_slot: u16,
     _marker: PhantomData<(K, V)>,
 }
 
-impl<'a, K, V> Iterator for NodeIterator<'a, K, V>
+impl<'a, K, V> Iterator for SlotArrayIterator<'a, K, V>
 where
     K: NodeKey,
     V: NodeValue,

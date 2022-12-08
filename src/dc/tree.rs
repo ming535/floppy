@@ -6,7 +6,7 @@ use crate::dc::{
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
-use crate::dc::tree_node::{PAGE_TYPE_INTERIOR, PAGE_TYPE_LEAF, PAGE_TYPE_ROOT};
+use crate::dc::tree_node::{PAGE_TYPE_INTERIOR, PAGE_TYPE_LEAF};
 use crate::env::Env;
 use std::path::Path;
 

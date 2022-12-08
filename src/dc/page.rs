@@ -12,7 +12,7 @@ pub(super) const PAGE_ID_ROOT: PageId = PageId(1);
 /// to identify other pages.
 ///
 /// `PageZero` is not used by the tree.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct PageId(pub(crate) u32);
 
 impl From<u32> for PageId {
