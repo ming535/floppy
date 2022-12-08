@@ -37,9 +37,9 @@ const PAGE_TYPE_ROOT: u8 = 0x01;
 const PAGE_TYPE_INTERIOR: u8 = 0x02;
 const PAGE_TYPE_LEAF: u8 = 0x04;
 
-pub(crate) trait NodeKey: Codec + Ord + Clone + fmt::Debug {}
+pub(crate) trait NodeKey: Codec + Ord + fmt::Debug {}
 
-pub(crate) trait NodeValue: Codec + Clone {}
+pub(crate) trait NodeValue: Codec {}
 
 pub(crate) struct TreeNode<'a, K, V> {
     page_frame: &'a mut BufferFrame,
