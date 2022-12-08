@@ -27,6 +27,11 @@ impl BufferFrame {
         u8::from_le_bytes(data[8..9].try_into().unwrap())
     }
 
+    pub fn set_page_type(&mut self, page_type: u8) {
+        let data = self.page_ptr.data_mut();
+        data[8..9].copy_from_slice(&page_type.to_le_bytes());
+    }
+
     pub fn payload<'a>(&self) -> &'a [u8] {
         &self.page_ptr.data()[9..]
     }

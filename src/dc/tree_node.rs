@@ -1,5 +1,6 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
+    buf_frame::BufferFrame,
     codec::{Codec, Decoder, Encoder},
     page::PageId,
 };
@@ -28,10 +29,9 @@ use std::{fmt, mem};
 ///                A zero value for this integer is interpreted as 65536.
 /// 7       1      The one-byte integer at offset 7 gives the number of
 ///                fragmented free bytes within the slot content area.
-/// 8       4      The four-byte integer at offset 8 is the right-child pointer
-///                for interior and root nodes.
-///                Leaf nodes don't have this field filled with 0 for
-///                simplicity.
+/// 8       4092   slotted array area.
+/// 4096    4      The four-byte integer at the end of a page is the right-child
+///                pointer for interior and root nodes.
 pub(crate) const PAGE_TYPE_ROOT: u8 = 0x01;
 pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
 pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
@@ -40,11 +40,55 @@ pub(crate) trait NodeKey: Codec + Ord + fmt::Debug {}
 
 pub(crate) trait NodeValue: Codec {}
 
-struct LeafNode<'a>(SlotArray<'a, &'a [u8], &'a [u8]>);
+/// The leaf node is a slog array with key and value encoded.
+pub(crate) struct LeafNode<'a>(SlotArray<'a, &'a [u8], &'a [u8]>);
 
-struct InteriorNode<'a>(SlotArray<'a, &'a [u8], PageId>);
+impl<'a> LeafNode<'a> {
+    pub fn from_frame(frame: &'a mut BufferFrame) -> Self {
+        let slot_array = SlotArray::from_data(frame.payload_mut());
+        Self(slot_array)
+    }
 
-pub(crate) struct SlotArray<'a, K, V> {
+    pub fn get(&self, key: &[u8]) -> Result<&[u8]> {
+        self.0.get(key)
+    }
+
+    pub fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.0.put(key, value)
+    }
+
+    pub fn iter(&self) -> NodeIterator<&[u8], &[u8]> {
+        self.0.iter()
+    }
+}
+
+/// The interior node has a slot array and a right child pointer.
+pub(crate) struct InteriorNode<'a>(SlotArray<'a, &'a [u8], PageId>, u32);
+
+impl<'a> InteriorNode<'a> {
+    pub fn from_frame(frame: &'a mut BufferFrame) -> Self {
+        let payload_len = frame.payload().len();
+        let slot_end = payload_len - 4;
+        let payload = frame.payload_mut();
+        let slot_array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
+        let right_child = u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap());
+        Self(slot_array, right_child)
+    }
+
+    pub fn get(&self, key: &[u8]) -> Result<PageId> {
+        self.0.get(key)
+    }
+
+    pub fn put(&mut self, key: &[u8], value: PageId) -> Result<()> {
+        self.0.put(key, value)
+    }
+
+    pub fn right_child(&self) -> PageId {
+        self.1.into()
+    }
+}
+
+struct SlotArray<'a, K, V> {
     data: &'a mut [u8],
     header: ArrayHeader,
     slot_ptrs: SlotPtrs,
@@ -56,11 +100,11 @@ where
     K: NodeKey,
     V: NodeValue,
 {
-    pub fn new(data: &'a mut [u8]) -> Self {
+    pub fn from_data(data: &'a mut [u8]) -> Self {
         let mut dec = Decoder::new(data);
         let header = unsafe { ArrayHeader::decode_from(&mut dec) };
-        let slot_ptr_data =
-            &(data[header.encode_size()..header.encode_size() + header.num_slots as usize * 2]);
+        let header_size = header.encode_size();
+        let slot_ptr_data = &(data[header_size..header_size + header.num_slots as usize * 2]);
         let mut dec = Decoder::new(slot_ptr_data);
         let slot_ptrs = unsafe { SlotPtrs::decode_from(&mut dec) };
 
@@ -243,12 +287,11 @@ struct ArrayHeader {
     num_slots: u16,
     slot_content_start: u16,
     fragmented_free_bytes: u8,
-    right_child: u32,
 }
 
 impl Codec for ArrayHeader {
     fn encode_size(&self) -> usize {
-        11
+        7
     }
 
     unsafe fn encode_to(&self, enc: &mut Encoder) {
@@ -256,7 +299,6 @@ impl Codec for ArrayHeader {
         enc.put_u16(self.num_slots);
         enc.put_u16(self.slot_content_start);
         enc.put_u8(self.fragmented_free_bytes);
-        enc.put_u32(self.right_child);
     }
 
     unsafe fn decode_from(dec: &mut Decoder) -> Self {
@@ -264,14 +306,12 @@ impl Codec for ArrayHeader {
         let num_slots = dec.get_u16();
         let slot_content_start = dec.get_u16();
         let fragmented_free_bytes = dec.get_u8();
-        let right_child = dec.get_u32();
 
         Self {
             freeblock,
             num_slots,
             slot_content_start,
             fragmented_free_bytes,
-            right_child,
         }
     }
 }
@@ -368,31 +408,31 @@ where
 mod tests {
     use super::*;
     use crate::common::error::Result;
-    use crate::dc::page::PagePtr;
+    use crate::dc::{buf_frame::BufferFrame, page::PagePtr};
 
     #[test]
     fn test_simple_put() -> Result<()> {
         let page_ptr = PagePtr::zero_content()?;
         let mut frame = BufferFrame::new(1.into(), page_ptr);
-        frame.payload_mut()[0] = PAGE_TYPE_LEAF;
-        let mut node: SlotArray<&[u8], &[u8]> = SlotArray::new(&mut frame);
+        frame.set_page_type(PAGE_TYPE_LEAF);
+        let mut leaf = LeafNode::from_frame(&mut frame);
 
-        node.put(b"2", b"2")?;
-        node.put(b"3", b"3")?;
-        node.put(b"1", b"1")?;
+        leaf.put(b"2", b"2")?;
+        leaf.put(b"3", b"3")?;
+        leaf.put(b"1", b"1")?;
 
-        assert_eq!(node.get(b"1")?, b"1");
-        assert_eq!(node.get(b"2")?, b"2");
+        assert_eq!(leaf.get(b"1")?, b"1");
+        assert_eq!(leaf.get(b"2")?, b"2");
 
-        let mut iter = node.iter();
+        let mut iter = leaf.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
         assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut node = SlotArray::new(&mut frame);
-        let mut iter = node.iter();
+        let mut leaf = LeafNode::from_frame(&mut frame);
+        let mut iter = leaf.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
         assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
