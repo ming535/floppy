@@ -1,3 +1,4 @@
+use crate::dc::node::NodeType;
 use crate::dc::page::{PageId, PagePtr};
 
 pub(crate) struct BufferFrame {
@@ -17,19 +18,20 @@ impl BufferFrame {
         }
     }
 
-    pub fn get_page_lsn(&self) -> u64 {
+    pub fn page_lsn(&self) -> u64 {
         let data = self.page_ptr.data();
         u64::from_le_bytes(data[0..8].try_into().unwrap())
     }
 
-    pub fn get_page_type(&self) -> u8 {
+    pub fn node_type(&self) -> NodeType {
         let data = self.page_ptr.data();
-        u8::from_le_bytes(data[8..9].try_into().unwrap())
+        u8::from_le_bytes(data[8..9].try_into().unwrap()).into()
     }
 
-    pub fn set_page_type(&mut self, page_type: u8) {
+    pub fn set_node_type(&mut self, node_type: NodeType) {
         let data = self.page_ptr.data_mut();
-        data[8..9].copy_from_slice(&page_type.to_le_bytes());
+        let type_flag: u8 = node_type.into();
+        data[8..9].copy_from_slice(&type_flag.to_le_bytes());
     }
 
     pub fn payload<'a>(&self) -> &'a [u8] {

@@ -2,11 +2,11 @@ use crate::common::error::Result;
 use crate::dc::{
     buf_frame::BufferFrame,
     buf_mgr::BufMgr,
+    node::{InteriorNode, LeafNode, NodeType},
     page::{PageId, PAGE_ID_ROOT},
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
-use crate::dc::tree_node::{PAGE_TYPE_INTERIOR, PAGE_TYPE_LEAF};
 use crate::env::Env;
 use std::path::Path;
 
@@ -47,24 +47,27 @@ where
         self.put_value(key, value, frame)
     }
 
-    fn find_leaf(&self, key: &[u8]) -> Result<&BufferFrame> {
+    fn find_leaf(&self, key: &[u8]) -> Result<&mut BufferFrame> {
         let mut page_id = PAGE_ID_ROOT;
         loop {
             let frame = self.buf_mgr.get_and_pin(page_id)?;
-            if frame.get_page_type() == PAGE_TYPE_LEAF {
-                return Ok(frame);
-            } else {
-                page_id = self.find_child(key, frame)?;
+            match frame.node_type() {
+                NodeType::Leaf => return Ok(frame),
+                NodeType::Interior => {
+                    page_id = self.find_child(key, frame)?;
+                }
             }
         }
     }
 
-    fn find_child(&self, key: &[u8], frame: &BufferFrame) -> Result<PageId> {
-        todo!()
+    fn find_child(&self, key: &[u8], frame: &mut BufferFrame) -> Result<PageId> {
+        let node = InteriorNode::from_frame(frame);
+        node.get(key)
     }
 
-    fn find_value(&self, key: &[u8], frame: &BufferFrame) -> Result<Option<Vec<u8>>> {
-        todo!()
+    fn find_value(&self, key: &[u8], frame: &mut BufferFrame) -> Result<Option<Vec<u8>>> {
+        let node = LeafNode::from_frame(frame);
+        node.get(key).map(|ov| ov.map(|v| v.into()))
     }
 
     fn put_value(&self, key: &[u8], value: &[u8], frame: &BufferFrame) -> Result<()> {
