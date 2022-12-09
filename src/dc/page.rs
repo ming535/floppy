@@ -21,12 +21,6 @@ impl From<u32> for PageId {
     }
 }
 
-// impl PageId {
-//     pub fn is_zero(&self) -> bool {
-//         self.0 == 0
-//     }
-// }
-
 pub(crate) struct PagePtr {
     buf: NonNull<u8>,
     size: usize,

@@ -63,28 +63,52 @@ impl<'a> LeafNode<'a> {
 }
 
 /// The interior node has a slot array and a right child pointer.
-pub(crate) struct InteriorNode<'a>(SlotArray<'a, &'a [u8], PageId>, u32);
+/// It consists of the following key value pairs:
+///
+/// (K0, P0), (K1, P2), ...(Ki, Pi), ... (Kn, Pn), Pn+1
+///
+/// Each pointer represents the following key range:
+///
+/// (-inf, K0], (K0, K1], ..., (Ki-1, Ki], ..., (Kn-1, Kn], (Kn, +inf)
+///
+/// Assuming the current keys are the following:
+/// 2, 5, 7, 9, 10, 299
+///
+/// When searching for key 8, the binary_search will return index 3.
+/// The pointer in index 3 covers the range (7, 9], so we can follow
+/// the pointer to the child page.
+///
+/// When searching for key 310, the binary_search will return index 6.
+/// The pointer index 6 is the "inf_pid", and covers the range
+/// (9, +inf). So we can follow the pointer to the child page.  
+pub(crate) struct InteriorNode<'a> {
+    array: SlotArray<'a, &'a [u8], PageId>,
+    inf_pid: PageId,
+}
 
 impl<'a> InteriorNode<'a> {
     pub fn from_frame(frame: &'a mut BufferFrame) -> Self {
         let payload_len = frame.payload().len();
         let slot_end = payload_len - 4;
         let payload = frame.payload_mut();
-        let right_child = u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap());
-        let slot_array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
-        Self(slot_array, right_child)
+        let inf_pid =
+            u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap()).into();
+        let array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
+        Self { array, inf_pid }
     }
 
     pub fn get(&self, key: &[u8]) -> Result<PageId> {
-        self.0.get(key)
+        todo!();
+        self.array.get(key)
     }
 
     pub fn put(&mut self, key: &'a [u8], value: PageId) -> Result<()> {
-        self.0.put(key, value)
+        todo!();
+        self.array.put(key, value)
     }
 
     pub fn right_child(&self) -> PageId {
-        self.1.into()
+        self.inf_pid
     }
 }
 
