@@ -62,7 +62,7 @@ where
 
     fn find_child(&self, key: &[u8], frame: &mut BufferFrame) -> Result<PageId> {
         let node = InteriorNode::from_frame(frame);
-        node.get(key)
+        node.get_child(key)
     }
 
     fn find_value(&self, key: &[u8], frame: &mut BufferFrame) -> Result<Option<Vec<u8>>> {

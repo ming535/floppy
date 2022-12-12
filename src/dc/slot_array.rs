@@ -68,7 +68,7 @@ where
         Err(left)
     }
 
-    pub fn put_at(&mut self, slot: usize, key: K, value: V) -> Result<()> {
+    pub fn insert_at(&mut self, slot: usize, key: K, value: V) -> Result<()> {
         let record = Record {
             flag: 0,
             key,
@@ -113,6 +113,23 @@ where
         unsafe {
             self.header.encode_to(&mut header_enc);
             self.slot_ptrs.encode_to(&mut slot_ptr_enc);
+        }
+        Ok(())
+    }
+
+    pub fn update_at(&mut self, slot: usize, value: V) -> Result<()> {
+        let mut record: Record<K, V>;
+        let slot_offset = self.slot_ptrs.0[slot];
+        let buf = self.data[slot_offset as usize..].as_mut();
+        let mut dec = Decoder::new(buf);
+        unsafe {
+            record = Record::decode_from(&mut dec);
+            record.value = value;
+        }
+
+        let mut enc = Encoder::new(buf);
+        unsafe {
+            record.encode_to(&mut enc);
         }
         Ok(())
     }

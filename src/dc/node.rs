@@ -95,7 +95,7 @@ impl<'a> LeafNode<'a> {
                 "Key {:?} already exists",
                 key
             )))),
-            Err(slot) => self.array.put_at(slot, key, value),
+            Err(slot) => self.array.insert_at(slot, key, value),
         }
     }
 
@@ -114,15 +114,28 @@ impl<'a> LeafNode<'a> {
 /// (-inf, K0], (K0, K1], ..., (Ki-1, Ki], ..., (Kn-1, Kn], (Kn, +inf)
 ///
 /// Assuming the current keys are the following:
-/// 2, 5, 7, 9, 10, 299
+///
+/// {2, P10}, {5, P2}, {7, P15}, {9, P24}, {10, P25}, {299, P4}, {+inf, P88}
 ///
 /// When searching for key 8, the binary_search will return index 3.
 /// The pointer in index 3 covers the range (7, 9], so we can follow
-/// the pointer to the child page.
+/// the pointer to the child page 24.
 ///
 /// When searching for key 310, the binary_search will return index 6.
 /// The pointer index 6 is the "inf_pid", and covers the range
-/// (9, +inf). So we can follow the pointer to the child page.  
+/// (9, +inf). So we can follow the pointer to the child page 88.
+///
+/// When P2 is split into two pages P2 and P2-right, where the split key is S.
+/// P2: K <= S, P2-right: K > S.
+/// We change the following entries:
+/// 1. Add a new entry {S, P2}
+/// 2. Replace the entry {5, P2} with {5, P2-right}
+///
+/// When P88 is split into two pages P88 and P88-right, where the split key is S.
+/// P88: K <=S, P88-right: K > S.
+/// We change the following entries:
+/// 1. Add a new entry {S, P88}
+/// 2. Replace the entry {+inf, P88} with {+inf, P88-right}
 pub(crate) struct InteriorNode<'a> {
     array: SlotArray<'a, &'a [u8], PageId>,
     inf_pid: PageId,
@@ -135,11 +148,11 @@ impl<'a> InteriorNode<'a> {
         let payload = frame.payload_mut();
         let inf_pid =
             u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap()).into();
-        let array = SlotArray::from_data(&mut payload[slot_end..payload_len]);
+        let array = SlotArray::from_data(&mut payload[..slot_end]);
         Self { array, inf_pid }
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<PageId> {
+    pub fn get_child(&self, key: &[u8]) -> Result<PageId> {
         let index = match self.array.rank(key) {
             Err(pos) => pos,
             Ok(pos) => pos,
@@ -154,20 +167,26 @@ impl<'a> InteriorNode<'a> {
         Ok(pid)
     }
 
-    pub fn put(&mut self, key: &'a [u8], value: PageId) -> Result<()> {
+    /// Insert a new entry into the interior node, and returns the rank when success.
+    pub fn insert(&mut self, key: &'a [u8], value: PageId) -> Result<usize> {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
                 key
             )))),
             Err(pos) => {
-                if pos == self.array.num_slots() as usize {
-                    self.inf_pid = value;
-                    Ok(())
-                } else {
-                    self.array.put_at(pos, key, value)
-                }
+                self.array.insert_at(pos, key, value)?;
+                Ok(pos)
             }
+        }
+    }
+
+    pub fn update(&mut self, pos: usize, value: PageId) -> Result<()> {
+        if pos == self.array.num_slots() as usize {
+            self.inf_pid = value;
+            Ok(())
+        } else {
+            self.array.update_at(pos, value)
         }
     }
 }
@@ -243,6 +262,27 @@ mod tests {
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
         assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
         assert_eq!(iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_simple_interior() -> Result<()> {
+        let page_ptr = PagePtr::zero_content()?;
+        let mut frame = BufferFrame::new(1.into(), page_ptr);
+        frame.set_node_type(NodeType::Interior);
+        let mut node = InteriorNode::from_frame(&mut frame);
+
+        node.insert(b"2", 2.into())?;
+        let pos = node.insert(b"3", 3.into())?;
+        // update inf_pid
+        node.update(pos + 1, 100.into());
+        node.insert(b"1", 1.into())?;
+
+        assert_eq!(node.get_child(b"1")?, PageId(1));
+        assert_eq!(node.get_child(b"2")?, PageId(2));
+        assert_eq!(node.get_child(b"3")?, PageId(3));
+        assert_eq!(node.get_child(b"001")?, PageId(1));
+        assert_eq!(node.get_child(b"4")?, PageId(100));
         Ok(())
     }
 }
