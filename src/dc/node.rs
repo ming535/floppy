@@ -167,6 +167,16 @@ impl<'a> InteriorNode<'a> {
         Ok(pid)
     }
 
+    pub fn add_index(
+        &mut self,
+        split_key: &'a [u8],
+        left_pid: PageId,
+        right_pid: PageId,
+    ) -> Result<()> {
+        let pos = self.insert(split_key, left_pid)?;
+        self.update(pos + 1, right_pid)
+    }
+
     /// Insert a new entry into the interior node, and returns the rank when success.
     pub fn insert(&mut self, key: &'a [u8], value: PageId) -> Result<usize> {
         match self.array.rank(key) {
@@ -272,17 +282,23 @@ mod tests {
         frame.set_node_type(NodeType::Interior);
         let mut node = InteriorNode::from_frame(&mut frame);
 
-        node.insert(b"2", 2.into())?;
-        let pos = node.insert(b"3", 3.into())?;
-        // update inf_pid
-        node.update(pos + 1, 100.into());
-        node.insert(b"1", 1.into())?;
-
+        // P1, (2), P2
+        node.add_index(b"2", 1.into(), 2.into())?;
+        // P1, (2), P3, (5), P4
+        node.add_index(b"5", 3.into(), 4.into())?;
+        // P1, (2), P8, (3), P9, (5), P4
+        node.add_index(b"3", 8.into(), 9.into())?;
         assert_eq!(node.get_child(b"1")?, PageId(1));
-        assert_eq!(node.get_child(b"2")?, PageId(2));
-        assert_eq!(node.get_child(b"3")?, PageId(3));
-        assert_eq!(node.get_child(b"001")?, PageId(1));
-        assert_eq!(node.get_child(b"4")?, PageId(100));
+        assert_eq!(node.get_child(b"2")?, PageId(1));
+
+        assert_eq!(node.get_child(b"2000")?, PageId(8));
+        assert_eq!(node.get_child(b"3")?, PageId(8));
+
+        assert_eq!(node.get_child(b"3000")?, PageId(9));
+        assert_eq!(node.get_child(b"4")?, PageId(9));
+        assert_eq!(node.get_child(b"5")?, PageId(9));
+
+        assert_eq!(node.get_child(b"50")?, PageId(4));
         Ok(())
     }
 }
