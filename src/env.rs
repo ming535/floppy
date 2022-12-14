@@ -75,6 +75,8 @@ pub trait PositionalReader: Send + Sync + 'static {
     ///
     /// Returns the number of bytes read.
     fn read_at<'a>(&'a self, buf: &'a mut [u8], pos: u64) -> Self::ReadAt<'a>;
+
+    async fn file_size(&self) -> usize;
 }
 
 /// Extension methods for [`PositionalReader`].
@@ -129,12 +131,12 @@ pub trait PositionalWriter: Send + Sync + 'static {
     /// disk.
     ///
     /// Returns Ok when success.
-    async fn sync_data(&mut self) -> Result<()>;
+    async fn sync_data(&self) -> Result<()>;
 
     /// Synchronizes all modified content and metadata of this file to disk.
     ///
     /// Returns Ok when success.
-    async fn sync_all(&mut self) -> Result<()>;
+    async fn sync_all(&self) -> Result<()>;
 }
 
 /// Extension methods for [`PositionalWriter`].

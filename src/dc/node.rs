@@ -1,6 +1,6 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_frame::BufferFrame,
+    buf_frame::{BufferFrame, BufferFrameRef},
     codec::{Codec, Decoder, Encoder},
     page::PageId,
     slot_array::{SlotArray, SlotArrayIterator},
@@ -70,7 +70,7 @@ pub(crate) struct LeafNode<'a> {
 }
 
 impl<'a> LeafNode<'a> {
-    pub fn from_frame(frame: &'a mut BufferFrame) -> Self {
+    pub fn from_frame(frame: &mut BufferFrame) -> Self {
         let array = SlotArray::from_data(frame.payload_mut());
         Self { array }
     }
@@ -142,7 +142,7 @@ pub(crate) struct InteriorNode<'a> {
 }
 
 impl<'a> InteriorNode<'a> {
-    pub fn from_frame(frame: &'a mut BufferFrame) -> Self {
+    pub fn from_frame(frame: &mut BufferFrame) -> Self {
         let payload_len = frame.payload().len();
         let slot_end = payload_len - 4;
         let payload = frame.payload_mut();

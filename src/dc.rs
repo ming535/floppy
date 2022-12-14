@@ -1,7 +1,7 @@
 mod buf_frame;
 mod buf_mgr;
 mod codec;
-mod lru;
+mod eviction_strategy;
 mod node;
 mod page;
 mod page_wal;

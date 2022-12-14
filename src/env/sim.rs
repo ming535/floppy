@@ -89,11 +89,11 @@ impl super::PositionalWriter for SimMem {
         }
     }
 
-    async fn sync_data(&mut self) -> Result<()> {
+    async fn sync_data(&self) -> Result<()> {
         Ok(())
     }
 
-    async fn sync_all(&mut self) -> Result<()> {
+    async fn sync_all(&self) -> Result<()> {
         Ok(())
     }
 }
@@ -113,6 +113,10 @@ impl PositionalReader for SimMem {
             buf[..copy_size].copy_from_slice(&unread[..copy_size]);
             Ok(copy_size)
         }
+    }
+
+    fn file_size(&self) -> usize {
+        async move { self.0.lock().await.len() }
     }
 }
 

@@ -1,21 +1,44 @@
-use crate::dc::node::NodeType;
-use crate::dc::page::{PageId, PagePtr};
+use crate::dc::{
+    node::NodeType,
+    page::{PageId, PagePtr},
+};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc, Mutex, MutexGuard,
+};
 
 pub(crate) struct BufferFrame {
     page_id: PageId,
     page_ptr: PagePtr,
-    pin_count: usize,
+    fix_count: AtomicI64,
     dirty: bool,
+}
+
+pub(crate) type BufferFrameRef = Arc<Mutex<BufferFrame>>;
+
+pub(crate) struct BufferFrameGuard<'a> {
+    pub(crate) frame: Arc<Mutex<BufferFrame>>,
+    pub(crate) guard: MutexGuard<'a, BufferFrame>,
 }
 
 impl BufferFrame {
     pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
         Self {
-            page_id: page_id,
+            page_id,
             page_ptr,
-            pin_count: 0,
+            fix_count: AtomicI64::new(0),
             dirty: false,
         }
+    }
+
+    pub fn init(&mut self) {}
+
+    pub fn page_ptr(&self) -> &PagePtr {
+        &self.page_ptr
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     pub fn page_lsn(&self) -> u64 {
@@ -40,5 +63,13 @@ impl BufferFrame {
 
     pub fn payload_mut<'a>(&mut self) -> &'a mut [u8] {
         &mut self.page_ptr.data_mut()[9..]
+    }
+
+    pub fn fix(&self) -> i64 {
+        self.fix_count.fetch_add(1, Ordering::Release)
+    }
+
+    pub fn unfix(&self) -> i64 {
+        self.fix_count.fetch_add(-1, Ordering::Release)
     }
 }

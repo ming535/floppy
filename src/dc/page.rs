@@ -12,12 +12,18 @@ pub(super) const PAGE_ID_ROOT: PageId = PageId(1);
 /// to identify other pages.
 ///
 /// `PageZero` is not used by the tree.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub(crate) struct PageId(pub(crate) u32);
 
 impl From<u32> for PageId {
     fn from(v: u32) -> Self {
         PageId(v)
+    }
+}
+
+impl PageId {
+    pub fn pos(&self, page_size: usize) -> usize {
+        self.0 as usize * page_size
     }
 }
 
@@ -46,7 +52,7 @@ impl PagePtr {
         unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.size) }
     }
 
-    pub fn data_mut<'a>(&mut self) -> &'a mut [u8] {
+    pub fn data_mut<'a>(&self) -> &'a mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
 }

@@ -50,6 +50,7 @@ pub enum DCError {
     SpaceExhaustedInPage(String),
     KeyNotFound(String),
     KeyAlreadyExists(String),
+    PageNotFound(String),
 }
 
 /// Create a "field not found" Floppy::SchemaError

@@ -107,11 +107,11 @@ impl super::PositionalWriter for PositionalReaderWriter {
         async move { self.0.write_at(buf, offset) }
     }
 
-    async fn sync_data(&mut self) -> Result<()> {
+    async fn sync_data(&self) -> Result<()> {
         async move { self.0.sync_data() }.await
     }
 
-    async fn sync_all(&mut self) -> Result<()> {
+    async fn sync_all(&self) -> Result<()> {
         async move { self.0.sync_all() }.await
     }
 }
