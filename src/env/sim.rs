@@ -98,6 +98,7 @@ impl super::PositionalWriter for SimMem {
     }
 }
 
+#[async_trait]
 impl PositionalReader for SimMem {
     type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
 
@@ -115,8 +116,8 @@ impl PositionalReader for SimMem {
         }
     }
 
-    fn file_size(&self) -> usize {
-        async move { self.0.lock().await.len() }
+    async fn file_size(&self) -> usize {
+        self.0.lock().await.len()
     }
 }
 

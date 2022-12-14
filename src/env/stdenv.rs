@@ -125,6 +125,10 @@ impl super::PositionalReader for PositionalReaderWriter {
         use std::os::unix::fs::FileExt;
         async move { self.0.read_at(buf, offset) }
     }
+
+    async fn file_size(&self) -> usize {
+        todo!()
+    }
 }
 
 impl super::DioEnabler for PositionalReaderWriter {
