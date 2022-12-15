@@ -50,21 +50,22 @@ where
 
     async fn find_leaf(&self, key: &[u8]) -> Result<BufferFrameGuard> {
         let mut page_id = PAGE_ID_ROOT;
+        let mut guard = self.buf_mgr.fix_page(page_id).await?;
         loop {
-            let guard = self.buf_mgr.fix_page(page_id).await?;
-            {
-                match guard.node_type() {
-                    NodeType::Leaf => return Ok(guard),
-                    NodeType::Interior => {
-                        page_id = self.find_child(key, guard)?;
-                    }
+            match guard.node_type() {
+                NodeType::Leaf => return Ok(guard),
+                NodeType::Interior => {
+                    page_id = self.find_child(key, &mut guard)?;
+                    let child_guard = self.buf_mgr.fix_page(page_id).await?;
+                    // this will drop the parent node's guard while we hold the child node's guard.
+                    guard = child_guard;
                 }
             }
         }
     }
 
-    fn find_child(&self, key: &[u8], mut parent_guard: BufferFrameGuard) -> Result<PageId> {
-        let node = InteriorNode::from_frame(&mut parent_guard);
+    fn find_child(&self, key: &[u8], parent_guard: &mut BufferFrameGuard) -> Result<PageId> {
+        let node = InteriorNode::from_frame(parent_guard);
         node.get_child(key)
     }
 
