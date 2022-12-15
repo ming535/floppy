@@ -87,13 +87,14 @@ where
     }
 
     /// Flush the page content to disk.
-    pub async fn flush_page(&self, frame: BufferFrameRef) -> Result<()> {
+    pub async fn flush_page(&self, frame: &BufferFrame) -> Result<()> {
         todo!()
     }
 
     /// Get a page from the buffer pool.
+    /// This page is fixed in the buffer pool,so that is won't be evicted.
     /// If the page is not in the buffer pool, we read it from disk.
-    pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameRef> {
+    pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameGuard> {
         if page_id >= self.next_page_id {
             return Err(FloppyError::DC(DCError::PageNotFound(format!(
                 "page not found, page_id = {:?}",
@@ -104,34 +105,34 @@ where
         let entry = self.active_pages.get(&page_id);
         if let Some(entry) = entry {
             let frame = entry.value();
-            let guard = frame.lock().unwrap();
-            guard.fix();
-            Ok(frame.clone())
-        } else {
-            Err(FloppyError::DC(DCError::PageNotFound(format!(
-                "page not found, page_id = {:?}",
-                page_id
-            ))))
-
-            // let frame = self.eviction_pages.evict();
-            //
+            Ok(BufferFrameGuard::new(frame.clone()).await)
             // let guard = frame.lock().unwrap();
-            // if guard.is_dirty() {
-            //     self.flush_page(frame.clone()).await?;
-            // }
-            //
-            // // refactor this to read_page
-            // let file = self.env.open_file(self.file_path.as_path()).await?;
-            // let pos = page_id.0 as u64 * PAGE_SIZE as u64;
-            // file.read_exact_at(guard.page_ptr().data_mut(), pos).await?;
-            //
-            // self.active_pages.insert(page_id, frame.clone());
+            // guard.fix();
             // Ok(frame.clone())
+        } else {
+            let frame = self.eviction_pages.evict();
+            let mut guard = BufferFrameGuard::new(frame.clone()).await;
+            if guard.is_dirty() {
+                self.flush_page(&guard).await?;
+            }
+
+            self.read_page(page_id, &mut guard).await?;
+            self.active_pages.insert(page_id, frame.clone());
+            Ok(guard)
         }
     }
 
     /// Unpin a page, so that it can be evicted from the buffer pool.
     pub fn unfix_page(&self, page_id: PageId) -> Result<()> {
         todo!()
+    }
+
+    async fn read_page(&self, page_id: PageId, frame: &mut BufferFrame) -> Result<()> {
+        let file = self.env.open_file(self.file_path.as_path()).await?;
+        let pos = page_id.0 as u64 * PAGE_SIZE as u64;
+        match file.read_exact_at(frame.page_ptr().data_mut(), pos).await {
+            Err(e) => Err(FloppyError::Io(e)),
+            Ok(_) => Ok(()),
+        }
     }
 }

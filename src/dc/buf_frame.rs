@@ -2,10 +2,13 @@ use crate::dc::{
     node::NodeType,
     page::{PageId, PagePtr},
 };
+use std::ops::{Deref, DerefMut};
 use std::sync::{
     atomic::{AtomicI64, Ordering},
-    Arc, Mutex, MutexGuard,
+    Arc,
 };
+
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 pub(crate) struct BufferFrame {
     page_id: PageId,
@@ -16,9 +19,36 @@ pub(crate) struct BufferFrame {
 
 pub(crate) type BufferFrameRef = Arc<Mutex<BufferFrame>>;
 
-pub(crate) struct BufferFrameGuard<'a> {
-    pub(crate) frame: Arc<Mutex<BufferFrame>>,
-    pub(crate) guard: MutexGuard<'a, BufferFrame>,
+pub(crate) struct BufferFrameGuard {
+    _guard: OwnedMutexGuard<BufferFrame>,
+}
+
+impl Deref for BufferFrameGuard {
+    type Target = BufferFrame;
+
+    fn deref(&self) -> &Self::Target {
+        &self._guard
+    }
+}
+
+impl DerefMut for BufferFrameGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self._guard
+    }
+}
+
+impl BufferFrameGuard {
+    pub async fn new(frame: BufferFrameRef) -> Self {
+        let guard = frame.clone().lock_owned().await;
+        guard.fix();
+        Self { _guard: guard }
+    }
+}
+
+impl Drop for BufferFrameGuard {
+    fn drop(&mut self) {
+        self._guard.unfix();
+    }
 }
 
 impl BufferFrame {
