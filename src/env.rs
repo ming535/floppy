@@ -4,9 +4,8 @@
 mod sim;
 mod stdenv;
 
+use async_trait::async_trait;
 use std::{future::Future, io::Result, path::Path};
-
-pub use async_trait::async_trait;
 
 /// Provides an environment to interact with a specific platform.
 #[async_trait]

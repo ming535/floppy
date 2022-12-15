@@ -1,15 +1,16 @@
 use crate::common::error::{DCError, FloppyError, Result};
-use crate::dc::buf_frame::BufferFrameGuard;
 use crate::dc::{
-    buf_frame::{BufferFrame, BufferFrameRef},
+    buf_frame::{BufferFrame, BufferFrameGuard, BufferFrameRef},
     eviction_strategy::EvictionPool,
     page::{PageId, PagePtr, PAGE_SIZE},
 };
 use crate::env::*;
 use dashmap::DashMap;
-use std::borrow::BorrowMut;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    borrow::BorrowMut,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::fs::OpenOptions;
 
 /// BufferPool manages the in memory cache AND file usage of pages.
@@ -90,7 +91,7 @@ where
         todo!()
     }
 
-    /// Get a page from the buffer pool. Returns a guard which locks the frame.
+    /// Get a page from the buffer pool.
     /// If the page is not in the buffer pool, we read it from disk.
     pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameRef> {
         if page_id >= self.next_page_id {
