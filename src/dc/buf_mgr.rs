@@ -91,8 +91,8 @@ where
         todo!()
     }
 
-    /// Get a page from the buffer pool.
-    /// This page is fixed in the buffer pool,so that is won't be evicted.
+    /// Fix and lock a page frame in the buffer pool.
+    /// "Fix" means the page won't be evicted.
     /// If the page is not in the buffer pool, we read it from disk.
     pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameGuard> {
         if page_id >= self.next_page_id {
@@ -106,9 +106,6 @@ where
         if let Some(entry) = entry {
             let frame = entry.value();
             Ok(BufferFrameGuard::new(frame.clone()).await)
-            // let guard = frame.lock().unwrap();
-            // guard.fix();
-            // Ok(frame.clone())
         } else {
             let frame = self.eviction_pages.evict();
             let mut guard = BufferFrameGuard::new(frame.clone()).await;
@@ -120,11 +117,6 @@ where
             self.active_pages.insert(page_id, frame.clone());
             Ok(guard)
         }
-    }
-
-    /// Unpin a page, so that it can be evicted from the buffer pool.
-    pub fn unfix_page(&self, page_id: PageId) -> Result<()> {
-        todo!()
     }
 
     async fn read_page(&self, page_id: PageId, frame: &mut BufferFrame) -> Result<()> {
