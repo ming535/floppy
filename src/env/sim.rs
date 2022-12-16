@@ -12,6 +12,8 @@ use tokio::sync::Mutex;
 #[derive(Clone, Debug)]
 pub struct SimEnv;
 
+pub const SimPath: &str = "sim";
+
 #[async_trait]
 impl Env for SimEnv {
     type PositionalReaderWriter = SimMem;

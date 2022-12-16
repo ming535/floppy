@@ -23,11 +23,8 @@ where
     /// All interior pages are read into buffer pool.
     pub async fn open<P: AsRef<Path>>(path: P, env: E) -> Result<Self> {
         let buf_mgr = BufMgr::open(env, path, 1000).await?;
-        // get_and_pin will extend the file if the page does not exist.
-        let root = buf_mgr.fix_page(PAGE_ID_ROOT).await?;
-        // let root_node = SlotArray::<&[u8], PageId>::new(root);
-        todo!()
-        // load all interior node into buffer pool.
+        Self::init_index(&buf_mgr).await?;
+        Ok(Self { buf_mgr })
     }
 
     pub fn close() -> Result<()> {
@@ -47,17 +44,18 @@ where
         self.put_value(key, value, leaf_guard)
     }
 
-    async fn init_root(&self) -> Result<()> {
-        match self.buf_mgr.fix_page(PAGE_ID_ROOT).await {
+    /// init root node if not exists
+    async fn init_index(buf_mgr: &BufMgr<E>) -> Result<()> {
+        match buf_mgr.fix_page(PAGE_ID_ROOT).await {
             Err(FloppyError::DC(DCError::PageNotFound(_))) => {
-                let frame = self.buf_mgr.alloc_page().await?;
-                // frame.set_
-                todo!()
+                let guard = buf_mgr.alloc_page().await?;
+                assert_eq!(guard.page_id(), PAGE_ID_ROOT);
+                Ok(())
             }
-            _ => todo!("root page already exists"),
+            Err(e) => Err(e),
+            Ok(_) => Ok(()),
         }
-
-        todo!()
+        // todo read all interior pages into buffer pool
     }
 
     async fn find_leaf(&self, key: &[u8]) -> Result<BufferFrameGuard> {
@@ -89,5 +87,21 @@ where
     fn put_value(&self, key: &[u8], value: &[u8], mut guard: BufferFrameGuard) -> Result<()> {
         let mut node = LeafNode::from_data(guard.payload_mut());
         node.put(key, value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::env::sim::{SimEnv, SimPath};
+
+    #[tokio::test]
+    async fn test_simple() -> Result<()> {
+        let env = SimEnv;
+        let tree = Tree::open(SimPath, env).await?;
+        tree.put(b"1", b"1").await?;
+        let v = tree.get(b"1").await?;
+        assert_eq!(v, Some(b"1".to_vec()));
+        Ok(())
     }
 }

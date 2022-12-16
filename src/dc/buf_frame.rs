@@ -21,6 +21,12 @@ impl BufferFrame {
             inner: Arc::new(Mutex::new(BufferFrameInner::new(page_id, page_ptr))),
         }
     }
+
+    pub async fn guard(&self) -> BufferFrameGuard {
+        let guard = self.inner.clone().lock_owned().await;
+        guard.fix();
+        BufferFrameGuard { _guard: guard }
+    }
 }
 
 pub(crate) struct BufferFrameInner {
@@ -41,6 +47,10 @@ impl BufferFrameInner {
     }
 
     pub fn init(&mut self) {}
+    
+    pub fn page_id(&self) -> PageId {
+        self.page_id
+    }
 
     pub fn page_ptr(&self) -> &PagePtr {
         &self.page_ptr

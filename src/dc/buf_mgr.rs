@@ -72,10 +72,13 @@ where
     /// To allocate a page, we first check if there is a free page in the
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
-    pub async fn alloc_page(&self) -> Result<BufferFrame> {
+    pub async fn alloc_page(&self) -> Result<BufferFrameGuard> {
         let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release).into();
         let page_ptr = PagePtr::zero_content()?;
-        Ok(BufferFrame::new(page_id, page_ptr))
+        let frame = BufferFrame::new(page_id, page_ptr);
+        let guard = frame.guard().await;
+        self.active_pages.insert(page_id, frame);
+        Ok(guard)
     }
 
     /// Free a page in the buffer pool. This happens when a node in the tree

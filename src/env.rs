@@ -1,8 +1,8 @@
 //! Environments for Floppy to interact with different runtimes and platforms.
 //! `Env` code is copied from photondb, with some modifications.
 
-mod sim;
-mod stdenv;
+pub mod sim;
+pub mod stdenv;
 
 use async_trait::async_trait;
 use std::{future::Future, io::Result, path::Path};
