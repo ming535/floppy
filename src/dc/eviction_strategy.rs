@@ -1,4 +1,4 @@
-use crate::dc::buf_frame::BufferFrameRef;
+use crate::dc::buf_frame::BufferFrame;
 
 pub(crate) struct EvictionPool {}
 
@@ -8,15 +8,15 @@ impl EvictionPool {
     }
 
     /// Makes the page held by `BufferFrame` a candidate for eviction.
-    pub fn insert(&self, frame: BufferFrameRef) {}
+    pub fn insert(&self, frame: BufferFrame) {}
 
     /// Ensures the page held by `BufferFrame` is no longer a candidate for eviction.
-    pub fn delete(&self, frame: BufferFrameRef) {}
+    pub fn delete(&self, frame: BufferFrame) {}
 
     /// Evicts a page previously marked as a candidate for eviction (if any),
     /// following the LRU eviction strategy.
     /// `BufferFrameManager` can use this frame after call this method.
-    pub fn evict(&self) -> BufferFrameRef {
+    pub fn evict(&self) -> BufferFrame {
         todo!()
     }
 }

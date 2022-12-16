@@ -10,48 +10,27 @@ use std::sync::{
 
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
+#[derive(Clone)]
 pub(crate) struct BufferFrame {
+    inner: Arc<Mutex<BufferFrameInner>>,
+}
+
+impl BufferFrame {
+    pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(BufferFrameInner::new(page_id, page_ptr))),
+        }
+    }
+}
+
+pub(crate) struct BufferFrameInner {
     page_id: PageId,
     page_ptr: PagePtr,
     fix_count: AtomicI64,
     dirty: bool,
 }
 
-pub(crate) type BufferFrameRef = Arc<Mutex<BufferFrame>>;
-
-pub(crate) struct BufferFrameGuard {
-    _guard: OwnedMutexGuard<BufferFrame>,
-}
-
-impl Deref for BufferFrameGuard {
-    type Target = BufferFrame;
-
-    fn deref(&self) -> &Self::Target {
-        &self._guard
-    }
-}
-
-impl DerefMut for BufferFrameGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self._guard
-    }
-}
-
-impl BufferFrameGuard {
-    pub async fn new(frame: BufferFrameRef) -> Self {
-        let guard = frame.clone().lock_owned().await;
-        guard.fix();
-        Self { _guard: guard }
-    }
-}
-
-impl Drop for BufferFrameGuard {
-    fn drop(&mut self) {
-        self._guard.unfix();
-    }
-}
-
-impl BufferFrame {
+impl BufferFrameInner {
     pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
         Self {
             page_id,
@@ -101,5 +80,37 @@ impl BufferFrame {
 
     pub fn unfix(&self) -> i64 {
         self.fix_count.fetch_add(-1, Ordering::Release)
+    }
+}
+
+pub(crate) struct BufferFrameGuard {
+    _guard: OwnedMutexGuard<BufferFrameInner>,
+}
+
+impl Deref for BufferFrameGuard {
+    type Target = BufferFrameInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self._guard
+    }
+}
+
+impl DerefMut for BufferFrameGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self._guard
+    }
+}
+
+impl BufferFrameGuard {
+    pub async fn new(frame: BufferFrame) -> Self {
+        let guard = frame.inner.clone().lock_owned().await;
+        guard.fix();
+        Self { _guard: guard }
+    }
+}
+
+impl Drop for BufferFrameGuard {
+    fn drop(&mut self) {
+        self._guard.unfix();
     }
 }

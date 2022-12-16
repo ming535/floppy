@@ -1,6 +1,5 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_frame::{BufferFrame, BufferFrameRef},
     codec::{Codec, Decoder, Encoder},
     page::PageId,
     slot_array::{SlotArray, SlotArrayIterator},
@@ -70,8 +69,8 @@ pub(crate) struct LeafNode<'a> {
 }
 
 impl<'a> LeafNode<'a> {
-    pub fn from_frame(frame: &mut BufferFrame) -> Self {
-        let array = SlotArray::from_data(frame.payload_mut());
+    pub fn from_data(data: &'a mut [u8]) -> Self {
+        let array = SlotArray::from_data(data);
         Self { array }
     }
 
@@ -142,13 +141,11 @@ pub(crate) struct InteriorNode<'a> {
 }
 
 impl<'a> InteriorNode<'a> {
-    pub fn from_frame(frame: &mut BufferFrame) -> Self {
-        let payload_len = frame.payload().len();
+    pub fn from_data(data: &'a mut [u8]) -> Self {
+        let payload_len = data.len();
         let slot_end = payload_len - 4;
-        let payload = frame.payload_mut();
-        let inf_pid =
-            u32::from_le_bytes(payload[slot_end - 4..slot_end].try_into().unwrap()).into();
-        let array = SlotArray::from_data(&mut payload[..slot_end]);
+        let inf_pid = u32::from_le_bytes(data[slot_end - 4..slot_end].try_into().unwrap()).into();
+        let array = SlotArray::from_data(&mut data[..slot_end]);
         Self { array, inf_pid }
     }
 
@@ -242,14 +239,12 @@ impl NodeValue for PageId {}
 mod tests {
     use super::*;
     use crate::common::error::Result;
-    use crate::dc::{buf_frame::BufferFrame, page::PagePtr};
+    use crate::dc::page::PagePtr;
 
     #[test]
     fn test_simple_leaf() -> Result<()> {
         let page_ptr = PagePtr::zero_content()?;
-        let mut frame = BufferFrame::new(1.into(), page_ptr);
-        frame.set_node_type(NodeType::Leaf);
-        let mut leaf = LeafNode::from_frame(&mut frame);
+        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
 
         leaf.put(b"2", b"2")?;
         leaf.put(b"3", b"3")?;
@@ -266,7 +261,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut leaf = LeafNode::from_frame(&mut frame);
+        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
         let mut iter = leaf.iter();
         assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
@@ -278,9 +273,7 @@ mod tests {
     #[test]
     fn test_simple_interior() -> Result<()> {
         let page_ptr = PagePtr::zero_content()?;
-        let mut frame = BufferFrame::new(1.into(), page_ptr);
-        frame.set_node_type(NodeType::Interior);
-        let mut node = InteriorNode::from_frame(&mut frame);
+        let mut node = InteriorNode::from_data(page_ptr.data_mut());
 
         // P1, (2), P2
         node.add_index(b"2", 1.into(), 2.into())?;

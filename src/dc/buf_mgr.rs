@@ -1,17 +1,15 @@
 use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_frame::{BufferFrame, BufferFrameGuard, BufferFrameRef},
+    buf_frame::{BufferFrame, BufferFrameGuard},
     eviction_strategy::EvictionPool,
     page::{PageId, PagePtr, PAGE_SIZE},
 };
 use crate::env::*;
 use dashmap::DashMap;
 use std::{
-    borrow::BorrowMut,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::atomic::{AtomicI64, Ordering},
 };
-use tokio::fs::OpenOptions;
 
 /// BufferPool manages the in memory cache AND file usage of pages.
 ///
@@ -36,10 +34,10 @@ use tokio::fs::OpenOptions;
 /// 3. LruList: The pages that are tracked by the LRU algorithm.
 pub(crate) struct BufMgr<E: Env> {
     env: E,
-    active_pages: DashMap<PageId, BufferFrameRef>,
+    active_pages: DashMap<PageId, BufferFrame>,
     eviction_pages: EvictionPool,
     file_path: PathBuf,
-    next_page_id: PageId,
+    next_page_id: AtomicI64,
 }
 
 impl<E> BufMgr<E>
@@ -65,7 +63,7 @@ where
             active_pages: DashMap::new(),
             eviction_pages: EvictionPool::new(pool_size),
             file_path: path.as_ref().to_path_buf(),
-            next_page_id,
+            next_page_id: AtomicI64::new(next_page_id.0 as i64),
         })
     }
 
@@ -74,8 +72,10 @@ where
     /// To allocate a page, we first check if there is a free page in the
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
-    pub async fn alloc_page() -> Result<BufferFrameRef> {
-        todo!()
+    pub async fn alloc_page(&self) -> Result<BufferFrame> {
+        let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release).into();
+        let page_ptr = PagePtr::zero_content()?;
+        Ok(BufferFrame::new(page_id, page_ptr))
     }
 
     /// Free a page in the buffer pool. This happens when a node in the tree
@@ -87,7 +87,7 @@ where
     }
 
     /// Flush the page content to disk.
-    pub async fn flush_page(&self, frame: &BufferFrame) -> Result<()> {
+    pub async fn flush_page(&self, guard: &BufferFrameGuard) -> Result<()> {
         todo!()
     }
 
@@ -95,7 +95,7 @@ where
     /// "Fix" means the page won't be evicted.
     /// If the page is not in the buffer pool, we read it from disk.
     pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameGuard> {
-        if page_id >= self.next_page_id {
+        if page_id >= self.next_page_id.load(Ordering::Acquire).into() {
             return Err(FloppyError::DC(DCError::PageNotFound(format!(
                 "page not found, page_id = {:?}",
                 page_id
@@ -119,7 +119,7 @@ where
         }
     }
 
-    async fn read_page(&self, page_id: PageId, frame: &mut BufferFrame) -> Result<()> {
+    async fn read_page(&self, page_id: PageId, frame: &mut BufferFrameGuard) -> Result<()> {
         let file = self.env.open_file(self.file_path.as_path()).await?;
         let pos = page_id.0 as u64 * PAGE_SIZE as u64;
         match file.read_exact_at(frame.page_ptr().data_mut(), pos).await {

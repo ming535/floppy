@@ -1,12 +1,11 @@
-use crate::common::error::Result;
+use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
-    buf_frame::{BufferFrameGuard, BufferFrameRef},
+    buf_frame::{BufferFrame, BufferFrameGuard},
     buf_mgr::BufMgr,
     node::{InteriorNode, LeafNode, NodeType},
     page::{PageId, PAGE_ID_ROOT},
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
-use std::ops::{Deref, DerefMut};
 
 use crate::env::Env;
 use std::path::Path;
@@ -48,6 +47,19 @@ where
         self.put_value(key, value, leaf_guard)
     }
 
+    async fn init_root(&self) -> Result<()> {
+        match self.buf_mgr.fix_page(PAGE_ID_ROOT).await {
+            Err(FloppyError::DC(DCError::PageNotFound(_))) => {
+                let frame = self.buf_mgr.alloc_page().await?;
+                // frame.set_
+                todo!()
+            }
+            _ => todo!("root page already exists"),
+        }
+
+        todo!()
+    }
+
     async fn find_leaf(&self, key: &[u8]) -> Result<BufferFrameGuard> {
         let mut page_id = PAGE_ID_ROOT;
         let mut guard = self.buf_mgr.fix_page(page_id).await?;
@@ -65,17 +77,17 @@ where
     }
 
     fn find_child(&self, key: &[u8], parent_guard: &mut BufferFrameGuard) -> Result<PageId> {
-        let node = InteriorNode::from_frame(parent_guard);
+        let node = InteriorNode::from_data(parent_guard.payload_mut());
         node.get_child(key)
     }
 
     fn find_value(&self, key: &[u8], mut guard: BufferFrameGuard) -> Result<Option<Vec<u8>>> {
-        let node = LeafNode::from_frame(&mut guard);
+        let node = LeafNode::from_data(guard.payload_mut());
         node.get(key).map(|opt_v| opt_v.map(|v| v.into()))
     }
 
     fn put_value(&self, key: &[u8], value: &[u8], mut guard: BufferFrameGuard) -> Result<()> {
-        let mut node = LeafNode::from_frame(&mut guard);
+        let mut node = LeafNode::from_data(guard.payload_mut());
         node.put(key, value)
     }
 }

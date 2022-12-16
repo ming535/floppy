@@ -21,6 +21,18 @@ impl From<u32> for PageId {
     }
 }
 
+impl From<i32> for PageId {
+    fn from(v: i32) -> Self {
+        PageId(v as u32)
+    }
+}
+
+impl From<i64> for PageId {
+    fn from(v: i64) -> Self {
+        PageId(v as u32)
+    }
+}
+
 impl PageId {
     pub fn pos(&self, page_size: usize) -> usize {
         self.0 as usize * page_size
