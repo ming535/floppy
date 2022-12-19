@@ -8,6 +8,7 @@ use std::sync::{
     Arc,
 };
 
+use crate::dc::page::PAGE_ID_ROOT;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[derive(Clone)]
@@ -47,9 +48,13 @@ impl BufferFrameInner {
     }
 
     pub fn init(&mut self) {}
-    
+
     pub fn page_id(&self) -> PageId {
         self.page_id
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.page_id == PAGE_ID_ROOT
     }
 
     pub fn page_ptr(&self) -> &PagePtr {

@@ -48,7 +48,8 @@ where
     async fn init_index(buf_mgr: &BufMgr<E>) -> Result<()> {
         match buf_mgr.fix_page(PAGE_ID_ROOT).await {
             Err(FloppyError::DC(DCError::PageNotFound(_))) => {
-                let guard = buf_mgr.alloc_page().await?;
+                let mut guard = buf_mgr.alloc_page().await?;
+                guard.set_node_type(NodeType::Leaf);
                 assert_eq!(guard.page_id(), PAGE_ID_ROOT);
                 Ok(())
             }
