@@ -23,10 +23,10 @@ impl BufferFrame {
         }
     }
 
-    pub async fn guard(&self) -> BufferFrameGuard {
+    pub async fn guard(&self, parent_guard: Option<BufferFrameGuard>) -> BufferFrameGuard {
         let guard = self.inner.clone().lock_owned().await;
         guard.fix();
-        BufferFrameGuard { _guard: guard }
+        BufferFrameGuard { guard }
     }
 }
 
@@ -99,20 +99,20 @@ impl BufferFrameInner {
 }
 
 pub(crate) struct BufferFrameGuard {
-    _guard: OwnedMutexGuard<BufferFrameInner>,
+    guard: OwnedMutexGuard<BufferFrameInner>,
 }
 
 impl Deref for BufferFrameGuard {
     type Target = BufferFrameInner;
 
     fn deref(&self) -> &Self::Target {
-        &self._guard
+        &self.guard
     }
 }
 
 impl DerefMut for BufferFrameGuard {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self._guard
+        &mut self.guard
     }
 }
 
@@ -120,12 +120,12 @@ impl BufferFrameGuard {
     pub async fn new(frame: BufferFrame) -> Self {
         let guard = frame.inner.clone().lock_owned().await;
         guard.fix();
-        Self { _guard: guard }
+        Self { guard }
     }
 }
 
 impl Drop for BufferFrameGuard {
     fn drop(&mut self) {
-        self._guard.unfix();
+        self.guard.unfix();
     }
 }

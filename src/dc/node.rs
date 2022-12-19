@@ -196,6 +196,14 @@ impl<'a> InteriorNode<'a> {
             self.array.update_at(pos, value)
         }
     }
+
+    pub fn may_split(&self) -> bool {
+        false
+    }
+
+    pub fn may_merge(&self) -> bool {
+        false
+    }
 }
 
 impl Codec for &[u8] {

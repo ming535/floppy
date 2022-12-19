@@ -33,15 +33,18 @@ where
 
     pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         assert!(key.len() <= MAX_KEY_SIZE);
-        let leaf_guard = self.find_leaf(key).await?;
-        self.find_value(key, leaf_guard)
+        let mut guard_chain = self.find_leaf(key, AccessMode::Read).await?;
+        assert_eq!(guard_chain.len(), 1);
+        self.find_value(key, &mut guard_chain[0])
     }
 
     pub async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         assert!(key.len() <= MAX_KEY_SIZE);
         assert!(value.len() <= MAX_VALUE_SIZE);
-        let leaf_guard = self.find_leaf(key).await?;
-        self.put_value(key, value, leaf_guard)
+        let mut guard_chain = self.find_leaf(key, AccessMode::Insert).await?;
+        let chain_len = guard_chain.len();
+        assert!(chain_len >= 1);
+        self.put_value(key, value, &mut guard_chain[chain_len - 1])
     }
 
     /// init root node if not exists
@@ -59,17 +62,51 @@ where
         // todo read all interior pages into buffer pool
     }
 
-    async fn find_leaf(&self, key: &[u8]) -> Result<BufferFrameGuard> {
+    /// Find the leaf node that contains the given key using latch coupling.
+    /// For [`AccessMode::Read`], we repeat 1 ~ 3 until we reach the leaf node:
+    /// 1. Acquire R latch on parent
+    /// 2. Acquire R latch on child
+    /// 3. Unlatch parent
+    /// After we reach the leaf node, we only have a R latch on the leaf node.
+    ///
+    /// For [`AccessMode::Insert`] or [`AccessMode::Delete`], we repeat these steps
+    /// until we reach the leaf node:
+    /// 1. Acquire X latch on parent
+    /// 2. Acquire X latch on child
+    /// 3. Check if child is safe (can be inserted or deleted without split/merge)
+    /// 3.1 If it is safe, unlatch all ancestor's latch
+    /// 3.2 If it is not safe, go deeper in the tree
+    /// After we reach the leaf node, we may have a chain of X latches on the path.
+    async fn find_leaf(&self, key: &[u8], mode: AccessMode) -> Result<Vec<BufferFrameGuard>> {
         let mut page_id = PAGE_ID_ROOT;
+        let mut guard_chain = vec![];
         let mut guard = self.buf_mgr.fix_page(page_id).await?;
         loop {
             match guard.node_type() {
-                NodeType::Leaf => return Ok(guard),
+                NodeType::Leaf => {
+                    guard_chain.push(guard);
+                    return Ok(guard_chain);
+                }
                 NodeType::Interior => {
                     page_id = self.find_child(key, &mut guard)?;
-                    let child_guard = self.buf_mgr.fix_page(page_id).await?;
-                    // this will drop the parent node's guard while we hold the child node's guard.
-                    guard = child_guard;
+                    let mut child_guard = self.buf_mgr.fix_page(page_id).await?;
+                    // add parent to the guard chain if SMO might happen.
+                    let child_node = InteriorNode::from_data(child_guard.payload_mut());
+                    if (mode == AccessMode::Insert && child_node.may_split())
+                        || (mode == AccessMode::Delete && child_node.may_merge())
+                    {
+                        let parent_guard = guard;
+                        guard_chain.push(parent_guard);
+                        guard = child_guard;
+                    } else {
+                        //
+                        // the child is safe, we can release all latches on ancestors
+                        //
+                        // 1. drop parent's guard to release its latch
+                        guard = child_guard;
+                        // 2. drop all ancestor's guard to release their latches
+                        guard_chain.clear();
+                    }
                 }
             }
         }
@@ -80,15 +117,22 @@ where
         node.get_child(key)
     }
 
-    fn find_value(&self, key: &[u8], mut guard: BufferFrameGuard) -> Result<Option<Vec<u8>>> {
+    fn find_value(&self, key: &[u8], guard: &mut BufferFrameGuard) -> Result<Option<Vec<u8>>> {
         let node = LeafNode::from_data(guard.payload_mut());
         node.get(key).map(|opt_v| opt_v.map(|v| v.into()))
     }
 
-    fn put_value(&self, key: &[u8], value: &[u8], mut guard: BufferFrameGuard) -> Result<()> {
+    fn put_value(&self, key: &[u8], value: &[u8], guard: &mut BufferFrameGuard) -> Result<()> {
         let mut node = LeafNode::from_data(guard.payload_mut());
         node.put(key, value)
     }
+}
+
+#[derive(Eq, PartialEq)]
+enum AccessMode {
+    Read,
+    Insert,
+    Delete,
 }
 
 #[cfg(test)]

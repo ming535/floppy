@@ -76,7 +76,7 @@ where
         let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release).into();
         let page_ptr = PagePtr::zero_content()?;
         let frame = BufferFrame::new(page_id, page_ptr);
-        let guard = frame.guard().await;
+        let guard = frame.guard(None).await;
         self.active_pages.insert(page_id, frame);
         Ok(guard)
     }
