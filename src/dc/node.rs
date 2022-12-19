@@ -106,32 +106,32 @@ impl<'a> LeafNode<'a> {
 /// The interior node has a slot array and extra "inf_pid" pointer.
 /// It consists of the following key value pairs:
 ///
-/// (K0, P0), (K1, P2), ...(Ki, Pi), ... (Kn, Pn), Pn+1
+/// (K0, P0), (K1, P1), ...(Ki, Pi), ... (Kn, Pn), Pn+1
 ///
 /// Each pointer represents the following key range:
-///
-/// (-inf, K0], (K0, K1], ..., (Ki-1, Ki], ..., (Kn-1, Kn], (Kn, +inf)
+///      P0         P1            Pi                Pn        Pn+1
+/// (-inf, K0), [K0, K1), ..., [Ki-1, Ki), ..., [Kn-1, Kn), [Kn, +inf)
 ///
 /// Assuming the current keys are the following:
 ///
 /// {2, P10}, {5, P2}, {7, P15}, {9, P24}, {10, P25}, {299, P4}, {+inf, P88}
 ///
 /// When searching for key 8, the binary_search will return index 3.
-/// The pointer in index 3 covers the range (7, 9], so we can follow
+/// The pointer in index 3 covers the range [7, 9), so we can follow
 /// the pointer to the child page 24.
 ///
 /// When searching for key 310, the binary_search will return index 6.
 /// The pointer index 6 is the "inf_pid", and covers the range
-/// (9, +inf). So we can follow the pointer to the child page 88.
+/// [299, +inf). So we can follow the pointer to the child page 88.
 ///
 /// When P2 is split into two pages P2 and P2-right, where the split key is S.
-/// P2: K <= S, P2-right: K > S.
+/// P2: 2 <= K < S, P2-right: S <= K < 5.
 /// We change the following entries:
 /// 1. Add a new entry {S, P2}
 /// 2. Replace the entry {5, P2} with {5, P2-right}
 ///
 /// When P88 is split into two pages P88 and P88-right, where the split key is S.
-/// P88: K <=S, P88-right: K > S.
+/// P88: 299 <= K < S, P88-right: K > S.
 /// We change the following entries:
 /// 1. Add a new entry {S, P88}
 /// 2. Replace the entry {+inf, P88} with {+inf, P88-right}
@@ -152,7 +152,7 @@ impl<'a> InteriorNode<'a> {
     pub fn get_child(&self, key: &[u8]) -> Result<PageId> {
         let index = match self.array.rank(key) {
             Err(pos) => pos,
-            Ok(pos) => pos,
+            Ok(pos) => pos + 1,
         };
 
         let pid = if index == self.array.num_slots() as usize {
@@ -290,15 +290,15 @@ mod tests {
         // P1, (2), P8, (3), P9, (5), P4
         node.add_index(b"3", 8.into(), 9.into())?;
         assert_eq!(node.get_child(b"1")?, PageId(1));
-        assert_eq!(node.get_child(b"2")?, PageId(1));
 
+        assert_eq!(node.get_child(b"2")?, PageId(8));
         assert_eq!(node.get_child(b"2000")?, PageId(8));
-        assert_eq!(node.get_child(b"3")?, PageId(8));
 
+        assert_eq!(node.get_child(b"3")?, PageId(9));
         assert_eq!(node.get_child(b"3000")?, PageId(9));
         assert_eq!(node.get_child(b"4")?, PageId(9));
-        assert_eq!(node.get_child(b"5")?, PageId(9));
 
+        assert_eq!(node.get_child(b"5")?, PageId(4));
         assert_eq!(node.get_child(b"50")?, PageId(4));
         Ok(())
     }
