@@ -88,7 +88,7 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn put(&mut self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
+    pub fn insert(&mut self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -96,6 +96,14 @@ impl<'a> LeafNode<'a> {
             )))),
             Err(slot) => self.array.insert_at(slot, key, value),
         }
+    }
+
+    pub fn will_overfull(&self, key: &[u8], value: &[u8]) -> bool {
+        self.array.will_overflow(key, value)
+    }
+
+    pub fn may_underfull(&self) -> bool {
+        false
     }
 
     pub fn iter(&self) -> SlotArrayIterator<&[u8], &[u8]> {
@@ -254,9 +262,9 @@ mod tests {
         let page_ptr = PagePtr::zero_content()?;
         let mut leaf = LeafNode::from_data(page_ptr.data_mut());
 
-        leaf.put(b"2", b"2")?;
-        leaf.put(b"3", b"3")?;
-        leaf.put(b"1", b"1")?;
+        leaf.insert(b"2", b"2")?;
+        leaf.insert(b"3", b"3")?;
+        leaf.insert(b"1", b"1")?;
 
         assert_eq!(leaf.get(b"1")?, Some(b"1".as_slice()));
         assert_eq!(leaf.get(b"2")?, Some(b"2".as_slice()));

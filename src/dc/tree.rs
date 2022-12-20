@@ -38,13 +38,11 @@ where
         self.find_value(key, &mut guard_chain[0])
     }
 
-    pub async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub async fn insert(&self, key: &[u8], value: &[u8]) -> Result<()> {
         assert!(key.len() <= MAX_KEY_SIZE);
         assert!(value.len() <= MAX_VALUE_SIZE);
         let mut guard_chain = self.find_leaf(key, AccessMode::Insert).await?;
-        let chain_len = guard_chain.len();
-        assert!(chain_len >= 1);
-        self.put_value(key, value, &mut guard_chain[chain_len - 1])
+        self.insert_value(key, value, guard_chain)
     }
 
     /// init root node if not exists
@@ -122,9 +120,33 @@ where
         node.get(key).map(|opt_v| opt_v.map(|v| v.into()))
     }
 
-    fn put_value(&self, key: &[u8], value: &[u8], guard: &mut BufferFrameGuard) -> Result<()> {
-        let mut node = LeafNode::from_data(guard.payload_mut());
-        node.put(key, value)
+    fn insert_value(
+        &self,
+        key: &[u8],
+        value: &[u8],
+        mut guard_chain: Vec<BufferFrameGuard>,
+    ) -> Result<()> {
+        let chain_len = guard_chain.len();
+        assert!(chain_len >= 1);
+        let leaf_guard = &mut guard_chain[chain_len - 1];
+        let mut node = LeafNode::from_data(leaf_guard.payload_mut());
+        if node.will_overfull(key, value) {
+            // Leaf Node split:
+            // 1. Copy all old sorted array A and new key value into a new sorted array N.
+            //    While copying, we also reorganize the array to make it compact.
+            // 2. Split the new sorted array into two sorted array iterator: left and right.
+            // 3. Replace A's content with left iterator.
+            // 4. Construct a new node with right iterator.
+            // So this process has two memory copy of a node: one in step 1, one in step 3 and 4.
+            todo!();
+        } else {
+            // drop parent guards to release their latches
+            node.insert(key, value)
+        }
+    }
+
+    fn maybe_split(&self, guard_chain: Vec<BufferFrameGuard>) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -144,7 +166,7 @@ mod tests {
     async fn test_simple() -> Result<()> {
         let env = SimEnv;
         let tree = Tree::open(SimPath, env).await?;
-        tree.put(b"1", b"1").await?;
+        tree.insert(b"1", b"1").await?;
         let v = tree.get(b"1").await?;
         assert_eq!(v, Some(b"1".to_vec()));
         Ok(())

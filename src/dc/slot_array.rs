@@ -68,6 +68,11 @@ where
         Err(left)
     }
 
+    pub fn will_overflow(&self, key: K, value: V) -> bool {
+        // we need to consider the space for slot pointer.
+        self.record_size(key, value) + 2 > self.free_space()
+    }
+
     pub fn insert_at(&mut self, slot: usize, key: K, value: V) -> Result<()> {
         let record = Record {
             flag: 0,
@@ -75,16 +80,8 @@ where
             value,
         };
         let record_size = record.encode_size();
-        // we need to consider the space for slot pointer.
-        let slot_size = record_size + 2;
-        if slot_size > self.free_space() {
-            return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
-                "No enough space to insert key {:?}",
-                record.key
-            ))));
-        }
-
-        let slot_offset = if slot_size <= self.unallocatd_space() {
+        let size_needed = record_size + 2;
+        let slot_offset = if size_needed <= self.unallocatd_space() {
             if self.header.slot_content_start == 0 {
                 (self.data.len() - record_size) as u16
             } else {
@@ -152,6 +149,15 @@ where
         let data = &self.data[offset as usize..];
         let mut dec = Decoder::new(data);
         unsafe { Record::decode_from(&mut dec) }
+    }
+
+    fn record_size(&self, key: K, value: V) -> usize {
+        let record = Record {
+            flag: 0,
+            key,
+            value,
+        };
+        record.encode_size()
     }
 
     fn free_space(&self) -> usize {
