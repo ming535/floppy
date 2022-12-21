@@ -131,21 +131,49 @@ where
         let leaf_guard = &mut guard_chain[chain_len - 1];
         let mut node = LeafNode::from_data(leaf_guard.payload_mut());
         if node.will_overfull(key, value) {
-            // Leaf Node split:
-            // 1. Copy all old sorted array A and new key value into a new sorted array N.
-            //    While copying, we also reorganize the array to make it compact.
-            // 2. Split the new sorted array into two sorted array iterator: left and right.
-            // 3. Replace A's content with left iterator.
-            // 4. Construct a new node with right iterator.
-            // So this process has two memory copy of a node: one in step 1, one in step 3 and 4.
-            todo!();
+            self.split(key, value, guard_chain)
         } else {
             // drop parent guards to release their latches
             node.insert(key, value)
         }
     }
 
-    fn maybe_split(&self, guard_chain: Vec<BufferFrameGuard>) -> Result<()> {
+    /// Leaf Node `N` split:
+    /// 1. Construct a iterator `Iter`.
+    /// 2. Copy elements of `Iter` into a new sorted array `Array`.
+    ///    Make sure `Array` has enough space for the new key value.
+    /// 3. Insert new key value pair into `Array`.
+    ///    Copy all old sorted array A and new key value into a new sorted array N.
+    /// 4. Split the new sorted array into two sorted array iterator: `Iter-left` and `Iter-right`.
+    /// 3. Replace N's content with `Iter-left`.
+    /// 4. Construct a new node with `Iter-right`.
+    ///
+    /// After leaf node split, we post a new index to interior node.
+    ///
+    /// Interior Node split happens when we want to add a index entry for split key S with
+    /// left children P-left, and right children P-right (S, P-left, P-right).
+    /// Interior Node `N` split:
+    /// 1. Get the rank of `S`.
+    /// 2. Construct two range iterator:
+    ///   - `Iter-left` with range [0..rank).
+    ///   - `Iter-right` with range [range, ..).
+    /// 3. Copy elements of `Iter-left` and (S, P-left, P-right) into a new sorted array `Array-left`.
+    /// 5. Copy elements of `Iter-right` into a new sorted array `Array-right`.
+    /// 4. Replace `N`'s content with sorted array `Array-left`.
+    /// 5. Construct a new node `N-right` with sorted array `Array-right`.
+    /// 6. Post a new index entry (S, N, N-right) into parent node.
+    ///
+    /// If the leaf node is root:
+    /// 1. Construct `Iter-left` and `Iter-right` as before.
+    /// 2. Construct a new node `N-left` with `Iter-left`.
+    /// 3. Construct a new node `N-right` with `Iter-right`.
+    /// 4. Replace the current node with a new interior node with (S, N-left, N-right) where S is the split key.
+    ///
+    /// If the interior node is root:
+    /// 1. Construct `Iter-left` and `Iter-right` as before.
+    /// 2. Construct a new node `N-left` with `Iter-left` and (S, P-left, P-right).
+    /// 3. Construct a new node `N-right` with `Iter-right`.
+    fn split(&self, key: &[u8], value: &[u8], guard_chain: Vec<BufferFrameGuard>) -> Result<()> {
         Ok(())
     }
 }
