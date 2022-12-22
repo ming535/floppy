@@ -78,7 +78,7 @@ impl<'a> LeafNode<'a> {
         match self.array.rank(key) {
             Err(_) => Ok(None),
             Ok(idx) => {
-                let record = self.array.get_slot_content(idx);
+                let record = self.array.slot_content(idx);
                 if record.key == key {
                     Ok(Some(record.value))
                 } else {
@@ -88,7 +88,7 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn insert(&mut self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
+    pub fn insert(&self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -166,7 +166,7 @@ impl<'a> InteriorNode<'a> {
         let pid = if index == self.array.num_slots() as usize {
             self.inf_pid
         } else {
-            self.array.get_slot_content(index).value
+            self.array.slot_content(index).value
         };
 
         Ok(pid)
@@ -283,6 +283,23 @@ mod tests {
         assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
         assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
         assert_eq!(iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_leaf_iter() -> Result<()> {
+        let page_ptr = PagePtr::zero_content()?;
+        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
+        let mut idx = 0;
+        loop {
+            let key = format!("{}", idx);
+            let value = key.clone();
+            match leaf.insert(key.as_bytes(), value.as_bytes()) {
+                Err(_) => break,
+                _ => idx += 1,
+            }
+        }
+
         Ok(())
     }
 
