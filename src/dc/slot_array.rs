@@ -3,6 +3,7 @@ use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
 };
+use std::ops::Deref;
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, mem, ops::Range, slice};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
@@ -19,10 +20,10 @@ impl TryFrom<usize> for SlotId {
 
     fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
         if value > u16::MAX as usize {
-            return Err(FloppyError::Internal(format!(
+            Err(FloppyError::Internal(format!(
                 "slot id overflow: {}",
                 value
-            )));
+            )))
         } else {
             Ok(SlotId(value as u16))
         }
@@ -81,7 +82,7 @@ where
         K: Borrow<Q>,
         Q: Ord,
     {
-        let mut size: usize = self.num_slots().into();
+        let mut size = self.num_slots();
         let mut left = 0;
         let mut right = size;
         while left < right {
