@@ -2,7 +2,7 @@ use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     page::PageId,
-    slot_array::{SlotArray, SlotArrayIterator},
+    slot_array::{SlotArray, SlotArrayIterator, SlotId},
 };
 use std::{cmp::Ordering, fmt, marker::PhantomData, mem};
 
@@ -158,15 +158,15 @@ impl<'a> InteriorNode<'a> {
     }
 
     pub fn get_child(&self, key: &[u8]) -> Result<PageId> {
-        let index = match self.array.rank(key) {
+        let slot_id = match self.array.rank(key) {
             Err(pos) => pos,
-            Ok(pos) => pos + 1,
+            Ok(pos) => SlotId(pos.0 + 1),
         };
 
-        let pid = if index == self.array.num_slots() as usize {
+        let pid = if slot_id == self.array.num_slots().try_into().unwrap() {
             self.inf_pid
         } else {
-            self.array.slot_content(index).value
+            self.array.slot_content(slot_id).value
         };
 
         Ok(pid)
@@ -179,11 +179,11 @@ impl<'a> InteriorNode<'a> {
         right_pid: PageId,
     ) -> Result<()> {
         let pos = self.insert(split_key, left_pid)?;
-        self.update(pos + 1, right_pid)
+        self.update(SlotId(pos.0 + 1), right_pid)
     }
 
     /// Insert a new entry into the interior node, and returns the rank when success.
-    pub fn insert(&mut self, key: &'a [u8], value: PageId) -> Result<usize> {
+    pub fn insert(&mut self, key: &'a [u8], value: PageId) -> Result<SlotId> {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -196,12 +196,12 @@ impl<'a> InteriorNode<'a> {
         }
     }
 
-    pub fn update(&mut self, pos: usize, value: PageId) -> Result<()> {
-        if pos == self.array.num_slots() as usize {
+    pub fn update(&mut self, slot: SlotId, value: PageId) -> Result<()> {
+        if slot == self.array.num_slots().try_into().unwrap() {
             self.inf_pid = value;
             Ok(())
         } else {
-            self.array.update_at(pos, value)
+            self.array.update_at(slot, value)
         }
     }
 
