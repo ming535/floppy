@@ -1,4 +1,4 @@
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::Result;
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
@@ -79,7 +79,7 @@ where
         let size_needed = record_size + 2;
         let slot_content_start = self.slot_content_start();
         let num_slots = self.num_slots();
-        let slot_offset = if size_needed <= self.unallocatd_space() {
+        let new_slot_offset = if size_needed <= self.unallocatd_space() {
             if slot_content_start == 0 {
                 (self.data.len() - record_size) as u16
             } else {
@@ -90,47 +90,26 @@ where
             todo!()
         };
 
+        // encode slot offset vec
+        let mut slot_offset_vec = self.slot_offset_vec();
+        slot_offset_vec.0.insert(slot, new_slot_offset);
+        self.set_slot_offset_vec(slot_offset_vec);
+
         // encode content
-        let data_ptr = self.data.as_ptr() as *mut u8;
-        let mut_buf = unsafe { slice::from_raw_parts_mut(data_ptr, self.data.len()) };
-        let content_buf = &mut mut_buf[slot_offset as usize..slot_offset as usize + record_size];
-        let mut enc = Encoder::new(content_buf);
-        unsafe {
-            record.encode_to(&mut enc);
-        }
+        self.set_slot_content(record, slot);
 
         // encode header
         let new_num_slots = num_slots + 1;
         self.set_num_slots(new_num_slots);
-        self.set_slot_content_start(slot_offset);
+        self.set_slot_content_start(new_slot_offset);
 
-        let header_size = self.header_encode_size();
-        // encode slot ptrs
-        let slot_ptr_buf = &mut mut_buf[header_size..header_size + new_num_slots as usize * 2];
-        let mut slot_ptr_dec = Decoder::new(slot_ptr_buf);
-        let mut slot_ptrs = unsafe { SlotPtrs::decode_from(&mut slot_ptr_dec) };
-        slot_ptrs.0.insert(slot, slot_offset);
-        let mut slot_ptr_enc = Encoder::new(slot_ptr_buf);
-        unsafe {
-            slot_ptrs.encode_to(&mut slot_ptr_enc);
-        }
         Ok(())
     }
 
     pub fn update_at(&mut self, slot: usize, value: V) -> Result<()> {
-        let mut record: Record<K, V>;
-        let slot_offset = self.slot_offset(slot as u16);
-        let buf = self.data[slot_offset as usize..].as_mut();
-        let mut dec = Decoder::new(buf);
-        unsafe {
-            record = Record::decode_from(&mut dec);
-            record.value = value;
-        }
-
-        let mut enc = Encoder::new(buf);
-        unsafe {
-            record.encode_to(&mut enc);
-        }
+        let mut record = self.slot_content(slot);
+        record.value = value;
+        self.set_slot_content(record, slot);
         Ok(())
     }
 
@@ -169,14 +148,14 @@ where
         let slot_content_start = self.slot_content_start() as usize;
         if slot_content_start == 0 {
             // This node haven't been used yet.
-            self.data.len() - self.header_encode_size() - self.slot_ptrs_size()
+            self.data.len() - self.header_encode_size() - self.slot_offsets_size()
         } else {
-            assert!(slot_content_start > self.header_encode_size() + self.slot_ptrs_size());
-            slot_content_start - self.header_encode_size() - self.slot_ptrs_size()
+            assert!(slot_content_start > self.header_encode_size() + self.slot_offsets_size());
+            slot_content_start - self.header_encode_size() - self.slot_offsets_size()
         }
     }
 
-    fn slot_ptrs_size(&self) -> usize {
+    fn slot_offsets_size(&self) -> usize {
         2 * self.num_slots() as usize
     }
 
@@ -235,9 +214,42 @@ where
     pub fn slot_content(&self, slot: usize) -> Record<K, V> {
         assert!(slot < self.num_slots() as usize);
         let offset = self.slot_offset(slot as u16);
-        let data = &self.data[offset as usize..];
-        let mut dec = Decoder::new(data);
+        let buf = &self.data[offset as usize..];
+        let mut dec = Decoder::new(buf);
         unsafe { Record::decode_from(&mut dec) }
+    }
+
+    fn set_slot_content(&self, record: Record<K, V>, slot: usize) {
+        let slot_offset = self.slot_offset(slot as u16);
+        let data_ptr = self.data.as_ptr() as *mut u8;
+        let mut_buf = unsafe { slice::from_raw_parts_mut(data_ptr, self.data.len()) };
+        let content_buf =
+            &mut mut_buf[slot_offset as usize..slot_offset as usize + record.encode_size()];
+        let mut enc = Encoder::new(content_buf);
+        unsafe {
+            record.encode_to(&mut enc);
+        }
+    }
+
+    fn slot_offset_vec(&self) -> SlotOffsetVec {
+        let ptr = self.slot_offset_vec_ptrs();
+        let buf = unsafe { slice::from_raw_parts(ptr, self.slot_offsets_size()) };
+        let mut dec = Decoder::new(buf);
+        unsafe { SlotOffsetVec::decode_from(&mut dec) }
+    }
+
+    fn set_slot_offset_vec(&self, offset_vec: SlotOffsetVec) {
+        let ptr = self.slot_offset_vec_ptrs() as *mut u8;
+        let buf = unsafe { slice::from_raw_parts_mut(ptr, self.slot_offsets_size()) };
+        let mut offset_vec_enc = Encoder::new(buf);
+        unsafe {
+            offset_vec.encode_to(&mut offset_vec_enc);
+        }
+    }
+
+    fn slot_offset_vec_ptrs(&self) -> *const u8 {
+        let data_ptr = self.data.as_ptr();
+        unsafe { data_ptr.add(self.header_encode_size()) }
     }
 
     fn slot_offset(&self, slot: u16) -> u16 {
@@ -333,9 +345,9 @@ where
 }
 
 #[derive(Default)]
-struct SlotPtrs(Vec<u16>);
+struct SlotOffsetVec(Vec<u16>);
 
-impl Codec for SlotPtrs {
+impl Codec for SlotOffsetVec {
     fn encode_size(&self) -> usize {
         self.0.len() * 2
     }
