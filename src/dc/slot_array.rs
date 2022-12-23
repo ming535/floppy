@@ -3,7 +3,6 @@ use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
 };
-use std::ops::Deref;
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, mem, ops::Range, slice};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
@@ -439,28 +438,60 @@ mod tests {
     use super::*;
     use crate::dc::page::PagePtr;
 
+    fn init_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
+    where
+        F: Fn(usize) -> usize,
+    {
+        let mut i: usize = 0;
+        loop {
+            match array.insert_at(i.try_into().unwrap(), &f(i).to_be_bytes(), &i.to_be_bytes()) {
+                Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
+                Ok(_) => i += 1,
+                Err(other) => return Err(other),
+            };
+        }
+        Ok(i)
+    }
+
     #[test]
     fn test_insert_iter_empty() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
         let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
-        let mut iter = array.iter();
-        assert_eq!(iter.next(), None);
-
-        let mut i: usize = 0;
-        loop {
-            let r = array.insert_at(i.try_into().unwrap(), &i.to_be_bytes(), &i.to_be_bytes());
-            if r.is_err() {
-                break;
-            }
-            i += 1;
-        }
-
-        let mut iter = array.iter();
+        init_array(&array, |x| x)?;
+        let iter = array.iter();
         for (i, (k, v)) in iter.enumerate() {
             assert_eq!(i.to_be_bytes(), k);
             assert_eq!(i.to_be_bytes(), v);
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_with_iter() -> Result<()> {
+        let page_a = PagePtr::zero_content(1024)?;
+        let array_a = SlotArray::<&[u8], &[u8]>::from_data(page_a.data_mut());
+        let size = init_array(&array_a, |x| x)?;
+
+        let page_b = PagePtr::zero_content(1024)?;
+        let array_b = SlotArray::<&[u8], &[u8]>::from_data(page_b.data_mut());
+
+        array_a.with_iter(array_b.iter())?;
+        // array_a should be empty now.
+        let mut iter_a = array_a.iter();
+        assert!(iter_a.next().is_none());
+
+        init_array(&array_b, |x| x * 2)?;
+        array_a.with_iter(array_b.iter())?;
+        let iter_a = array_a.iter();
+        // array_a should be the same with array array_a
+        let iter_b = array_b.iter();
+        let iter = iter_a.zip(iter_b);
+
+        for ((k_a, v_a), (k_b, v_b)) in iter {
+            assert_eq!(k_a, k_b);
+            assert_eq!(v_a, v_b);
+        }
         Ok(())
     }
 }
