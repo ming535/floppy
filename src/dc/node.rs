@@ -255,11 +255,11 @@ impl NodeValue for PageId {}
 mod tests {
     use super::*;
     use crate::common::error::Result;
-    use crate::dc::page::PagePtr;
+    use crate::dc::page::{PagePtr, PAGE_SIZE};
 
     #[test]
     fn test_simple_leaf() -> Result<()> {
-        let page_ptr = PagePtr::zero_content()?;
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut leaf = LeafNode::from_data(page_ptr.data_mut());
 
         leaf.insert(b"2", b"2")?;
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_leaf_iter() -> Result<()> {
-        let page_ptr = PagePtr::zero_content()?;
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut leaf = LeafNode::from_data(page_ptr.data_mut());
         let mut idx = 0;
         loop {
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_simple_interior() -> Result<()> {
-        let page_ptr = PagePtr::zero_content()?;
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut node = InteriorNode::from_data(page_ptr.data_mut());
 
         // P1, (2), P2

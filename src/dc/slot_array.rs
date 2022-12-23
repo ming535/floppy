@@ -1,4 +1,4 @@
-use crate::common::error::{FloppyError, Result};
+use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
@@ -36,14 +36,6 @@ impl From<SlotId> for usize {
     }
 }
 
-struct SlotOffset(u16);
-
-impl From<usize> for SlotOffset {
-    fn from(v: usize) -> Self {
-        SlotOffset(v as u16)
-    }
-}
-
 pub(crate) struct SlotArray<'a, K, V> {
     data: &'a mut [u8],
     _marker: PhantomData<(K, V)>,
@@ -61,10 +53,14 @@ where
         }
     }
 
-    pub fn with_iter(&mut self, iter: impl Iterator<Item = (K, V)>) -> Result<()> {
-        unsafe { self.data.as_mut_ptr().write_bytes(0, self.data.len()) }
+    pub fn with_iter(&self, iter: impl Iterator<Item = (K, V)>) -> Result<()> {
+        unsafe {
+            let ptr = self.data.as_ptr() as *mut u8;
+            ptr.write_bytes(0, self.data.len());
+        }
+
         for (slot, (k, v)) in iter.enumerate() {
-            self.insert_at(slot.try_into().unwrap(), k, v)?;
+            self.insert_at(slot.try_into()?, k, v)?;
         }
         Ok(())
     }
@@ -115,6 +111,7 @@ where
             value,
         };
         let record_size = record.encode_size();
+        // we need to consider slot offset.
         let size_needed = record_size + 2;
         let slot_content_start = self.slot_content_start();
         let num_slots = self.num_slots();
@@ -126,29 +123,31 @@ where
             }
         } else {
             // find freeblocks
-            todo!()
+            return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
+                "page exhausted when insert slot: {:?}",
+                slot.0
+            ))));
         };
+
+        // encode slot content
+        self.set_slot_content(record, new_slot_offset);
 
         // encode slot offset vec
         let mut slot_offset_vec = self.slot_offset_vec();
         slot_offset_vec.0.insert(slot.into(), new_slot_offset);
         self.set_slot_offset_vec(slot_offset_vec);
 
-        // encode content
-        self.set_slot_content(record, slot);
-
         // encode header
-        let new_num_slots = num_slots + 1;
-        self.set_num_slots(new_num_slots);
+        self.set_num_slots(num_slots + 1);
         self.set_slot_content_start(new_slot_offset);
-
         Ok(())
     }
 
     pub fn update_at(&mut self, slot: SlotId, value: V) -> Result<()> {
         let mut record = self.slot_content(slot);
         record.value = value;
-        self.set_slot_content(record, slot);
+        let offset = self.slot_offset(slot);
+        self.set_slot_content(record, offset);
         Ok(())
     }
 
@@ -258,12 +257,10 @@ where
         unsafe { Record::decode_from(&mut dec) }
     }
 
-    fn set_slot_content(&self, record: Record<K, V>, slot: SlotId) {
-        let slot_offset = self.slot_offset(slot);
+    fn set_slot_content(&self, record: Record<K, V>, offset: u16) {
         let data_ptr = self.data.as_ptr() as *mut u8;
         let mut_buf = unsafe { slice::from_raw_parts_mut(data_ptr, self.data.len()) };
-        let content_buf =
-            &mut mut_buf[slot_offset as usize..slot_offset as usize + record.encode_size()];
+        let content_buf = &mut mut_buf[offset as usize..offset as usize + record.encode_size()];
         let mut enc = Encoder::new(content_buf);
         unsafe {
             record.encode_to(&mut enc);
@@ -271,22 +268,22 @@ where
     }
 
     fn slot_offset_vec(&self) -> SlotOffsetVec {
-        let ptr = self.slot_offset_vec_ptrs();
+        let ptr = self.slot_offset_vec_ptr();
         let buf = unsafe { slice::from_raw_parts(ptr, self.slot_offsets_size()) };
         let mut dec = Decoder::new(buf);
         unsafe { SlotOffsetVec::decode_from(&mut dec) }
     }
 
     fn set_slot_offset_vec(&self, offset_vec: SlotOffsetVec) {
-        let ptr = self.slot_offset_vec_ptrs() as *mut u8;
-        let buf = unsafe { slice::from_raw_parts_mut(ptr, self.slot_offsets_size()) };
+        let ptr = self.slot_offset_vec_ptr() as *mut u8;
+        let buf = unsafe { slice::from_raw_parts_mut(ptr, offset_vec.encode_size()) };
         let mut offset_vec_enc = Encoder::new(buf);
         unsafe {
             offset_vec.encode_to(&mut offset_vec_enc);
         }
     }
 
-    fn slot_offset_vec_ptrs(&self) -> *const u8 {
+    fn slot_offset_vec_ptr(&self) -> *const u8 {
         let data_ptr = self.data.as_ptr();
         unsafe { data_ptr.add(self.header_encode_size()) }
     }
@@ -318,7 +315,7 @@ where
     }
 
     fn header_slot_content_start_ptr(&self) -> *const u8 {
-        unsafe { self.header_free_block_ptr().add(2) }
+        unsafe { self.header_num_slots_ptr().add(2) }
     }
 
     fn header_fragmented_free_bytes_ptr(&self) -> *const u8 {
@@ -394,8 +391,8 @@ impl Codec for SlotOffsetVec {
     }
 
     unsafe fn encode_to(&self, enc: &mut Encoder) {
-        for ptr in &self.0 {
-            enc.put_u16(*ptr);
+        for offset in &self.0 {
+            enc.put_u16(*offset);
         }
     }
 
@@ -434,5 +431,36 @@ where
         let key = K::decode_from(dec);
         let value = V::decode_from(dec);
         Self { flag, key, value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dc::page::PagePtr;
+
+    #[test]
+    fn test_insert_iter_empty() -> Result<()> {
+        let page = PagePtr::zero_content(1024)?;
+        let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
+        let mut iter = array.iter();
+        assert_eq!(iter.next(), None);
+
+        let mut i: usize = 0;
+        loop {
+            let r = array.insert_at(i.try_into().unwrap(), &i.to_be_bytes(), &i.to_be_bytes());
+            if r.is_err() {
+                break;
+            }
+            i += 1;
+        }
+
+        let mut iter = array.iter();
+        for (i, (k, v)) in iter.enumerate() {
+            assert_eq!(i.to_be_bytes(), k);
+            assert_eq!(i.to_be_bytes(), v);
+        }
+
+        Ok(())
     }
 }

@@ -50,7 +50,7 @@ where
         let file = env.open_file(path.as_ref()).await?;
         let size = file.file_size().await;
         let next_page_id = if size == 0 {
-            let page_zero = PagePtr::zero_content()?;
+            let page_zero = PagePtr::zero_content(PAGE_SIZE)?;
             file.write_at(page_zero.data(), 0).await?;
             file.sync_all().await?;
             PageId(1)
@@ -74,7 +74,7 @@ where
     /// file and return the new page.
     pub async fn alloc_page(&self) -> Result<BufferFrameGuard> {
         let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release).into();
-        let page_ptr = PagePtr::zero_content()?;
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let frame = BufferFrame::new(page_id, page_ptr);
         let guard = frame.guard(None).await;
         self.active_pages.insert(page_id, frame);

@@ -45,18 +45,15 @@ pub(crate) struct PagePtr {
 }
 
 impl PagePtr {
-    pub fn zero_content() -> Result<Self> {
-        let layout = Layout::from_size_align(PAGE_SIZE, mem::size_of::<usize>())?;
+    pub fn zero_content(size: usize) -> Result<Self> {
+        let layout = Layout::from_size_align(size, mem::size_of::<usize>())?;
         unsafe {
             let buf = alloc_zeroed(layout);
             if buf.is_null() {
                 return Err(FloppyError::External("alloc mem failed".to_string()));
             }
             let buf = NonNull::new_unchecked(buf);
-            Ok(Self {
-                buf,
-                size: PAGE_SIZE,
-            })
+            Ok(Self { buf, size })
         }
     }
 
@@ -71,7 +68,7 @@ impl PagePtr {
 
 impl Drop for PagePtr {
     fn drop(&mut self) {
-        let layout = Layout::from_size_align(PAGE_SIZE, mem::size_of::<usize>()).unwrap();
+        let layout = Layout::from_size_align(self.size, mem::size_of::<usize>()).unwrap();
         unsafe {
             dealloc(self.buf.as_ptr(), layout);
         }
@@ -91,7 +88,7 @@ struct PageZero {
 
 impl PageZero {
     pub fn new() -> Result<Self> {
-        let page_ptr = PagePtr::zero_content()?;
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         Ok(Self { page_ptr })
     }
 
@@ -124,7 +121,7 @@ mod tests {
 
     #[test]
     fn page_ptr_read_write() -> Result<()> {
-        let mut page = PagePtr::zero_content()?;
+        let mut page = PagePtr::zero_content(PAGE_SIZE)?;
         page.data_mut()[0] = 1;
         assert_eq!(page.data()[0], 1);
         page.data_mut()[1] = 3;
