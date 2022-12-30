@@ -98,7 +98,7 @@ where
         Err(left.try_into().unwrap())
     }
 
-    pub fn will_overflow(&self, key: K, value: V) -> bool {
+    pub fn will_overfull(&self, key: K, value: V) -> bool {
         // we need to consider the space for slot pointer.
         self.record_size(key, value) + 2 > self.free_space()
     }
@@ -165,6 +165,17 @@ where
             range,
             _marker: PhantomData,
         }
+    }
+
+    /// split_at will split the SlotArray into two SlotArrayRangeIterator left and right.
+    /// The left will contain the range [0, slot), and the right will contain the range [slot, num_slots).
+    pub fn split_at(
+        &self,
+        slot: SlotId,
+    ) -> (SlotArrayRangeIterator<K, V>, SlotArrayRangeIterator<K, V>) {
+        let left = self.range(SlotId(0)..slot);
+        let right = self.range(slot..self.num_slots().try_into().unwrap());
+        (left, right)
     }
 
     fn record_size(&self, key: K, value: V) -> usize {
@@ -450,6 +461,7 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
+        assert!(array.will_overfull(&(i.to_be_bytes()), &(i.to_be_bytes())));
         Ok(i)
     }
 

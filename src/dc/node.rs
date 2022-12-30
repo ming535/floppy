@@ -1,10 +1,11 @@
 use crate::common::error::{DCError, FloppyError, Result};
+use crate::dc::slot_array::SlotArrayRangeIterator;
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     page::PageId,
     slot_array::{SlotArray, SlotArrayIterator, SlotId},
 };
-use std::{cmp::Ordering, fmt, marker::PhantomData, mem};
+use std::{fmt, marker::PhantomData, mem};
 
 /// The b-tree node header is 12 bytes. It is composed of the following fields:
 ///
@@ -99,15 +100,34 @@ impl<'a> LeafNode<'a> {
     }
 
     pub fn will_overfull(&self, key: &[u8], value: &[u8]) -> bool {
-        self.array.will_overflow(key, value)
+        self.array.will_overfull(key, value)
     }
 
     pub fn may_underfull(&self) -> bool {
         false
     }
 
+    pub fn with_iter(&self, iter: impl Iterator<Item = (&'a [u8], &'a [u8])>) -> Result<()> {
+        self.array.with_iter(iter)
+    }
+
     pub fn iter(&self) -> SlotArrayIterator<&[u8], &[u8]> {
         self.array.iter()
+    }
+
+    pub fn split_iter(
+        &self,
+    ) -> (
+        &[u8],
+        SlotArrayRangeIterator<&[u8], &[u8]>,
+        SlotArrayRangeIterator<&[u8], &[u8]>,
+    ) {
+        let num_slots = self.array.num_slots();
+        assert!(num_slots > 1);
+        let mid = num_slots / 2;
+        let split_key = self.array.slot_content(mid.try_into().unwrap()).key;
+        let (left, right) = self.array.split_at(mid.try_into().unwrap());
+        (split_key, left, right)
     }
 }
 
@@ -205,11 +225,11 @@ impl<'a> InteriorNode<'a> {
         }
     }
 
-    pub fn may_split(&self) -> bool {
+    pub fn will_overfull(&self, key: &[u8]) -> bool {
         false
     }
 
-    pub fn may_merge(&self) -> bool {
+    pub fn will_underfull(&self) -> bool {
         false
     }
 }

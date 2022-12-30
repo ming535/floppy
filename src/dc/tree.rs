@@ -2,11 +2,14 @@ use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc::{
     buf_frame::{BufferFrame, BufferFrameGuard},
     buf_mgr::BufMgr,
+    codec::Codec,
     node::{InteriorNode, LeafNode, NodeType},
-    page::{PageId, PAGE_ID_ROOT},
+    page::{PageId, PagePtr, PAGE_ID_ROOT, PAGE_SIZE},
+    slot_array::Record,
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 
+use crate::dc::slot_array::SlotArray;
 use crate::env::Env;
 use std::path::Path;
 
@@ -90,8 +93,8 @@ where
                     let mut child_guard = self.buf_mgr.fix_page(page_id).await?;
                     // add parent to the guard chain if SMO might happen.
                     let child_node = InteriorNode::from_data(child_guard.payload_mut());
-                    if (mode == AccessMode::Insert && child_node.may_split())
-                        || (mode == AccessMode::Delete && child_node.may_merge())
+                    if (mode == AccessMode::Insert && child_node.will_overfull(key))
+                        || (mode == AccessMode::Delete && child_node.will_underfull())
                     {
                         let parent_guard = guard;
                         guard_chain.push(parent_guard);
@@ -131,7 +134,7 @@ where
         let leaf_guard = &mut guard_chain[chain_len - 1];
         let mut node = LeafNode::from_data(leaf_guard.payload_mut());
         if node.will_overfull(key, value) {
-            self.split(key, value, guard_chain)
+            self.split(key, value, guard_chain.as_mut_slice())
         } else {
             // drop parent guards to release their latches
             node.insert(key, value)
@@ -173,8 +176,70 @@ where
     /// 1. Construct `Iter-left` and `Iter-right` as before.
     /// 2. Construct a new node `N-left` with `Iter-left` and (S, P-left, P-right).
     /// 3. Construct a new node `N-right` with `Iter-right`.
-    fn split(&self, key: &[u8], value: &[u8], guard_chain: Vec<BufferFrameGuard>) -> Result<()> {
+    fn split(&self, key: &[u8], value: &[u8], guard_chain: &mut [BufferFrameGuard]) -> Result<()> {
+        guard_chain.reverse();
+
+        assert!(guard_chain.len() > 0);
+
+        let leaf_guard = &mut guard_chain[0];
+
+        let (split_key, new_leaf) = self.split_leaf(leaf_guard, key, value)?;
+
+        // let guard = &mut guard_chain[1];
+        // let guard_chain = &guard_chain[2..];
+        // let mut node = InteriorNode::from_data(guard.payload_mut());
+        // if node.will_overfull(split_key) {
+        //     self.split_interior(
+        //         guard_chain,
+        //         split_key,
+        //         leaf_guard.page_id(),
+        //         new_leaf.page_id(),
+        //     );
+        // } else {
+        //     node.add_index(split_key, left_guard.page_id(), new_leaf.page_id());
+        // }
         Ok(())
+    }
+
+    fn split_interior(
+        &self,
+        guard_chain: &mut [BufferFrameGuard],
+        key: &[u8],
+        left: PageId,
+        right: PageId,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn split_leaf(
+        &self,
+        guard: &mut BufferFrameGuard,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(&[u8], LeafNode)> {
+        todo!()
+        // let record = Record {
+        //     flag: 0,
+        //     key,
+        //     value,
+        // };
+        //
+        // let leaf_node = LeafNode::from_data(guard.payload_mut());
+        // let leaf_iter = leaf_node.iter();
+        //
+        // let scratch_page_ptr = PagePtr::zero_content(PAGE_SIZE + record.encode_size() + 2)?;
+        // let scratch_slot_array = SlotArray::<&[u8], &[u8]>::from_data(scratch_page_ptr.data_mut());
+        // scratch_slot_array.with_iter(leaf_iter)?;
+        // let scratch_node = LeafNode::from_data(scratch_page_ptr.data_mut());
+        // scratch_node.insert(key, value)?;
+        //
+        // let (split_key, left_iter, right_iter) = scratch_node.split_iter();
+        // leaf_node.with_iter(left_iter)?;
+        //
+        // let right_page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
+        // let right_node = LeafNode::from_data(right_page_ptr.data_mut());
+        // right_node.with_iter(right_iter)?;
+        // Ok((split_key, right_node))
     }
 }
 

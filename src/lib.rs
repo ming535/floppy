@@ -1,4 +1,4 @@
-#![feature(type_alias_impl_trait, io_error_more)]
+#![feature(type_alias_impl_trait, io_error_more, anonymous_lifetime_in_impl_trait)]
 
 mod catalog;
 mod common;
