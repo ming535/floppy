@@ -1,5 +1,5 @@
 use crate::common::error::{DCError, FloppyError, Result};
-use crate::dc::slot_array::SlotArrayRangeIterator;
+use crate::dc::slot_array::{SlotArrayRangeIterator, FLAG_INFINITE_SMALL};
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     page::PageId,
@@ -95,7 +95,7 @@ impl<'a> LeafNode<'a> {
                 "Key {:?} already exists",
                 key
             )))),
-            Err(slot) => self.array.insert_at(slot, key, value),
+            Err(slot) => self.array.insert_at(slot, key, value, None),
         }
     }
 
@@ -134,94 +134,63 @@ impl<'a> LeafNode<'a> {
 /// The interior node has a slot array and extra "inf_pid" pointer.
 /// It consists of the following key value pairs:
 ///
-/// (K0, P0), (K1, P1), ...(Ki, Pi), ... (Kn, Pn), Pn+1
+/// (P0), (K1, P1), ...(Ki, Pi), ... (Kn, Pn)
 ///
 /// Each pointer represents the following key range:
-///      P0         P1            Pi                Pn        Pn+1
-/// (-inf, K0), [K0, K1), ..., [Ki-1, Ki), ..., [Kn-1, Kn), [Kn, +inf)
+///      P0         P1            Pi                Pn
+/// (-inf, K1), [K1, K2), ..., [Ki, Ki+1), ..., [Kn, +inf)
 ///
-/// Assuming the current keys are the following:
-///
-/// {2, P10}, {5, P2}, {7, P15}, {9, P24}, {10, P25}, {299, P4}, {+inf, P88}
-///
-/// When searching for key 8, the binary_search will return index 3.
-/// The pointer in index 3 covers the range [7, 9), so we can follow
-/// the pointer to the child page 24.
-///
-/// When searching for key 310, the binary_search will return index 6.
-/// The pointer index 6 is the "inf_pid", and covers the range
-/// [299, +inf). So we can follow the pointer to the child page 88.
-///
-/// When P2 is split into two pages P2 and P2-right, where the split key is S.
-/// P2: 2 <= K < S, P2-right: S <= K < 5.
-/// We change the following entries:
-/// 1. Add a new entry {S, P2}
-/// 2. Replace the entry {5, P2} with {5, P2-right}
-///
-/// When P88 is split into two pages P88 and P88-right, where the split key is S.
-/// P88: 299 <= K < S, P88-right: K > S.
-/// We change the following entries:
-/// 1. Add a new entry {S, P88}
-/// 2. Replace the entry {+inf, P88} with {+inf, P88-right}
+/// Take (K1, P1) as an example:
+/// The key (K1) is the lower bound of the child page (P1). The upper bound
+/// of the child page (P1) is the next key in the array (K2).
+/// When a leaf page splits,we "copy" the split key and new page into the parent.
+/// When a interior page splits, we "move" the split key and new page into the parent.
 pub(crate) struct InteriorNode<'a> {
     array: SlotArray<'a, &'a [u8], PageId>,
-    inf_pid: PageId,
 }
 
 impl<'a> InteriorNode<'a> {
     pub fn from_data(data: &'a mut [u8]) -> Self {
-        let payload_len = data.len();
-        let slot_end = payload_len - 4;
-        let inf_pid = u32::from_le_bytes(data[slot_end - 4..slot_end].try_into().unwrap()).into();
-        let array = SlotArray::from_data(&mut data[..slot_end]);
-        Self { array, inf_pid }
+        let array = SlotArray::from_data(&mut data[4..]);
+        Self { array }
+    }
+
+    /// Init a Interior node fro a single key and two page pointer.
+    pub fn init(&self, key: &[u8], left_pid: PageId, right_pid: PageId) -> Result<()> {
+        self.array.reset_zero();
+        self.array
+            .insert_at(SlotId(0), &[], left_pid, Some(FLAG_INFINITE_SMALL))?;
+        self.array.insert_at(SlotId(1), key, right_pid, None)?;
+        Ok(())
     }
 
     pub fn get_child(&self, key: &[u8]) -> Result<PageId> {
-        let slot_id = match self.array.rank(key) {
-            Err(pos) => pos,
-            Ok(pos) => SlotId(pos.0 + 1),
+        let pos = match self.array.rank(key) {
+            Err(pos) => {
+                if pos.0 == 0 {
+                    pos
+                } else {
+                    SlotId(pos.0 - 1)
+                }
+            }
+            Ok(pos) => pos,
         };
-
-        let pid = if slot_id == self.array.num_slots().try_into().unwrap() {
-            self.inf_pid
-        } else {
-            self.array.slot_content(slot_id).value
-        };
-
-        Ok(pid)
+        let page_id = self.array.slot_content(pos).value;
+        Ok(page_id)
     }
 
-    pub fn add_index(
-        &mut self,
-        split_key: &'a [u8],
-        left_pid: PageId,
-        right_pid: PageId,
-    ) -> Result<()> {
-        let pos = self.insert(split_key, left_pid)?;
-        self.update(SlotId(pos.0 + 1), right_pid)
-    }
-
-    /// Insert a new entry into the interior node, and returns the rank when success.
-    pub fn insert(&mut self, key: &'a [u8], value: PageId) -> Result<SlotId> {
-        match self.array.rank(key) {
+    /// Add an index where `pid` contains all keys greater all equal to `lower_bound_key`.
+    /// In another words, `pid` points to keys `[lower_bound_key, next_entry_of_this_key)`.
+    pub fn add_index(&mut self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
+        match self.array.rank(lower_bound_key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
-                key
+                pid
             )))),
             Err(pos) => {
-                self.array.insert_at(pos, key, value)?;
-                Ok(pos)
+                let slot = if pos.0 == 0 { SlotId(1) } else { pos };
+                self.array.insert_at(slot, lower_bound_key, pid, None)
             }
-        }
-    }
-
-    pub fn update(&mut self, slot: SlotId, value: PageId) -> Result<()> {
-        if slot == self.array.num_slots().try_into().unwrap() {
-            self.inf_pid = value;
-            Ok(())
-        } else {
-            self.array.update_at(slot, value)
         }
     }
 
@@ -278,7 +247,7 @@ mod tests {
     use crate::dc::page::{PagePtr, PAGE_SIZE};
 
     #[test]
-    fn test_simple_leaf() -> Result<()> {
+    fn test_node_simple_leaf() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut leaf = LeafNode::from_data(page_ptr.data_mut());
 
@@ -307,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn test_leaf_iter() -> Result<()> {
+    fn test_node_leaf_iter() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut leaf = LeafNode::from_data(page_ptr.data_mut());
         let mut idx = 0;
@@ -324,27 +293,26 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_interior() -> Result<()> {
+    fn test_node_simple_interior() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let mut node = InteriorNode::from_data(page_ptr.data_mut());
+        // P1, (b), P2
+        node.init(b"b", PageId(1), PageId(2))?;
+        // P1, (b), P2, (c), P3
+        node.add_index(b"c", 3.into())?;
+        // P1, (b), P2, (c), P3, (d), P8
+        node.add_index(b"d", 8.into())?;
 
-        // P1, (2), P2
-        node.add_index(b"2", 1.into(), 2.into())?;
-        // P1, (2), P3, (5), P4
-        node.add_index(b"5", 3.into(), 4.into())?;
-        // P1, (2), P8, (3), P9, (5), P4
-        node.add_index(b"3", 8.into(), 9.into())?;
-        assert_eq!(node.get_child(b"1")?, PageId(1));
+        assert_eq!(node.get_child(b"a")?, PageId(1));
 
-        assert_eq!(node.get_child(b"2")?, PageId(8));
-        assert_eq!(node.get_child(b"2000")?, PageId(8));
+        assert_eq!(node.get_child(b"b")?, PageId(2));
+        assert_eq!(node.get_child(b"b000")?, PageId(2));
 
-        assert_eq!(node.get_child(b"3")?, PageId(9));
-        assert_eq!(node.get_child(b"3000")?, PageId(9));
-        assert_eq!(node.get_child(b"4")?, PageId(9));
+        assert_eq!(node.get_child(b"c")?, PageId(3));
+        assert_eq!(node.get_child(b"c000")?, PageId(3));
 
-        assert_eq!(node.get_child(b"5")?, PageId(4));
-        assert_eq!(node.get_child(b"50")?, PageId(4));
+        assert_eq!(node.get_child(b"d")?, PageId(8));
+        assert_eq!(node.get_child(b"d0")?, PageId(8));
         Ok(())
     }
 }

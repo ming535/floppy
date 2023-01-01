@@ -52,6 +52,13 @@ where
         }
     }
 
+    pub fn reset_zero(&self) {
+        unsafe {
+            let ptr = self.data.as_ptr() as *mut u8;
+            ptr.write_bytes(0, self.data.len());
+        }
+    }
+
     pub fn with_iter(&self, iter: impl Iterator<Item = (K, V)>) -> Result<()> {
         unsafe {
             let ptr = self.data.as_ptr() as *mut u8;
@@ -59,7 +66,7 @@ where
         }
 
         for (slot, (k, v)) in iter.enumerate() {
-            self.insert_at(slot.try_into()?, k, v)?;
+            self.insert_at(slot.try_into()?, k, v, None)?;
         }
         Ok(())
     }
@@ -80,10 +87,24 @@ where
         let mut size = self.num_slots();
         let mut left = 0;
         let mut right = size;
+        // (infi_small, c)
+        // size = 2
+        // left = 0, right = 2
+        //
+        // mid = 1 mid = c > target = a
+        // right = 1
+        // size = 1
+        //
+        // mid = 0
+        // right = 0
         while left < right {
             let mid = left + size / 2;
             let slot_content = self.slot_content(mid.try_into().unwrap());
-            let cmp = slot_content.key.borrow().cmp(target);
+            let cmp = if slot_content.flag & FLAG_INFINITE_SMALL != 0 {
+                Ordering::Greater
+            } else {
+                slot_content.key.borrow().cmp(target)
+            };
             if cmp == Ordering::Less {
                 // mid < target
                 left = mid + 1;
@@ -103,12 +124,9 @@ where
         self.record_size(key, value) + 2 > self.free_space()
     }
 
-    pub fn insert_at(&self, slot: SlotId, key: K, value: V) -> Result<()> {
-        let record = Record {
-            flag: 0,
-            key,
-            value,
-        };
+    pub fn insert_at(&self, slot: SlotId, key: K, value: V, flag: Option<u8>) -> Result<()> {
+        let flag = flag.map_or(0, |v| v);
+        let record = Record { flag, key, value };
         let record_size = record.encode_size();
         // we need to consider slot offset.
         let size_needed = record_size + 2;
@@ -415,6 +433,8 @@ impl Codec for SlotOffsetVec {
     }
 }
 
+pub(crate) const FLAG_INFINITE_SMALL: u8 = 0x1;
+
 pub(crate) struct Record<K, V> {
     pub flag: u8,
     pub key: K,
@@ -449,13 +469,45 @@ mod tests {
     use super::*;
     use crate::dc::page::PagePtr;
 
-    fn init_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
+    fn init_leaf_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
     where
         F: Fn(usize) -> usize,
     {
         let mut i: usize = 0;
         loop {
-            match array.insert_at(i.try_into().unwrap(), &f(i).to_be_bytes(), &i.to_be_bytes()) {
+            match array.insert_at(
+                i.try_into().unwrap(),
+                &f(i).to_be_bytes(),
+                &i.to_be_bytes(),
+                None,
+            ) {
+                Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
+                Ok(_) => i += 1,
+                Err(other) => return Err(other),
+            };
+        }
+        assert!(array.will_overfull(&(i.to_be_bytes()), &(i.to_be_bytes())));
+        Ok(i)
+    }
+
+    fn init_interior_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
+    where
+        F: Fn(usize) -> usize,
+    {
+        let mut i: usize = 0;
+        loop {
+            let flag = if i == 0 {
+                Some(FLAG_INFINITE_SMALL)
+            } else {
+                None
+            };
+
+            match array.insert_at(
+                i.try_into().unwrap(),
+                &f(i).to_be_bytes(),
+                &i.to_be_bytes(),
+                flag,
+            ) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
                 Ok(_) => i += 1,
                 Err(other) => return Err(other),
@@ -466,10 +518,10 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_iter_empty() -> Result<()> {
+    fn test_leaf_array_init() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
         let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
-        init_array(&array, |x| x)?;
+        init_leaf_array(&array, |x| x)?;
         let iter = array.iter();
         for (i, (k, v)) in iter.enumerate() {
             assert_eq!(i.to_be_bytes(), k);
@@ -480,10 +532,10 @@ mod tests {
     }
 
     #[test]
-    fn test_with_iter() -> Result<()> {
+    fn test_leaf_array_with_iter() -> Result<()> {
         let page_a = PagePtr::zero_content(1024)?;
         let array_a = SlotArray::<&[u8], &[u8]>::from_data(page_a.data_mut());
-        let size = init_array(&array_a, |x| x)?;
+        let size = init_leaf_array(&array_a, |x| x)?;
 
         let page_b = PagePtr::zero_content(1024)?;
         let array_b = SlotArray::<&[u8], &[u8]>::from_data(page_b.data_mut());
@@ -493,7 +545,7 @@ mod tests {
         let mut iter_a = array_a.iter();
         assert!(iter_a.next().is_none());
 
-        init_array(&array_b, |x| x * 2)?;
+        init_leaf_array(&array_b, |x| x * 2)?;
         array_a.with_iter(array_b.iter())?;
         let iter_a = array_a.iter();
         // array_a should be the same with array array_a
@@ -504,6 +556,20 @@ mod tests {
             assert_eq!(k_a, k_b);
             assert_eq!(v_a, v_b);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_interior_array() -> Result<()> {
+        let page = PagePtr::zero_content(1024)?;
+        let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
+        init_interior_array(&array, |x| x)?;
+        let iter = array.iter();
+        for (i, (k, v)) in iter.enumerate() {
+            assert_eq!(i.to_be_bytes(), k);
+            assert_eq!(i.to_be_bytes(), v);
+        }
+
         Ok(())
     }
 }
