@@ -75,6 +75,11 @@ impl<'a> LeafNode<'a> {
         Self { array }
     }
 
+    pub fn min_key(&self) -> Vec<u8> {
+        let record = self.array.slot_content(SlotId(0));
+        record.key.into()
+    }
+
     pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>> {
         match self.array.rank(key) {
             Err(_) => Ok(None),
@@ -115,19 +120,14 @@ impl<'a> LeafNode<'a> {
         self.array.iter()
     }
 
-    pub fn split_iter(
+    pub fn split_half(
         &self,
     ) -> (
         &[u8],
         SlotArrayRangeIterator<&[u8], &[u8]>,
         SlotArrayRangeIterator<&[u8], &[u8]>,
     ) {
-        let num_slots = self.array.num_slots();
-        assert!(num_slots > 1);
-        let mid = num_slots / 2;
-        let split_key = self.array.slot_content(mid.try_into().unwrap()).key;
-        let (left, right) = self.array.split_at(mid.try_into().unwrap());
-        (split_key, left, right)
+        self.array.split_half()
     }
 }
 
@@ -153,6 +153,13 @@ impl<'a> InteriorNode<'a> {
     pub fn from_data(data: &'a mut [u8]) -> Self {
         let array = SlotArray::from_data(&mut data[4..]);
         Self { array }
+    }
+
+    pub fn set_inf_min(&self) -> Vec<u8> {
+        let mut record = self.array.slot_content(SlotId(0));
+        self.array
+            .update_at(SlotId(0), record.key, record.value, FLAG_INFINITE_SMALL);
+        record.key.into()
     }
 
     /// Init a Interior node fro a single key and two page pointer.
@@ -181,7 +188,7 @@ impl<'a> InteriorNode<'a> {
 
     /// Add an index where `pid` contains all keys greater all equal to `lower_bound_key`.
     /// In another words, `pid` points to keys `[lower_bound_key, next_entry_of_this_key)`.
-    pub fn add_index(&mut self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
+    pub fn add_index(&self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
         match self.array.rank(lower_bound_key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -192,6 +199,16 @@ impl<'a> InteriorNode<'a> {
                 self.array.insert_at(slot, lower_bound_key, pid, None)
             }
         }
+    }
+
+    pub fn split_half(
+        &self,
+    ) -> (
+        &[u8],
+        SlotArrayRangeIterator<&[u8], PageId>,
+        SlotArrayRangeIterator<&[u8], PageId>,
+    ) {
+        self.array.split_half()
     }
 
     pub fn will_overfull(&self, key: &[u8]) -> bool {

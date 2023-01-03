@@ -11,7 +11,7 @@ use crate::dc::{
 
 use crate::dc::slot_array::SlotArray;
 use crate::env::Env;
-use std::path::Path;
+use std::{cmp::Ordering, path::Path};
 
 pub struct Tree<E: Env> {
     buf_mgr: BufMgr<E>,
@@ -45,7 +45,7 @@ where
         assert!(key.len() <= MAX_KEY_SIZE);
         assert!(value.len() <= MAX_VALUE_SIZE);
         let mut guard_chain = self.find_leaf(key, AccessMode::Insert).await?;
-        self.insert_value(key, value, guard_chain)
+        self.insert_value(key, value, guard_chain).await
     }
 
     /// init root node if not exists
@@ -123,7 +123,7 @@ where
         node.get(key).map(|opt_v| opt_v.map(|v| v.into()))
     }
 
-    fn insert_value(
+    async fn insert_value(
         &self,
         key: &[u8],
         value: &[u8],
@@ -134,7 +134,7 @@ where
         let leaf_guard = &mut guard_chain[chain_len - 1];
         let mut node = LeafNode::from_data(leaf_guard.payload_mut());
         if node.will_overfull(key, value) {
-            self.split(key, value, guard_chain.as_mut_slice())
+            self.split(key, value, guard_chain.as_mut_slice()).await
         } else {
             // drop parent guards to release their latches
             node.insert(key, value)
@@ -176,70 +176,95 @@ where
     /// 1. Construct `Iter-left` and `Iter-right` as before.
     /// 2. Construct a new node `N-left` with `Iter-left` and (S, P-left, P-right).
     /// 3. Construct a new node `N-right` with `Iter-right`.
-    fn split(&self, key: &[u8], value: &[u8], guard_chain: &mut [BufferFrameGuard]) -> Result<()> {
+    async fn split(
+        &self,
+        key: &[u8],
+        value: &[u8],
+        guard_chain: &mut [BufferFrameGuard],
+    ) -> Result<()> {
         guard_chain.reverse();
 
         assert!(guard_chain.len() > 0);
 
         let leaf_guard = &mut guard_chain[0];
 
-        let (split_key, new_leaf) = self.split_leaf(leaf_guard, key, value)?;
+        let mut new_frame = self.split_leaf(leaf_guard, key, value).await?;
+        let mut new_node = LeafNode::from_data(new_frame.payload_mut());
+        let mut split_key = new_node.min_key();
 
-        // let guard = &mut guard_chain[1];
-        // let guard_chain = &guard_chain[2..];
-        // let mut node = InteriorNode::from_data(guard.payload_mut());
-        // if node.will_overfull(split_key) {
-        //     self.split_interior(
-        //         guard_chain,
-        //         split_key,
-        //         leaf_guard.page_id(),
-        //         new_leaf.page_id(),
-        //     );
-        // } else {
-        //     node.add_index(split_key, left_guard.page_id(), new_leaf.page_id());
-        // }
+        let parents = &mut guard_chain[1..];
+        for guard in parents.iter_mut() {
+            let node = InteriorNode::from_data(guard.payload_mut());
+            if node.will_overfull(split_key.as_slice()) {
+                new_frame = self
+                    .split_interior(guard, split_key.as_slice(), new_frame.page_id())
+                    .await?;
+                let new_node = InteriorNode::from_data(new_frame.payload_mut());
+                split_key = new_node.set_inf_min();
+            } else {
+                node.add_index(split_key.as_slice(), new_frame.page_id())?;
+                break;
+            }
+        }
         Ok(())
     }
 
-    fn split_interior(
+    async fn split_interior(
         &self,
-        guard_chain: &mut [BufferFrameGuard],
+        guard: &mut BufferFrameGuard,
         key: &[u8],
-        left: PageId,
-        right: PageId,
-    ) -> Result<()> {
-        Ok(())
+        page_id: PageId,
+    ) -> Result<BufferFrameGuard> {
+        let interior_node = InteriorNode::from_data(guard.payload_mut());
+        let (split_key, left_iter, right_iter) = interior_node.split_half();
+
+        let mut new_page = self.buf_mgr.alloc_page().await?;
+        let new_slot_array = SlotArray::<&[u8], PageId>::from_data(new_page.payload_mut());
+        new_slot_array.with_iter(right_iter)?;
+        let right_node = InteriorNode::from_data(new_page.payload_mut());
+
+        let cmp = key.cmp(split_key);
+        if cmp == Ordering::Less {
+            interior_node.add_index(key, page_id)?;
+        } else if cmp == Ordering::Greater {
+            right_node.add_index(key, page_id)?;
+        } else {
+            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "key already exists {:?}",
+                key
+            ))));
+        }
+
+        Ok(new_page)
     }
 
-    fn split_leaf(
+    async fn split_leaf(
         &self,
         guard: &mut BufferFrameGuard,
         key: &[u8],
         value: &[u8],
-    ) -> Result<(&[u8], LeafNode)> {
-        todo!()
-        // let record = Record {
-        //     flag: 0,
-        //     key,
-        //     value,
-        // };
-        //
-        // let leaf_node = LeafNode::from_data(guard.payload_mut());
-        // let leaf_iter = leaf_node.iter();
-        //
-        // let scratch_page_ptr = PagePtr::zero_content(PAGE_SIZE + record.encode_size() + 2)?;
-        // let scratch_slot_array = SlotArray::<&[u8], &[u8]>::from_data(scratch_page_ptr.data_mut());
-        // scratch_slot_array.with_iter(leaf_iter)?;
-        // let scratch_node = LeafNode::from_data(scratch_page_ptr.data_mut());
-        // scratch_node.insert(key, value)?;
-        //
-        // let (split_key, left_iter, right_iter) = scratch_node.split_iter();
-        // leaf_node.with_iter(left_iter)?;
-        //
-        // let right_page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        // let right_node = LeafNode::from_data(right_page_ptr.data_mut());
-        // right_node.with_iter(right_iter)?;
-        // Ok((split_key, right_node))
+    ) -> Result<BufferFrameGuard> {
+        let leaf_node = LeafNode::from_data(guard.payload_mut());
+        let (split_key, left_iter, right_iter) = leaf_node.split_half();
+
+        let mut new_page = self.buf_mgr.alloc_page().await?;
+        let new_slot_array = SlotArray::<&[u8], &[u8]>::from_data(new_page.payload_mut());
+        new_slot_array.with_iter(right_iter)?;
+        let right_node = LeafNode::from_data(new_page.payload_mut());
+
+        let cmp = key.cmp(split_key);
+        if cmp == Ordering::Less {
+            leaf_node.insert(key, value)?;
+        } else if cmp == Ordering::Greater {
+            right_node.insert(key, value)?;
+        } else {
+            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "key already exists {:?}",
+                key
+            ))));
+        }
+
+        Ok(new_page)
     }
 }
 

@@ -87,16 +87,6 @@ where
         let mut size = self.num_slots();
         let mut left = 0;
         let mut right = size;
-        // (infi_small, c)
-        // size = 2
-        // left = 0, right = 2
-        //
-        // mid = 1 mid = c > target = a
-        // right = 1
-        // size = 1
-        //
-        // mid = 0
-        // right = 0
         while left < right {
             let mid = left + size / 2;
             let slot_content = self.slot_content(mid.try_into().unwrap());
@@ -160,12 +150,13 @@ where
         Ok(())
     }
 
-    pub fn update_at(&mut self, slot: SlotId, value: V) -> Result<()> {
+    pub fn update_at(&self, slot: SlotId, key: K, value: V, flag: u8) {
         let mut record = self.slot_content(slot);
+        record.key = key;
         record.value = value;
+        record.flag = flag;
         let offset = self.slot_offset(slot);
         self.set_slot_content(record, offset);
-        Ok(())
     }
 
     pub fn iter(&self) -> SlotArrayIterator<K, V> {
@@ -185,15 +176,24 @@ where
         }
     }
 
-    /// split_at will split the SlotArray into two SlotArrayRangeIterator left and right.
-    /// The left will contain the range [0, slot), and the right will contain the range [slot, num_slots).
-    pub fn split_at(
+    /// split_half returns a split key and two range iterator.
+    /// The split key returned is the middle of the key `mid_key`.
+    /// The first iterator returns the range [min_key, mid_key),
+    /// and the second iterator returns the range [mid_key, max_key)
+    pub fn split_half(
         &self,
-        slot: SlotId,
-    ) -> (SlotArrayRangeIterator<K, V>, SlotArrayRangeIterator<K, V>) {
-        let left = self.range(SlotId(0)..slot);
-        let right = self.range(slot..self.num_slots().try_into().unwrap());
-        (left, right)
+    ) -> (
+        K,
+        SlotArrayRangeIterator<K, V>,
+        SlotArrayRangeIterator<K, V>,
+    ) {
+        let num_slots = self.num_slots();
+        assert!(num_slots >= 2);
+        let mid: SlotId = (num_slots / 2).try_into().unwrap();
+        let record = self.slot_content(mid);
+        let left = self.range(SlotId(0)..mid);
+        let right = self.range(mid..num_slots.try_into().unwrap());
+        (record.key, left, right)
     }
 
     fn record_size(&self, key: K, value: V) -> usize {
