@@ -188,6 +188,10 @@ where
 
         let leaf_guard = &mut guard_chain[0];
 
+        if leaf_guard.page_id() == PAGE_ID_ROOT {
+            return self.split_leaf_root(leaf_guard, key, value).await;
+        }
+
         let mut new_frame = self.split_leaf(leaf_guard, key, value).await?;
         let mut new_node = LeafNode::from_data(new_frame.payload_mut());
         let mut split_key = new_node.min_key();
@@ -196,6 +200,11 @@ where
         for guard in parents.iter_mut() {
             let node = InteriorNode::from_data(guard.payload_mut());
             if node.will_overfull(split_key.as_slice()) {
+                if guard.page_id() == PAGE_ID_ROOT {
+                    return self
+                        .split_interior_root(guard, split_key.as_slice(), new_frame.page_id())
+                        .await;
+                }
                 new_frame = self
                     .split_interior(guard, split_key.as_slice(), new_frame.page_id())
                     .await?;
@@ -265,6 +274,80 @@ where
         }
 
         Ok(new_page)
+    }
+
+    async fn split_leaf_root(
+        &self,
+        guard: &mut BufferFrameGuard,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<()> {
+        let leaf_node = LeafNode::from_data(guard.payload_mut());
+        let (split_key, left_iter, right_iter) = leaf_node.split_half();
+
+        let mut new_left_page = self.buf_mgr.alloc_page().await?;
+        let new_left_slot_array = SlotArray::<&[u8], &[u8]>::from_data(new_left_page.payload_mut());
+        new_left_slot_array.with_iter(left_iter)?;
+        let new_left_node = LeafNode::from_data(new_left_page.payload_mut());
+
+        let mut new_right_page = self.buf_mgr.alloc_page().await?;
+        let new_right_slot_array =
+            SlotArray::<&[u8], &[u8]>::from_data(new_right_page.payload_mut());
+        new_right_slot_array.with_iter(right_iter)?;
+        let new_right_node = LeafNode::from_data(new_right_page.payload_mut());
+
+        let cmp = key.cmp(split_key);
+        if cmp == Ordering::Less {
+            new_left_node.insert(key, value)?;
+        } else if cmp == Ordering::Greater {
+            new_right_node.insert(key, value)?;
+        } else {
+            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "key already exists {:?}",
+                key
+            ))));
+        }
+
+        let root = InteriorNode::from_data(guard.payload_mut());
+        root.init(split_key, new_left_page.page_id(), new_right_page.page_id())
+    }
+
+    async fn split_interior_root(
+        &self,
+        guard: &mut BufferFrameGuard,
+        key: &[u8],
+        page_id: PageId,
+    ) -> Result<()> {
+        let interior_node = InteriorNode::from_data(guard.payload_mut());
+        let (split_key, left_iter, right_iter) = interior_node.split_half();
+
+        let mut new_left_page = self.buf_mgr.alloc_page().await?;
+        let new_left_slot_array =
+            SlotArray::<&[u8], PageId>::from_data(new_left_page.payload_mut());
+        new_left_slot_array.with_iter(left_iter)?;
+        let new_left_node = InteriorNode::from_data(new_left_page.payload_mut());
+
+        let mut new_right_page = self.buf_mgr.alloc_page().await?;
+        let new_right_slot_array =
+            SlotArray::<&[u8], PageId>::from_data(new_right_page.payload_mut());
+        new_right_slot_array.with_iter(right_iter)?;
+        let new_right_node = InteriorNode::from_data(new_right_page.payload_mut());
+        new_right_node.set_inf_min();
+
+        let cmp = key.cmp(split_key);
+        if cmp == Ordering::Less {
+            new_left_node.add_index(key, page_id)?;
+        } else if cmp == Ordering::Greater {
+            new_right_node.add_index(key, page_id)?;
+        } else {
+            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "key already exists {:?}",
+                key
+            ))));
+        }
+
+        let root = InteriorNode::from_data(guard.payload_mut());
+        root.init(split_key, new_left_page.page_id(), new_right_page.page_id())
     }
 }
 
