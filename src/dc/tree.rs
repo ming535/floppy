@@ -355,7 +355,7 @@ mod tests {
     use crate::env::sim::{SimEnv, SIM_PATH};
 
     #[tokio::test]
-    async fn test_simple() -> Result<()> {
+    async fn test_tree_simple() -> Result<()> {
         let env = SimEnv;
         let tree = Tree::open(SIM_PATH, env).await?;
         tree.insert(b"1", b"1").await?;

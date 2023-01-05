@@ -571,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn test_leaf_array_init() -> Result<()> {
+    fn test_slot_leaf_array_init() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
         let array = SlotArray::<&[u8], IVec>::from_data(page.data_mut());
         init_leaf_array(&array, |x| x)?;
@@ -585,7 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn test_leaf_array_with_iter() -> Result<()> {
+    fn test_slot_leaf_array_with_iter() -> Result<()> {
         let page_a = PagePtr::zero_content(1024)?;
         let array_a = SlotArray::<&[u8], IVec>::from_data(page_a.data_mut());
         let size = init_leaf_array(&array_a, |x| x)?;
@@ -613,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn test_interior_array() -> Result<()> {
+    fn test_slot_interior_array() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
         let array = SlotArray::<&[u8], PageId>::from_data(page.data_mut());
         init_interior_array(&array, |x| x)?;

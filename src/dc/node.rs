@@ -278,11 +278,13 @@ impl NodeValue for PageId {}
 
 impl Codec for IVec {
     fn encode_size(&self) -> usize {
-        self.encode_size()
+        let s = self.as_ref();
+        s.encode_size()
     }
 
     unsafe fn encode_to(&self, encoder: &mut Encoder) {
-        self.encode_to(encoder)
+        let s = self.as_ref();
+        s.encode_to(encoder)
     }
 
     unsafe fn decode_from(dec: &mut Decoder) -> Self {
