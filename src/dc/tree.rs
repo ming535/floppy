@@ -5,10 +5,8 @@ use crate::common::{
 use crate::dc::{
     buf_frame::{BufferFrame, BufferFrameGuard},
     buf_mgr::BufMgr,
-    codec::Codec,
     node::{InteriorNode, LeafNode, NodeType, NodeValue, TreeNode},
-    page::{PageId, PagePtr, PAGE_ID_ROOT, PAGE_SIZE},
-    slot_array::{Record, SlotArray},
+    page::{PageId, PAGE_ID_ROOT},
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 use crate::env::Env;

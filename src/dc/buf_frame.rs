@@ -1,14 +1,12 @@
-use crate::dc::{
-    node::NodeType,
-    page::{PageId, PagePtr},
-};
-use std::ops::{Deref, DerefMut};
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    Arc,
+use crate::dc::page::{PageId, PagePtr, PAGE_ID_ROOT};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
 };
 
-use crate::dc::page::PAGE_ID_ROOT;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[derive(Clone)]
@@ -19,11 +17,16 @@ pub(crate) struct BufferFrame {
 impl BufferFrame {
     pub fn new(page_id: PageId, page_ptr: PagePtr) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(BufferFrameInner::new(page_id, page_ptr))),
+            inner: Arc::new(Mutex::new(BufferFrameInner::new(
+                page_id, page_ptr,
+            ))),
         }
     }
 
-    pub async fn guard(&self, parent_guard: Option<BufferFrameGuard>) -> BufferFrameGuard {
+    pub async fn guard(
+        &self,
+        parent_guard: Option<BufferFrameGuard>,
+    ) -> BufferFrameGuard {
         let guard = self.inner.clone().lock_owned().await;
         guard.fix();
         BufferFrameGuard { guard }

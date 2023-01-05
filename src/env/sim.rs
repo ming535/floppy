@@ -71,14 +71,14 @@ impl Env for SimEnv {
 
     async fn metadata<P: AsRef<Path> + Send>(
         &self,
-        path: P,
+        _path: P,
     ) -> Result<Metadata> {
         todo!()
     }
 
     async fn open_dir<P: AsRef<Path> + Send>(
         &self,
-        path: P,
+        _path: P,
     ) -> Result<Self::Directory> {
         todo!()
     }

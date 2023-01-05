@@ -5,12 +5,9 @@ use crate::common::{
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     page::{PageId, PagePtr},
-    slot_array::{
-        Record, SlotArray, SlotArrayIterator, SlotArrayRangeIterator, SlotId,
-        FLAG_INFINITE_SMALL,
-    },
+    slot_array::{SlotArray, SlotId, FLAG_INFINITE_SMALL},
 };
-use std::{borrow::Borrow, fmt, marker::PhantomData, mem};
+use std::{fmt, mem};
 
 /// The b-tree node header is 12 bytes. It is composed of the following fields:
 ///
@@ -88,7 +85,6 @@ where
 ///
 /// (K0, V0), (K1, V1), ...(Ki, Pi), ... (Kn, Vn)
 pub(crate) struct LeafNode<'a> {
-    page: &'a PagePtr,
     array: SlotArray<'a, &'a [u8], IVec>,
 }
 
@@ -109,7 +105,7 @@ impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
         }
 
         let array = SlotArray::from_data(page.node_data_mut());
-        Ok(Self { page, array })
+        Ok(Self { array })
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>> {
@@ -157,13 +153,12 @@ impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
 /// parent. When a interior page splits, we "move" the split key and new page
 /// into the parent.
 pub(crate) struct InteriorNode<'a> {
-    page: &'a PagePtr,
     array: SlotArray<'a, &'a [u8], PageId>,
 }
 
 impl<'a> InteriorNode<'a> {
     pub fn set_inf_min(&self) -> IVec {
-        let mut record = self.array.slot_content(SlotId(0));
+        let record = self.array.slot_content(SlotId(0));
         self.array.update_at(
             SlotId(0),
             record.key,
@@ -202,7 +197,7 @@ impl<'a> TreeNode<'a, &'a [u8], PageId> for InteriorNode<'a> {
         }
 
         let array = SlotArray::from_data(page.node_data_mut());
-        Ok(Self { page, array })
+        Ok(Self { array })
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<PageId>> {
