@@ -294,7 +294,7 @@ fn transform_binary_op(
 fn transform_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
     let param = p.strip_prefix("$");
     if param.is_none() {
-        return Err(FloppyError::Plan(format!("invalid parameter: {}", p)));
+        return Err(FloppyError::Plan(format!("invalid parameter: {p}")));
     }
 
     let n = param.unwrap().parse::<i32>().map_err(|e| {
@@ -512,7 +512,7 @@ mod tests {
             "SELECT 1 + ?",
             "Projection: Int64(1) + Int64(?)\n  EmptyTable",
         )
-        .expect("SELECT 1 + ?");
+        .expect("SELECT 1 + ");
 
         quick_test_eq(
             &scx,
