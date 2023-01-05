@@ -25,7 +25,7 @@ impl BufferFrame {
 
     pub async fn guard(
         &self,
-        parent_guard: Option<BufferFrameGuard>,
+        _parent_guard: Option<BufferFrameGuard>,
     ) -> BufferFrameGuard {
         let guard = self.inner.clone().lock_owned().await;
         guard.fix();

@@ -85,12 +85,12 @@ where
     /// merges.
     /// When deallocate a page, we add the page to the freelist. We do not
     /// shrink the file here.
-    pub async fn dealloc_page(page_id: PageId) -> Result<()> {
+    pub async fn dealloc_page(_page_id: PageId) -> Result<()> {
         todo!()
     }
 
     /// Flush the page content to disk.
-    pub async fn flush_page(&self, guard: &BufferFrameGuard) -> Result<()> {
+    pub async fn flush_page(&self, _guard: &BufferFrameGuard) -> Result<()> {
         todo!()
     }
 

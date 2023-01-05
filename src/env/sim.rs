@@ -2,7 +2,6 @@ use super::*;
 use std::{
     fs::ReadDir,
     pin::Pin,
-    slice,
     task::{Context, Poll},
     thread,
 };
@@ -31,7 +30,7 @@ impl Env for SimEnv {
         Ok(SimMem(Mutex::new(vec![])))
     }
 
-    fn spawn_background<F>(&self, f: F) -> Self::JoinHandle<F::Output>
+    fn spawn_background<F>(&self, _f: F) -> Self::JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send,
@@ -41,31 +40,31 @@ impl Env for SimEnv {
 
     async fn rename<P: AsRef<Path> + Send, Q: AsRef<Path> + Send>(
         &self,
-        from: P,
-        to: Q,
+        _from: P,
+        _to: Q,
     ) -> Result<()> {
         todo!()
     }
 
-    async fn remove_file<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
+    async fn remove_file<P: AsRef<Path> + Send>(&self, _path: P) -> Result<()> {
         Ok(())
     }
 
     async fn create_dir_all<P: AsRef<Path> + Send>(
         &self,
-        path: P,
+        _path: P,
     ) -> Result<()> {
         todo!()
     }
 
     async fn remove_dir_all<P: AsRef<Path> + Send>(
         &self,
-        path: P,
+        _path: P,
     ) -> Result<()> {
         todo!()
     }
 
-    fn read_dir<P: AsRef<Path>>(&self, path: P) -> Result<ReadDir> {
+    fn read_dir<P: AsRef<Path>>(&self, _path: P) -> Result<ReadDir> {
         todo!()
     }
 

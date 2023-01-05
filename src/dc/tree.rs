@@ -3,7 +3,7 @@ use crate::common::{
     ivec::IVec,
 };
 use crate::dc::{
-    buf_frame::{BufferFrame, BufferFrameGuard},
+    buf_frame::{BufferFrameGuard},
     buf_mgr::BufMgr,
     node::{InteriorNode, LeafNode, NodeType, NodeValue, TreeNode},
     page::{PageId, PAGE_ID_ROOT},
@@ -279,7 +279,7 @@ where
         Node: TreeNode<'a, &'a [u8], V>,
     {
         let node = Node::from_page(guard.page_ptr())?;
-        let (split_key, left_iter, right_iter) = node.slot_array().split_half();
+        let (split_key, _left_iter, right_iter) = node.slot_array().split_half();
 
         let right_node = Node::from_page(new_page.page_ptr())?;
         right_node.slot_array().with_iter(right_iter)?;
