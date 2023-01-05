@@ -294,12 +294,12 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
 mod tests {
     use super::*;
     use crate::catalog;
-    use crate::catalog::names::{FullObjectName, PartialObjectName};
-    use crate::catalog::CatalogStore;
+    
+    
     use crate::common::relation::RelationDesc;
     use crate::sql::context::StatementContext;
     use crate::sql::primitive::func::{add, and, equal, gt, or};
-    use sqlparser::ast::Statement;
+    
     use std::sync::Arc;
 
     fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn addition() -> Result<()> {
-        let mut catalog = Arc::new(catalog::memory::MemCatalog::default());
+        let catalog = Arc::new(catalog::memory::MemCatalog::default());
         // seed_catalog(&mut catalog);
         // let partial_obj_name: PartialObjectName = "test".into();
         // let full_obj_name: FullObjectName = "test".into();
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn logical_expr() -> Result<()> {
-        let mut catalog = Arc::new(catalog::memory::MemCatalog::default());
+        let catalog = Arc::new(catalog::memory::MemCatalog::default());
         let ecx = ExprContext {
             scx: Arc::new(StatementContext::new(catalog.clone())),
             rel_desc: Arc::new(RelationDesc::empty()),

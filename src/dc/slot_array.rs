@@ -588,7 +588,7 @@ mod tests {
     fn test_slot_leaf_array_with_iter() -> Result<()> {
         let page_a = PagePtr::zero_content(1024)?;
         let array_a = SlotArray::<&[u8], IVec>::from_data(page_a.data_mut());
-        let size = init_leaf_array(&array_a, |x| x)?;
+        let _size = init_leaf_array(&array_a, |x| x)?;
 
         let page_b = PagePtr::zero_content(1024)?;
         let array_b = SlotArray::<&[u8], IVec>::from_data(page_b.data_mut());

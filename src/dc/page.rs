@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn page_ptr_read_write() -> Result<()> {
-        let mut page = PagePtr::zero_content(PAGE_SIZE)?;
+        let page = PagePtr::zero_content(PAGE_SIZE)?;
         page.data_mut()[0] = 1;
         assert_eq!(page.data()[0], 1);
         page.data_mut()[1] = 3;

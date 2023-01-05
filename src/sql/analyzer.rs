@@ -443,7 +443,7 @@ mod tests {
     }
 
     fn quick_test_fail(scx: &StatementContext, sql: &str) -> Result<()> {
-        let plan = logical_plan(scx, sql)?;
+        let _plan = logical_plan(scx, sql)?;
         Ok(())
     }
 

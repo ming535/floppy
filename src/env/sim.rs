@@ -185,7 +185,7 @@ mod tests {
         let offset = 100 * 1024;
         let path = "sim";
 
-        let mut file = env.open_file(path).await.unwrap();
+        let file = env.open_file(path).await.unwrap();
         file.write_at(b"hello", offset).await.unwrap();
         file.sync_all().await.unwrap();
 

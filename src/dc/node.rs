@@ -301,7 +301,7 @@ mod tests {
     fn test_node_simple_leaf() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         page_ptr.set_node_type(NodeType::Leaf);
-        let mut leaf = LeafNode::from_page(&page_ptr)?;
+        let leaf = LeafNode::from_page(&page_ptr)?;
 
         leaf.insert(b"2", b"2".into())?;
         leaf.insert(b"3", b"3".into())?;
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut leaf = LeafNode::from_page(&page_ptr)?;
+        let leaf = LeafNode::from_page(&page_ptr)?;
         let mut iter = leaf.slot_array().iter();
         assert_eq!(iter.next(), Some((b"1".as_slice(), b"1".into())));
         assert_eq!(iter.next(), Some((b"2".as_slice(), b"2".into())));
@@ -331,7 +331,7 @@ mod tests {
     fn test_node_leaf_iter() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         page_ptr.set_node_type(NodeType::Leaf);
-        let mut leaf = LeafNode::from_page(&page_ptr)?;
+        let leaf = LeafNode::from_page(&page_ptr)?;
         let mut idx = 0;
         loop {
             let key = format!("{}", idx);
@@ -349,7 +349,7 @@ mod tests {
     fn test_node_simple_interior() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         page_ptr.set_node_type(NodeType::Interior);
-        let mut node = InteriorNode::from_page(&page_ptr)?;
+        let node = InteriorNode::from_page(&page_ptr)?;
         // P1, (b), P2
         node.init(b"b", PageId(1), PageId(2))?;
         // P1, (b), P2, (c), P3

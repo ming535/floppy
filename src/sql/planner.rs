@@ -29,7 +29,7 @@ mod tests {
         let (catalog_store, table_store) = seeder::seed_catalog_and_table(&vec![])?;
         let scx = StatementContext::new(catalog_store.clone());
         let exec_ctx = ExecutionContext::new(catalog_store.clone(), table_store.clone());
-        let mut plan = plan(&scx, "SELECT 1 + 2")?;
+        let plan = plan(&scx, "SELECT 1 + 2")?;
         let mut stream = plan.stream(Arc::new(exec_ctx)).expect("no error");
         let row = stream
             .next()
