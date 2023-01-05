@@ -150,8 +150,7 @@ impl RelationDesc {
             Some(idx) => match matches.next() {
                 None => Ok(idx),
                 Some(_) => Err(FloppyError::Internal(format!(
-                    "duplicated column name: {}",
-                    column_name
+                    "duplicated column name: {column_name}"
                 ))),
             },
         }
@@ -245,7 +244,10 @@ impl Row {
         Ok(self.values[index].clone())
     }
 
-    pub fn prim_key_datums(&self, rel_desc: &RelationDesc) -> Result<IndexKeyDatums> {
+    pub fn prim_key_datums(
+        &self,
+        rel_desc: &RelationDesc,
+    ) -> Result<IndexKeyDatums> {
         let prim_key = rel_desc.prim_key();
         prim_key
             .iter()
@@ -342,6 +344,6 @@ mod tests {
             }
         );
 
-        assert_eq!(key_start < key_end, true);
+        assert!(key_start < key_end);
     }
 }

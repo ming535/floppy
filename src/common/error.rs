@@ -69,20 +69,19 @@ pub fn field_not_found(
 /// Create a "table not found" Floppy::SchemaError
 pub fn table_not_found_in_catalog(table_name: &str) -> FloppyError {
     FloppyError::Catalog(CatalogError::TableNotFound(format!(
-        "table not found in catalog: {}",
-        table_name
+        "table not found in catalog: {table_name}",
     )))
 }
 
 pub fn table_not_found_in_storage(table_id: GlobalId) -> FloppyError {
-    FloppyError::Storage(format!("table not found in storage: {}", table_id))
+    FloppyError::Storage(format!("table not found in storage: {table_id}"))
 }
 
 impl std::fmt::Display for CatalogError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TableNotFound(desc) => {
-                write!(f, "{}", desc)
+                write!(f, "{desc}")
             }
             Self::ColumnNotFound {
                 qualifier,
@@ -91,9 +90,9 @@ impl std::fmt::Display for CatalogError {
             } => {
                 write!(f, "No field named ")?;
                 if let Some(q) = qualifier {
-                    write!(f, "'{}.{}'", q, name)?;
+                    write!(f, "'{q}.{name}'")?;
                 } else {
-                    write!(f, "'{}'", name)?;
+                    write!(f, "'{name}'")?;
                 }
                 if let Some(field_names) = valid_fields {
                     write!(
@@ -101,7 +100,7 @@ impl std::fmt::Display for CatalogError {
                         ". Valid fields are {}",
                         field_names
                             .iter()
-                            .map(|name| format!("'{}'", name))
+                            .map(|name| format!("'{name}'"))
                             .collect::<Vec<String>>()
                             .join(", ")
                     )?;
@@ -146,37 +145,36 @@ impl std::fmt::Display for FloppyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FloppyError::NotImplemented(desc) => {
-                write!(f, "This feature is not implemented: {}", desc)
+                write!(f, "This feature is not implemented: {desc}")
             }
             FloppyError::Internal(desc) => {
                 write!(
                     f,
-                    "Internal error: {}. This was likely caused by a bug",
-                    desc
+                    "Internal error: {desc}. This was likely caused by a bug"
                 )
             }
             FloppyError::Plan(desc) => {
-                write!(f, "Planner error: {}", desc)
+                write!(f, "Planner error: {desc}")
             }
             FloppyError::EvalExpr(desc) => {
-                write!(f, "Expression evaluation error: {}", desc)
+                write!(f, "Expression evaluation error: {desc}")
             }
-            FloppyError::Storage(desc) => write!(f, "Storage error: {}", desc),
-            FloppyError::DC(e) => write!(f, "DC error: {:?}", e),
+            FloppyError::Storage(desc) => write!(f, "Storage error: {desc}"),
+            FloppyError::DC(e) => write!(f, "DC error: {e:?}"),
             FloppyError::Catalog(e) => {
-                write!(f, "Schema error: {}", e)
+                write!(f, "Schema error: {e}")
             }
             FloppyError::Parser(e) => {
-                write!(f, "Parser error: {}", e)
+                write!(f, "Parser error: {e}")
             }
             FloppyError::Io(e) => {
-                write!(f, "Io error: {}", e)
+                write!(f, "Io error: {e}")
             }
             FloppyError::ExecuteReturnedResults => {
                 write!(f, "Execute returned results")
             }
             FloppyError::External(e) => {
-                write!(f, "external error: {}", e)
+                write!(f, "external error: {e}")
             }
         }
     }
