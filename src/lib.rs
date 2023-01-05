@@ -3,6 +3,8 @@
     io_error_more,
     anonymous_lifetime_in_impl_trait
 )]
+// todo fix this
+#![allow(dead_code)]
 
 mod catalog;
 mod common;
