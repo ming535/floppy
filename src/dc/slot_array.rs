@@ -3,7 +3,9 @@ use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
 };
-use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, mem, ops::Range, slice};
+use std::{
+    borrow::Borrow, cmp::Ordering, marker::PhantomData, mem, ops::Range, slice,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
 pub(crate) struct SlotId(pub(crate) u16);
@@ -59,7 +61,10 @@ where
         }
     }
 
-    pub fn with_iter(&self, iter: impl Iterator<Item = (K, V)>) -> Result<()> {
+    pub fn with_iter(
+        &self,
+        iter: impl Iterator<Item = (K, V)>,
+    ) -> Result<&Self> {
         unsafe {
             let ptr = self.data.as_ptr() as *mut u8;
             ptr.write_bytes(0, self.data.len());
@@ -68,7 +73,7 @@ where
         for (slot, (k, v)) in iter.enumerate() {
             self.insert_at(slot.try_into()?, k, v, None)?;
         }
-        Ok(())
+        Ok(&self)
     }
 
     /// Binary searches this node for a give key.
@@ -79,7 +84,10 @@ where
     /// If key is not found then [`Result::Err`] is returned, containing
     /// the index where a matching element could be inserted while maintaining
     /// the sorted order.
-    pub fn rank<Q: ?Sized>(&self, target: &Q) -> std::result::Result<SlotId, SlotId>
+    pub fn rank<Q: ?Sized>(
+        &self,
+        target: &Q,
+    ) -> std::result::Result<SlotId, SlotId>
     where
         K: Borrow<Q>,
         Q: Ord,
@@ -114,7 +122,17 @@ where
         self.record_size(key, value) + 2 > self.free_space()
     }
 
-    pub fn insert_at(&self, slot: SlotId, key: K, value: V, flag: Option<u8>) -> Result<()> {
+    pub fn will_underfull(&self) -> bool {
+        false
+    }
+
+    pub fn insert_at(
+        &self,
+        slot: SlotId,
+        key: K,
+        value: V,
+        flag: Option<u8>,
+    ) -> Result<()> {
         let flag = flag.map_or(0, |v| v);
         let record = Record { flag, key, value };
         let record_size = record.encode_size();
@@ -130,10 +148,9 @@ where
             }
         } else {
             // find freeblocks
-            return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(format!(
-                "page exhausted when insert slot: {:?}",
-                slot.0
-            ))));
+            return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(
+                format!("page exhausted when insert slot: {:?}", slot.0),
+            )));
         };
 
         // encode slot content
@@ -214,10 +231,17 @@ where
         let slot_content_start = self.slot_content_start() as usize;
         if slot_content_start == 0 {
             // This node haven't been used yet.
-            self.data.len() - self.header_encode_size() - self.slot_offsets_size()
+            self.data.len()
+                - self.header_encode_size()
+                - self.slot_offsets_size()
         } else {
-            assert!(slot_content_start > self.header_encode_size() + self.slot_offsets_size());
-            slot_content_start - self.header_encode_size() - self.slot_offsets_size()
+            assert!(
+                slot_content_start
+                    > self.header_encode_size() + self.slot_offsets_size()
+            );
+            slot_content_start
+                - self.header_encode_size()
+                - self.slot_offsets_size()
         }
     }
 
@@ -226,52 +250,71 @@ where
     }
 
     fn freeblock(&self) -> u16 {
-        let buf = unsafe { slice::from_raw_parts(self.header_free_block_ptr(), 2) };
+        let buf =
+            unsafe { slice::from_raw_parts(self.header_free_block_ptr(), 2) };
         let mut dec = Decoder::new(buf);
         unsafe { Decoder::get_u16(&mut dec) }
     }
 
     fn set_freeblock(&self, freeblock: u16) {
-        let buf = unsafe { slice::from_raw_parts_mut(self.header_free_block_ptr() as *mut u8, 2) };
+        let buf = unsafe {
+            slice::from_raw_parts_mut(
+                self.header_free_block_ptr() as *mut u8,
+                2,
+            )
+        };
         let mut encoder = Encoder::new(buf);
         unsafe { encoder.put_u16(freeblock) }
     }
 
     pub fn num_slots(&self) -> usize {
-        let buf = unsafe { slice::from_raw_parts(self.header_num_slots_ptr(), 2) };
+        let buf =
+            unsafe { slice::from_raw_parts(self.header_num_slots_ptr(), 2) };
         let mut dec = Decoder::new(buf);
         unsafe { Decoder::get_u16(&mut dec) }.into()
     }
 
     fn set_num_slots(&self, num_slot: usize) {
-        let buf = unsafe { slice::from_raw_parts_mut(self.header_num_slots_ptr() as *mut u8, 2) };
+        let buf = unsafe {
+            slice::from_raw_parts_mut(self.header_num_slots_ptr() as *mut u8, 2)
+        };
         let mut encoder = Encoder::new(buf);
         unsafe { encoder.put_u16(num_slot.try_into().unwrap()) }
     }
 
     fn slot_content_start(&self) -> u16 {
-        let buf = unsafe { slice::from_raw_parts(self.header_slot_content_start_ptr(), 2) };
+        let buf = unsafe {
+            slice::from_raw_parts(self.header_slot_content_start_ptr(), 2)
+        };
         let mut dec = Decoder::new(buf);
         unsafe { Decoder::get_u16(&mut dec) }
     }
 
     fn set_slot_content_start(&self, slot_content_start: u16) {
         let buf = unsafe {
-            slice::from_raw_parts_mut(self.header_slot_content_start_ptr() as *mut u8, 2)
+            slice::from_raw_parts_mut(
+                self.header_slot_content_start_ptr() as *mut u8,
+                2,
+            )
         };
         let mut encoder = Encoder::new(buf);
         unsafe { encoder.put_u16(slot_content_start) }
     }
 
     fn fragmented_free_bytes(&self) -> u8 {
-        let buf = unsafe { slice::from_raw_parts(self.header_fragmented_free_bytes_ptr(), 1) };
+        let buf = unsafe {
+            slice::from_raw_parts(self.header_fragmented_free_bytes_ptr(), 1)
+        };
         let mut dec = Decoder::new(buf);
         unsafe { Decoder::get_u8(&mut dec) }
     }
 
     fn set_fragmented_free_bytes(&self, fragmented_free_bytes: u8) {
         let buf = unsafe {
-            slice::from_raw_parts_mut(self.header_fragmented_free_bytes_ptr() as *mut u8, 1)
+            slice::from_raw_parts_mut(
+                self.header_fragmented_free_bytes_ptr() as *mut u8,
+                1,
+            )
         };
         let mut encoder = Encoder::new(buf);
         unsafe { encoder.put_u8(fragmented_free_bytes) }
@@ -287,8 +330,10 @@ where
 
     fn set_slot_content(&self, record: Record<K, V>, offset: u16) {
         let data_ptr = self.data.as_ptr() as *mut u8;
-        let mut_buf = unsafe { slice::from_raw_parts_mut(data_ptr, self.data.len()) };
-        let content_buf = &mut mut_buf[offset as usize..offset as usize + record.encode_size()];
+        let mut_buf =
+            unsafe { slice::from_raw_parts_mut(data_ptr, self.data.len()) };
+        let content_buf = &mut mut_buf
+            [offset as usize..offset as usize + record.encode_size()];
         let mut enc = Encoder::new(content_buf);
         unsafe {
             record.encode_to(&mut enc);
@@ -297,14 +342,16 @@ where
 
     fn slot_offset_vec(&self) -> SlotOffsetVec {
         let ptr = self.slot_offset_vec_ptr();
-        let buf = unsafe { slice::from_raw_parts(ptr, self.slot_offsets_size()) };
+        let buf =
+            unsafe { slice::from_raw_parts(ptr, self.slot_offsets_size()) };
         let mut dec = Decoder::new(buf);
         unsafe { SlotOffsetVec::decode_from(&mut dec) }
     }
 
     fn set_slot_offset_vec(&self, offset_vec: SlotOffsetVec) {
         let ptr = self.slot_offset_vec_ptr() as *mut u8;
-        let buf = unsafe { slice::from_raw_parts_mut(ptr, offset_vec.encode_size()) };
+        let buf =
+            unsafe { slice::from_raw_parts_mut(ptr, offset_vec.encode_size()) };
         let mut offset_vec_enc = Encoder::new(buf);
         unsafe {
             offset_vec.encode_to(&mut offset_vec_enc);
@@ -317,7 +364,8 @@ where
     }
 
     fn slot_offset(&self, slot: SlotId) -> u16 {
-        let buf = unsafe { slice::from_raw_parts(self.slot_offset_ptr(slot), 2) };
+        let buf =
+            unsafe { slice::from_raw_parts(self.slot_offset_ptr(slot), 2) };
         let mut dec = Decoder::new(buf);
         unsafe { Decoder::get_u16(&mut dec) }
     }
@@ -467,9 +515,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dc::page::PagePtr;
+    use crate::common::ivec::IVec;
+    use crate::dc::page::{PageId, PagePtr};
 
-    fn init_leaf_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
+    fn init_leaf_array<F>(array: &SlotArray<&[u8], IVec>, f: F) -> Result<usize>
     where
         F: Fn(usize) -> usize,
     {
@@ -477,8 +526,8 @@ mod tests {
         loop {
             match array.insert_at(
                 i.try_into().unwrap(),
-                &f(i).to_be_bytes(),
-                &i.to_be_bytes(),
+                &f(i).to_le_bytes(),
+                IVec::from(&i.to_le_bytes()),
                 None,
             ) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
@@ -486,11 +535,15 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array.will_overfull(&(i.to_be_bytes()), &(i.to_be_bytes())));
+        assert!(array
+            .will_overfull(&(i.to_le_bytes()), IVec::from(&i.to_le_bytes())));
         Ok(i)
     }
 
-    fn init_interior_array<F>(array: &SlotArray<&[u8], &[u8]>, f: F) -> Result<usize>
+    fn init_interior_array<F>(
+        array: &SlotArray<&[u8], PageId>,
+        f: F,
+    ) -> Result<usize>
     where
         F: Fn(usize) -> usize,
     {
@@ -504,8 +557,8 @@ mod tests {
 
             match array.insert_at(
                 i.try_into().unwrap(),
-                &f(i).to_be_bytes(),
-                &i.to_be_bytes(),
+                &f(i).to_le_bytes(),
+                i.try_into().unwrap(),
                 flag,
             ) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
@@ -513,19 +566,19 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array.will_overfull(&(i.to_be_bytes()), &(i.to_be_bytes())));
+        assert!(array.will_overfull(&(i.to_le_bytes()), i.try_into().unwrap()));
         Ok(i)
     }
 
     #[test]
     fn test_leaf_array_init() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
-        let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
+        let array = SlotArray::<&[u8], IVec>::from_data(page.data_mut());
         init_leaf_array(&array, |x| x)?;
         let iter = array.iter();
         for (i, (k, v)) in iter.enumerate() {
-            assert_eq!(i.to_be_bytes(), k);
-            assert_eq!(i.to_be_bytes(), v);
+            assert_eq!(i.to_le_bytes(), k);
+            assert_eq!(IVec::from(&i.to_le_bytes()), v);
         }
 
         Ok(())
@@ -534,11 +587,11 @@ mod tests {
     #[test]
     fn test_leaf_array_with_iter() -> Result<()> {
         let page_a = PagePtr::zero_content(1024)?;
-        let array_a = SlotArray::<&[u8], &[u8]>::from_data(page_a.data_mut());
+        let array_a = SlotArray::<&[u8], IVec>::from_data(page_a.data_mut());
         let size = init_leaf_array(&array_a, |x| x)?;
 
         let page_b = PagePtr::zero_content(1024)?;
-        let array_b = SlotArray::<&[u8], &[u8]>::from_data(page_b.data_mut());
+        let array_b = SlotArray::<&[u8], IVec>::from_data(page_b.data_mut());
 
         array_a.with_iter(array_b.iter())?;
         // array_a should be empty now.
@@ -562,12 +615,12 @@ mod tests {
     #[test]
     fn test_interior_array() -> Result<()> {
         let page = PagePtr::zero_content(1024)?;
-        let array = SlotArray::<&[u8], &[u8]>::from_data(page.data_mut());
+        let array = SlotArray::<&[u8], PageId>::from_data(page.data_mut());
         init_interior_array(&array, |x| x)?;
         let iter = array.iter();
         for (i, (k, v)) in iter.enumerate() {
-            assert_eq!(i.to_be_bytes(), k);
-            assert_eq!(i.to_be_bytes(), v);
+            assert_eq!(i.to_le_bytes(), k);
+            assert_eq!(PageId::try_from(i).unwrap(), v);
         }
 
         Ok(())

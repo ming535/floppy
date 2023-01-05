@@ -1,4 +1,5 @@
 use crate::common::error::{FloppyError, Result};
+use crate::dc::node::NodeType;
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::ptr::NonNull;
 use std::{mem, slice};
@@ -33,6 +34,21 @@ impl From<i64> for PageId {
     }
 }
 
+impl TryFrom<usize> for PageId {
+    type Error = FloppyError;
+
+    fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
+        if value > u32::MAX as usize {
+            Err(FloppyError::Internal(format!(
+                "page id overflow: {}",
+                value
+            )))
+        } else {
+            Ok(PageId(value as u32))
+        }
+    }
+}
+
 impl PageId {
     pub fn pos(&self, page_size: usize) -> usize {
         self.0 as usize * page_size
@@ -50,11 +66,30 @@ impl PagePtr {
         unsafe {
             let buf = alloc_zeroed(layout);
             if buf.is_null() {
-                return Err(FloppyError::External("alloc mem failed".to_string()));
+                return Err(FloppyError::External(
+                    "alloc mem failed".to_string(),
+                ));
             }
             let buf = NonNull::new_unchecked(buf);
             Ok(Self { buf, size })
         }
+    }
+
+    pub fn page_lsn(&self) -> u64 {
+        let data = self.data();
+        u64::from_le_bytes(data[0..8].try_into().unwrap())
+    }
+
+    pub fn node_type(&self) -> NodeType {
+        let data = self.data();
+        u8::from_le_bytes(data[8..9].try_into().unwrap()).into()
+    }
+
+    pub fn set_node_type(&self, node_type: NodeType) -> &Self {
+        let data = self.data_mut();
+        let type_flag: u8 = node_type.into();
+        data[8..9].copy_from_slice(&type_flag.to_le_bytes());
+        &self
     }
 
     pub fn data<'a>(&self) -> &'a [u8] {
@@ -64,11 +99,23 @@ impl PagePtr {
     pub fn data_mut<'a>(&self) -> &'a mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
+
+    pub fn node_data<'a>(&self) -> &'a [u8] {
+        &self.data()[9..]
+    }
+
+    pub fn node_data_mut<'a>(&self) -> &'a mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(self.buf.as_ptr().add(9), self.size - 9)
+        }
+    }
 }
 
 impl Drop for PagePtr {
     fn drop(&mut self) {
-        let layout = Layout::from_size_align(self.size, mem::size_of::<usize>()).unwrap();
+        let layout =
+            Layout::from_size_align(self.size, mem::size_of::<usize>())
+                .unwrap();
         unsafe {
             dealloc(self.buf.as_ptr(), layout);
         }

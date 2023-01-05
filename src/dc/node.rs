@@ -1,11 +1,16 @@
-use crate::common::error::{DCError, FloppyError, Result};
-use crate::dc::slot_array::{SlotArrayRangeIterator, FLAG_INFINITE_SMALL};
+use crate::common::{
+    error::{DCError, FloppyError, Result},
+    ivec::IVec,
+};
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
-    page::PageId,
-    slot_array::{SlotArray, SlotArrayIterator, SlotId},
+    page::{PageId, PagePtr},
+    slot_array::{
+        Record, SlotArray, SlotArrayIterator, SlotArrayRangeIterator, SlotId,
+        FLAG_INFINITE_SMALL,
+    },
 };
-use std::{fmt, marker::PhantomData, mem};
+use std::{borrow::Borrow, fmt, marker::PhantomData, mem};
 
 /// The b-tree node header is 12 bytes. It is composed of the following fields:
 ///
@@ -33,6 +38,7 @@ use std::{fmt, marker::PhantomData, mem};
 pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
 pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
 
+#[derive(PartialEq, Debug)]
 pub(crate) enum NodeType {
     Interior,
     Leaf,
@@ -61,32 +67,58 @@ pub(crate) trait NodeKey: Codec + Ord + fmt::Debug {}
 
 pub(crate) trait NodeValue: Codec {}
 
+pub(crate) trait TreeNode<'a, K, V>
+where
+    K: NodeKey,
+    V: NodeValue,
+{
+    fn from_page(page: &'a PagePtr) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn get(&self, key: K) -> Result<Option<V>>;
+
+    fn insert(&self, key: K, value: V) -> Result<()>;
+
+    fn slot_array(&self) -> &SlotArray<'a, K, V>;
+}
+
 /// The leaf node has a slot array. Key and value are encoded in each slot.
 /// It consists of the following pairs:
 ///
 /// (K0, V0), (K1, V1), ...(Ki, Pi), ... (Kn, Vn)
 pub(crate) struct LeafNode<'a> {
-    array: SlotArray<'a, &'a [u8], &'a [u8]>,
+    page: &'a PagePtr,
+    array: SlotArray<'a, &'a [u8], IVec>,
 }
 
 impl<'a> LeafNode<'a> {
-    pub fn from_data(data: &'a mut [u8]) -> Self {
-        let array = SlotArray::from_data(data);
-        Self { array }
-    }
-
-    pub fn min_key(&self) -> Vec<u8> {
+    pub fn min_key(&self) -> IVec {
         let record = self.array.slot_content(SlotId(0));
-        record.key.into()
+        IVec::from(record.key)
+    }
+}
+
+impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
+    fn from_page(page: &'a PagePtr) -> Result<Self> {
+        if page.node_type() != NodeType::Leaf {
+            return Err(FloppyError::Internal(format!(
+                "node type wrong, expect leaf: {:?}",
+                page.node_type()
+            )));
+        }
+
+        let array = SlotArray::from_data(page.node_data_mut());
+        Ok(Self { page, array })
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>> {
+    fn get(&self, key: &[u8]) -> Result<Option<IVec>> {
         match self.array.rank(key) {
             Err(_) => Ok(None),
             Ok(idx) => {
                 let record = self.array.slot_content(idx);
                 if record.key == key {
-                    Ok(Some(record.value))
+                    Ok(Some(record.value.into()))
                 } else {
                     Ok(None)
                 }
@@ -94,7 +126,7 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn insert(&self, key: &'a [u8], value: &'a [u8]) -> Result<()> {
+    fn insert(&self, key: &[u8], value: IVec) -> Result<()> where {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -104,30 +136,8 @@ impl<'a> LeafNode<'a> {
         }
     }
 
-    pub fn will_overfull(&self, key: &[u8], value: &[u8]) -> bool {
-        self.array.will_overfull(key, value)
-    }
-
-    pub fn may_underfull(&self) -> bool {
-        false
-    }
-
-    pub fn with_iter(&self, iter: impl Iterator<Item = (&'a [u8], &'a [u8])>) -> Result<()> {
-        self.array.with_iter(iter)
-    }
-
-    pub fn iter(&self) -> SlotArrayIterator<&[u8], &[u8]> {
-        self.array.iter()
-    }
-
-    pub fn split_half(
-        &self,
-    ) -> (
-        &[u8],
-        SlotArrayRangeIterator<&[u8], &[u8]>,
-        SlotArrayRangeIterator<&[u8], &[u8]>,
-    ) {
-        self.array.split_half()
+    fn slot_array(&self) -> &SlotArray<'a, &'a [u8], IVec> {
+        &self.array
     }
 }
 
@@ -143,35 +153,59 @@ impl<'a> LeafNode<'a> {
 /// Take (K1, P1) as an example:
 /// The key (K1) is the lower bound of the child page (P1). The upper bound
 /// of the child page (P1) is the next key in the array (K2).
-/// When a leaf page splits,we "copy" the split key and new page into the parent.
-/// When a interior page splits, we "move" the split key and new page into the parent.
+/// When a leaf page splits,we "copy" the split key and new page into the
+/// parent. When a interior page splits, we "move" the split key and new page
+/// into the parent.
 pub(crate) struct InteriorNode<'a> {
+    page: &'a PagePtr,
     array: SlotArray<'a, &'a [u8], PageId>,
 }
 
 impl<'a> InteriorNode<'a> {
-    pub fn from_data(data: &'a mut [u8]) -> Self {
-        let array = SlotArray::from_data(&mut data[4..]);
-        Self { array }
-    }
-
-    pub fn set_inf_min(&self) -> Vec<u8> {
+    pub fn set_inf_min(&self) -> IVec {
         let mut record = self.array.slot_content(SlotId(0));
-        self.array
-            .update_at(SlotId(0), record.key, record.value, FLAG_INFINITE_SMALL);
-        record.key.into()
+        self.array.update_at(
+            SlotId(0),
+            record.key,
+            record.value,
+            FLAG_INFINITE_SMALL,
+        );
+        IVec::from(record.key)
     }
 
     /// Init a Interior node fro a single key and two page pointer.
-    pub fn init(&self, key: &[u8], left_pid: PageId, right_pid: PageId) -> Result<()> {
+    pub fn init(
+        &self,
+        key: &[u8],
+        left_pid: PageId,
+        right_pid: PageId,
+    ) -> Result<()> {
         self.array.reset_zero();
-        self.array
-            .insert_at(SlotId(0), &[], left_pid, Some(FLAG_INFINITE_SMALL))?;
+        self.array.insert_at(
+            SlotId(0),
+            &[],
+            left_pid,
+            Some(FLAG_INFINITE_SMALL),
+        )?;
         self.array.insert_at(SlotId(1), key, right_pid, None)?;
         Ok(())
     }
+}
 
-    pub fn get_child(&self, key: &[u8]) -> Result<PageId> {
+impl<'a> TreeNode<'a, &'a [u8], PageId> for InteriorNode<'a> {
+    fn from_page(page: &'a PagePtr) -> Result<Self> {
+        if page.node_type() != NodeType::Interior {
+            return Err(FloppyError::Internal(format!(
+                "node type wrong, expect interior: {:?}",
+                page.node_type()
+            )));
+        }
+
+        let array = SlotArray::from_data(page.node_data_mut());
+        Ok(Self { page, array })
+    }
+
+    fn get(&self, key: &[u8]) -> Result<Option<PageId>> {
         let pos = match self.array.rank(key) {
             Err(pos) => {
                 if pos.0 == 0 {
@@ -183,12 +217,13 @@ impl<'a> InteriorNode<'a> {
             Ok(pos) => pos,
         };
         let page_id = self.array.slot_content(pos).value;
-        Ok(page_id)
+        Ok(Some(page_id))
     }
 
-    /// Add an index where `pid` contains all keys greater all equal to `lower_bound_key`.
-    /// In another words, `pid` points to keys `[lower_bound_key, next_entry_of_this_key)`.
-    pub fn add_index(&self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
+    /// Add an index where `pid` contains all keys greater all equal to
+    /// `lower_bound_key`. In another words, `pid` points to keys
+    /// `[lower_bound_key, next_entry_of_this_key)`.
+    fn insert(&self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
         match self.array.rank(lower_bound_key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
                 "Key {:?} already exists",
@@ -201,22 +236,8 @@ impl<'a> InteriorNode<'a> {
         }
     }
 
-    pub fn split_half(
-        &self,
-    ) -> (
-        &[u8],
-        SlotArrayRangeIterator<&[u8], PageId>,
-        SlotArrayRangeIterator<&[u8], PageId>,
-    ) {
-        self.array.split_half()
-    }
-
-    pub fn will_overfull(&self, key: &[u8]) -> bool {
-        false
-    }
-
-    pub fn will_underfull(&self) -> bool {
-        false
+    fn slot_array(&self) -> &SlotArray<'a, &'a [u8], PageId> {
+        &self.array
     }
 }
 
@@ -239,8 +260,6 @@ impl Codec for &[u8] {
 
 impl NodeKey for &[u8] {}
 
-impl NodeValue for &[u8] {}
-
 impl Codec for PageId {
     fn encode_size(&self) -> usize {
         mem::size_of::<u32>()
@@ -257,6 +276,24 @@ impl Codec for PageId {
 
 impl NodeValue for PageId {}
 
+impl Codec for IVec {
+    fn encode_size(&self) -> usize {
+        self.encode_size()
+    }
+
+    unsafe fn encode_to(&self, encoder: &mut Encoder) {
+        self.encode_to(encoder)
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let len = dec.get_u16() as usize;
+        let s = dec.get_byte_slice(len);
+        IVec::from(s)
+    }
+}
+
+impl NodeValue for IVec {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,28 +303,29 @@ mod tests {
     #[test]
     fn test_node_simple_leaf() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
+        page_ptr.set_node_type(NodeType::Leaf);
+        let mut leaf = LeafNode::from_page(&page_ptr)?;
 
-        leaf.insert(b"2", b"2")?;
-        leaf.insert(b"3", b"3")?;
-        leaf.insert(b"1", b"1")?;
+        leaf.insert(b"2", b"2".into())?;
+        leaf.insert(b"3", b"3".into())?;
+        leaf.insert(b"1", b"1".into())?;
 
-        assert_eq!(leaf.get(b"1")?, Some(b"1".as_slice()));
-        assert_eq!(leaf.get(b"2")?, Some(b"2".as_slice()));
+        assert_eq!(leaf.get(b"1")?, Some(b"1".into()));
+        assert_eq!(leaf.get(b"2")?, Some(b"2".into()));
         assert_eq!(leaf.get(b"8989")?, None);
 
-        let mut iter = leaf.iter();
-        assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
-        assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
-        assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
+        let mut iter = leaf.slot_array().iter();
+        assert_eq!(iter.next(), Some((b"1".as_slice(), b"1".into())));
+        assert_eq!(iter.next(), Some((b"2".as_slice(), b"2".into())));
+        assert_eq!(iter.next(), Some((b"3".as_slice(), b"3".into())));
         assert_eq!(iter.next(), None);
 
         // build a new node and test
-        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
-        let mut iter = leaf.iter();
-        assert_eq!(iter.next(), Some((b"1".as_ref(), b"1".as_ref())));
-        assert_eq!(iter.next(), Some((b"2".as_ref(), b"2".as_ref())));
-        assert_eq!(iter.next(), Some((b"3".as_ref(), b"3".as_ref())));
+        let mut leaf = LeafNode::from_page(&page_ptr)?;
+        let mut iter = leaf.slot_array().iter();
+        assert_eq!(iter.next(), Some((b"1".as_slice(), b"1".into())));
+        assert_eq!(iter.next(), Some((b"2".as_slice(), b"2".into())));
+        assert_eq!(iter.next(), Some((b"3".as_slice(), b"3".into())));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -295,12 +333,13 @@ mod tests {
     #[test]
     fn test_node_leaf_iter() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        let mut leaf = LeafNode::from_data(page_ptr.data_mut());
+        page_ptr.set_node_type(NodeType::Leaf);
+        let mut leaf = LeafNode::from_page(&page_ptr)?;
         let mut idx = 0;
         loop {
             let key = format!("{}", idx);
             let value = key.clone();
-            match leaf.insert(key.as_bytes(), value.as_bytes()) {
+            match leaf.insert(key.as_bytes(), value.into()) {
                 Err(_) => break,
                 _ => idx += 1,
             }
@@ -312,24 +351,25 @@ mod tests {
     #[test]
     fn test_node_simple_interior() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        let mut node = InteriorNode::from_data(page_ptr.data_mut());
+        page_ptr.set_node_type(NodeType::Interior);
+        let mut node = InteriorNode::from_page(&page_ptr)?;
         // P1, (b), P2
         node.init(b"b", PageId(1), PageId(2))?;
         // P1, (b), P2, (c), P3
-        node.add_index(b"c", 3.into())?;
+        node.insert(b"c", 3.into())?;
         // P1, (b), P2, (c), P3, (d), P8
-        node.add_index(b"d", 8.into())?;
+        node.insert(b"d", 8.into())?;
 
-        assert_eq!(node.get_child(b"a")?, PageId(1));
+        assert_eq!(node.get(b"a")?, Some(PageId(1)));
 
-        assert_eq!(node.get_child(b"b")?, PageId(2));
-        assert_eq!(node.get_child(b"b000")?, PageId(2));
+        assert_eq!(node.get(b"b")?, Some(PageId(2)));
+        assert_eq!(node.get(b"b000")?, Some(PageId(2)));
 
-        assert_eq!(node.get_child(b"c")?, PageId(3));
-        assert_eq!(node.get_child(b"c000")?, PageId(3));
+        assert_eq!(node.get(b"c")?, Some(PageId(3)));
+        assert_eq!(node.get(b"c000")?, Some(PageId(3)));
 
-        assert_eq!(node.get_child(b"d")?, PageId(8));
-        assert_eq!(node.get_child(b"d0")?, PageId(8));
+        assert_eq!(node.get(b"d")?, Some(PageId(8)));
+        assert_eq!(node.get(b"d0")?, Some(PageId(8)));
         Ok(())
     }
 }

@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 #[derive(Clone, Debug)]
 pub struct SimEnv;
 
-pub const SimPath: &str = "sim";
+pub const SIM_PATH: &str = "sim";
 
 #[async_trait]
 impl Env for SimEnv {
@@ -20,7 +20,10 @@ impl Env for SimEnv {
     type JoinHandle<T: Send> = SimJoinHandle<T>;
     type Directory = SimDir;
 
-    async fn open_file<P>(&self, path: P) -> Result<Self::PositionalReaderWriter>
+    async fn open_file<P>(
+        &self,
+        path: P,
+    ) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send,
     {
@@ -48,11 +51,17 @@ impl Env for SimEnv {
         Ok(())
     }
 
-    async fn create_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
+    async fn create_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()> {
         todo!()
     }
 
-    async fn remove_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
+    async fn remove_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()> {
         todo!()
     }
 
@@ -60,11 +69,17 @@ impl Env for SimEnv {
         todo!()
     }
 
-    async fn metadata<P: AsRef<Path> + Send>(&self, path: P) -> Result<Metadata> {
+    async fn metadata<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Metadata> {
         todo!()
     }
 
-    async fn open_dir<P: AsRef<Path> + Send>(&self, path: P) -> Result<Self::Directory> {
+    async fn open_dir<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Self::Directory> {
         todo!()
     }
 }
@@ -104,7 +119,11 @@ impl super::PositionalWriter for SimMem {
 impl PositionalReader for SimMem {
     type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
 
-    fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
+    fn read_at<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+        offset: u64,
+    ) -> Self::ReadAt<'a> {
         async move {
             let data = &self.0.lock().await;
             if offset > data.len() as u64 {
@@ -135,7 +154,10 @@ pub struct SimJoinHandle<T> {
 
 impl<T> Future for SimJoinHandle<T> {
     type Output = T;
-    fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+    ) -> Poll<Self::Output> {
         let handle = self.handle.take().unwrap();
         match handle.join() {
             Ok(v) => Poll::Ready(v),

@@ -11,7 +11,11 @@ pub mod memory;
 pub type RowIter = Box<dyn Iterator<Item = Result<Row>>>;
 
 pub trait TableStore: fmt::Debug + Send + Sync {
-    fn primary_index_range(&self, table_id: &GlobalId, range: &IndexRange) -> Result<RowIter>;
+    fn primary_index_range(
+        &self,
+        table_id: &GlobalId,
+        range: &IndexRange,
+    ) -> Result<RowIter>;
 
     fn full_scan(&self, table_id: &GlobalId) -> Result<RowIter> {
         self.primary_index_range(
@@ -28,4 +32,4 @@ pub trait TableStore: fmt::Debug + Send + Sync {
     // todo! add secondary_index_scan
 }
 
-pub static mut global_table_store: Option<Arc<dyn TableStore>> = None;
+pub static mut GLOBAL_TABLE_STORE: Option<Arc<dyn TableStore>> = None;
