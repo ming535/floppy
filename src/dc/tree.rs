@@ -143,7 +143,7 @@ where
         guard: &mut BufferFrameGuard,
     ) -> Result<Option<IVec>> {
         let node = LeafNode::from_page(guard.page_ptr())?;
-        node.get(key).map(|opt_v| opt_v)
+        node.get(key)
     }
 
     async fn insert_value(
