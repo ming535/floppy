@@ -39,9 +39,7 @@ impl TryFrom<usize> for PageId {
 
     fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
         if value > u32::MAX as usize {
-            Err(FloppyError::Internal(format!(
-                "page id overflow: {value}"
-            )))
+            Err(FloppyError::Internal(format!("page id overflow: {value}")))
         } else {
             Ok(PageId(value as u32))
         }

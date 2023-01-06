@@ -42,7 +42,10 @@ impl BinaryExpr {
         let datum2 = self.expr2.evaluate(ecx, row)?;
 
         if self.expr1.typ(ecx) != self.expr2.typ(ecx) {
-            return Err(FloppyError::Internal("expression should have the same type for binary function".to_string()));
+            return Err(FloppyError::Internal(
+                "expression should have the same type for binary function"
+                    .to_string(),
+            ));
         }
 
         match self.func {
@@ -183,7 +186,9 @@ impl VariadicExpr {
             .collect::<Result<Vec<Datum>>>()?;
 
         if datums.len() < 2 {
-            return Err(FloppyError::EvalExpr("at least two expression is required".to_string()));
+            return Err(FloppyError::EvalExpr(
+                "at least two expression is required".to_string(),
+            ));
         }
 
         // since we only support "AND", "OR", let's simplify the

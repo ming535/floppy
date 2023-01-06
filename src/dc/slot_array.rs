@@ -21,9 +21,7 @@ impl TryFrom<usize> for SlotId {
 
     fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
         if value > u16::MAX as usize {
-            Err(FloppyError::Internal(format!(
-                "slot id overflow: {value}"
-            )))
+            Err(FloppyError::Internal(format!("slot id overflow: {value}")))
         } else {
             Ok(SlotId(value as u16))
         }
