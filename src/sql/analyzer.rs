@@ -21,7 +21,7 @@ pub fn transform_statement(
     s: &SqlStatement,
 ) -> Result<LogicalPlan> {
     match s {
-        SqlStatement::Query(q) => transform_query(scx, &q),
+        SqlStatement::Query(q) => transform_query(scx, q),
         _ => Err(FloppyError::NotImplemented(format!(
             "statement not implemented yet: {s}",
         ))),
@@ -145,7 +145,7 @@ fn transform_projection(
         rel_desc: Arc::new(input.rel_desc()),
     };
     let exprs = projection
-        .into_iter()
+        .iter()
         .map(|e| {
             transform_select_item(&ecx, e)
             // let column_name = match &expr {
@@ -240,7 +240,7 @@ fn transform_literal(
     literal: &SqlValue,
 ) -> Result<CoercibleExpr> {
     match literal {
-        SqlValue::Number(n, _) => expr::parse_sql_number(&n).map(|e| e.into()),
+        SqlValue::Number(n, _) => expr::parse_sql_number(n).map(|e| e.into()),
         SqlValue::SingleQuotedString(s) => {
             Ok(CoercibleExpr::LiteralString(s.to_string()))
         }
@@ -292,7 +292,7 @@ fn transform_binary_op(
 }
 
 fn transform_parameter(ecx: &ExprContext, p: String) -> Result<CoercibleExpr> {
-    let param = p.strip_prefix("$");
+    let param = p.strip_prefix('$');
     if param.is_none() {
         return Err(FloppyError::Plan(format!("invalid parameter: {p}")));
     }

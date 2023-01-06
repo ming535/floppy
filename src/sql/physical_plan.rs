@@ -33,13 +33,12 @@ impl PhysicalPlan {
     /// ready to be executed.
     pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         match self {
-            Self::Empty(p) => p.stream(exec_ctx.clone()),
-            Self::Filter(p) => p.stream(exec_ctx.clone()),
-            Self::Projection(p) => p.stream(exec_ctx.clone()),
+            Self::Empty(p) => p.stream(exec_ctx),
+            Self::Filter(p) => p.stream(exec_ctx),
+            Self::Projection(p) => p.stream(exec_ctx),
             Self::PriKeyScan(p) => p.stream(exec_ctx),
             _ => Err(FloppyError::NotImplemented(format!(
-                "physical sql not implemented: {:?}",
-                self
+                "physical sql not implemented: {self:?}"
             ))),
         }
     }

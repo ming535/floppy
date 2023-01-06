@@ -1,4 +1,4 @@
-use floppy;
+
 use floppy::Result;
 
 #[test]

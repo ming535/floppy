@@ -36,13 +36,11 @@ impl ops::Add for Datum {
         match (self, rhs) {
             (Self::Int64(d1), Self::Int64(d2)) => {
                 d1.checked_add(d2).map_or_else(
-                    || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                    || Err(FloppyError::EvalExpr("integer over flow".to_string())),
                     |v| Ok(Datum::Int64(v)),
                 )
             }
-            _ => Err(FloppyError::Internal(format!(
-                "mismatched type for addition"
-            ))),
+            _ => Err(FloppyError::Internal("mismatched type for addition".to_string())),
         }
     }
 }
@@ -54,13 +52,11 @@ impl ops::Sub for Datum {
         match (self, rhs) {
             (Self::Int64(d1), Self::Int64(d2)) => {
                 d1.checked_sub(d2).map_or_else(
-                    || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                    || Err(FloppyError::EvalExpr("integer over flow".to_string())),
                     |v| Ok(Datum::Int64(v)),
                 )
             }
-            _ => Err(FloppyError::Internal(format!(
-                "mismatched type for addition"
-            ))),
+            _ => Err(FloppyError::Internal("mismatched type for addition".to_string())),
         }
     }
 }
@@ -75,8 +71,8 @@ impl fmt::Display for Datum {
                     write!(f, "FALSE")
                 }
             }
-            Self::Int64(e) => write!(f, "{}", e),
-            Self::Text(e) => write!(f, "{}", e),
+            Self::Int64(e) => write!(f, "{e}"),
+            Self::Text(e) => write!(f, "{e}"),
             Self::Null => write!(f, "NULL"),
         }
     }
@@ -88,7 +84,7 @@ impl Datum {
             (Self::Boolean(d1), Self::Boolean(d2)) => {
                 Ok(Datum::Boolean(*d1 && *d2))
             }
-            _ => Err(FloppyError::Internal(format!("AND type error"))),
+            _ => Err(FloppyError::Internal("AND type error".to_string())),
         }
     }
 
@@ -97,7 +93,7 @@ impl Datum {
             (Self::Boolean(d1), Self::Boolean(d2)) => {
                 Ok(Datum::Boolean(*d1 || *d2))
             }
-            _ => Err(FloppyError::Internal(format!("OR type error"))),
+            _ => Err(FloppyError::Internal("OR type error".to_string())),
         }
     }
 }

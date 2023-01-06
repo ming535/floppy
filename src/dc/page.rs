@@ -40,8 +40,7 @@ impl TryFrom<usize> for PageId {
     fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
         if value > u32::MAX as usize {
             Err(FloppyError::Internal(format!(
-                "page id overflow: {}",
-                value
+                "page id overflow: {value}"
             )))
         } else {
             Ok(PageId(value as u32))
@@ -89,7 +88,7 @@ impl PagePtr {
         let data = self.data_mut();
         let type_flag: u8 = node_type.into();
         data[8..9].copy_from_slice(&type_flag.to_le_bytes());
-        &self
+        self
     }
 
     pub fn data<'a>(&self) -> &'a [u8] {

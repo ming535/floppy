@@ -20,7 +20,7 @@ impl ProjectionExec {
     pub fn stream(&self, exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
         Ok(Box::pin(ProjectionExecStream {
             ecx: self.ecx.clone(),
-            input: self.input.stream(exec_ctx.clone())?,
+            input: self.input.stream(exec_ctx)?,
             exprs: self.exprs.clone(),
         }))
     }

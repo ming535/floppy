@@ -22,8 +22,7 @@ impl TryFrom<usize> for SlotId {
     fn try_from(value: usize) -> std::result::Result<Self, Self::Error> {
         if value > u16::MAX as usize {
             Err(FloppyError::Internal(format!(
-                "slot id overflow: {}",
-                value
+                "slot id overflow: {value}"
             )))
         } else {
             Ok(SlotId(value as u16))
@@ -73,7 +72,7 @@ where
         for (slot, (k, v)) in iter.enumerate() {
             self.insert_at(slot.try_into()?, k, v, None)?;
         }
-        Ok(&self)
+        Ok(self)
     }
 
     /// Binary searches this node for a give key.
@@ -246,7 +245,7 @@ where
     }
 
     fn slot_offsets_size(&self) -> usize {
-        2 * self.num_slots() as usize
+        2 * self.num_slots()
     }
 
     fn freeblock(&self) -> u16 {

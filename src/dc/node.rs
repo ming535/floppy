@@ -114,7 +114,7 @@ impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
             Ok(idx) => {
                 let record = self.array.slot_content(idx);
                 if record.key == key {
-                    Ok(Some(record.value.into()))
+                    Ok(Some(record.value))
                 } else {
                     Ok(None)
                 }
@@ -125,8 +125,7 @@ impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
     fn insert(&self, key: &[u8], value: IVec) -> Result<()> where {
         match self.array.rank(key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "Key {:?} already exists",
-                key
+                "Key {key:?} already exists"
             )))),
             Err(slot) => self.array.insert_at(slot, key, value, None),
         }
@@ -221,8 +220,7 @@ impl<'a> TreeNode<'a, &'a [u8], PageId> for InteriorNode<'a> {
     fn insert(&self, lower_bound_key: &'a [u8], pid: PageId) -> Result<()> {
         match self.array.rank(lower_bound_key) {
             Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "Key {:?} already exists",
-                pid
+                "Key {pid:?} already exists"
             )))),
             Err(pos) => {
                 let slot = if pos.0 == 0 { SlotId(1) } else { pos };
@@ -334,7 +332,7 @@ mod tests {
         let leaf = LeafNode::from_page(&page_ptr)?;
         let mut idx = 0;
         loop {
-            let key = format!("{}", idx);
+            let key = format!("{idx}");
             let value = key.clone();
             match leaf.insert(key.as_bytes(), value.into()) {
                 Err(_) => break,

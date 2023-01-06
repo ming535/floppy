@@ -143,7 +143,7 @@ where
         guard: &mut BufferFrameGuard,
     ) -> Result<Option<IVec>> {
         let node = LeafNode::from_page(guard.page_ptr())?;
-        node.get(key).map(|opt_v| opt_v.map(|v| v.into()))
+        node.get(key).map(|opt_v| opt_v)
     }
 
     async fn insert_value(
@@ -209,7 +209,7 @@ where
     ) -> Result<()> {
         guard_chain.reverse();
 
-        assert!(guard_chain.len() > 0);
+        assert!(!guard_chain.is_empty());
 
         let leaf_guard = &mut guard_chain[0];
 
@@ -292,8 +292,7 @@ where
             right_node.insert(key, value)?;
         } else {
             return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "key already exists {:?}",
-                key
+                "key already exists {key:?}"
             ))));
         }
 
@@ -331,8 +330,7 @@ where
             new_right_node.insert(key, value)?;
         } else {
             return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "key already exists {:?}",
-                key
+                "key already exists {key:?}"
             ))));
         }
 

@@ -254,8 +254,7 @@ impl Row {
             .map(|i| {
                 if *i >= self.values.len() {
                     Err(FloppyError::Internal(format!(
-                        "primary key index out of range: {:?}",
-                        rel_desc
+                        "primary key index out of range: {rel_desc:?}"
                     )))
                 } else {
                     let datum = self.values[*i].clone();

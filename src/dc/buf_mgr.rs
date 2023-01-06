@@ -105,8 +105,7 @@ where
     pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameGuard> {
         if page_id >= self.next_page_id.load(Ordering::Acquire).into() {
             return Err(FloppyError::DC(DCError::PageNotFound(format!(
-                "page not found, page_id = {:?}",
-                page_id
+                "page not found, page_id = {page_id:?}"
             ))));
         }
 

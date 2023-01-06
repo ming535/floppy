@@ -57,14 +57,12 @@ impl Expr {
                 ScalarType::Int64 => Ok(literal_i64(Decimal::from_str_exact(s)?.try_into()?)),
                 _ => Err(FloppyError::NotImplemented(format!(
                     "only support implicit cast from string to numeric, explicit cast also not \
-                     supported. err from {} to {}",
-                    self, ty
+                     supported. err from {self} to {ty}"
                 ))),
             },
             _ => Err(FloppyError::NotImplemented(format!(
                 "only support implicit cast from string to numeric, explicit cast also not \
-                 supported. err from {} to {}",
-                self, ty
+                 supported. err from {self} to {ty}"
             ))),
         }
     }
@@ -84,10 +82,10 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Column(c) => write!(f, "{}", c.name),
-            Self::Parameter(n) => write!(f, "${}", n),
-            Self::Literal(l) => write!(f, "{}", l),
-            Self::CallBinary(e) => write!(f, "{}", e),
-            Self::CallVariadic(e) => write!(f, "{}", e),
+            Self::Parameter(n) => write!(f, "${n}"),
+            Self::Literal(l) => write!(f, "{l}"),
+            Self::CallBinary(e) => write!(f, "{e}"),
+            Self::CallVariadic(e) => write!(f, "{e}"),
         }
     }
 }
@@ -214,8 +212,7 @@ impl CoercibleExpr {
         let expr_ty = expr.typ(ecx).scalar_type;
         if expr_ty != *ty {
             Err(FloppyError::Plan(format!(
-                "must have type {}, not type {}",
-                ty, expr_ty
+                "must have type {ty}, not type {expr_ty}"
             )))
         } else {
             Ok(expr)
@@ -267,11 +264,10 @@ impl From<Expr> for CoercibleExpr {
 pub fn parse_sql_number(n: &str) -> Result<Expr> {
     let d = Decimal::from_str_exact(n)?;
     if let Ok(n) = d.try_into() {
-        Ok(literal_i64(n).into())
+        Ok(literal_i64(n))
     } else {
         Err(FloppyError::NotImplemented(format!(
-            "sql number not supported: {:?}",
-            n
+            "sql number not supported: {n:?}"
         )))
     }
 }
@@ -288,8 +284,7 @@ fn cast(
                 Ok(literal_i64(n))
             } else {
                 Err(FloppyError::Plan(format!(
-                    "cannot cast from String to Int64: {}",
-                    s
+                    "cannot cast from String to Int64: {s}"
                 )))
             }
         }
@@ -297,8 +292,7 @@ fn cast(
             Ok(literal_text(s))
         }
         _ => Err(FloppyError::NotImplemented(format!(
-            "cast not implemented from datum: {} typ: {}, to : {}",
-            datum, scalar_type, to
+            "cast not implemented from datum: {datum} typ: {scalar_type}, to : {to}"
         ))),
     }
 }
@@ -338,7 +332,7 @@ mod tests {
         //     .desc(&full_obj_name)?;
 
         let ecx = ExprContext {
-            scx: Arc::new(StatementContext::new(catalog.clone())),
+            scx: Arc::new(StatementContext::new(catalog)),
             rel_desc: Arc::new(RelationDesc::empty()),
         };
 
@@ -347,15 +341,15 @@ mod tests {
 
         // 1 + 1 = 2
         let l3 = add(&ecx, &l1, &l2)?;
-        assert_eq!(format!("{}", l3), "Int64(1) + Int64(1)");
+        assert_eq!(format!("{l3}"), "Int64(1) + Int64(1)");
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "2");
+        assert_eq!(format!("{d}"), "2");
 
         // (1 + 1) + 100 = 102
         let l4 = literal_i64(100);
         let l5 = add(&ecx, &l3, &l4)?;
         let d = l5.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "102");
+        assert_eq!(format!("{d}"), "102");
 
         Ok(())
     }
@@ -364,7 +358,7 @@ mod tests {
     fn logical_expr() -> Result<()> {
         let catalog = Arc::new(catalog::memory::MemCatalog::default());
         let ecx = ExprContext {
-            scx: Arc::new(StatementContext::new(catalog.clone())),
+            scx: Arc::new(StatementContext::new(catalog)),
             rel_desc: Arc::new(RelationDesc::empty()),
         };
 
@@ -373,35 +367,35 @@ mod tests {
         let l2 = literal_false();
         let l3 = equal(&ecx, &l1, &l2)?;
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "FALSE");
+        assert_eq!(format!("{d}"), "FALSE");
 
         // TRUE AND FALSE
         let l1 = literal_true();
         let l2 = literal_false();
         let l3 = and(vec![l1, l2]);
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "FALSE");
+        assert_eq!(format!("{d}"), "FALSE");
 
         // TRUE AND TRUE
         let l1 = literal_true();
         let l2 = literal_true();
         let l3 = and(vec![l1, l2]);
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "TRUE");
+        assert_eq!(format!("{d}"), "TRUE");
 
         // TRUE OR FALSE
         let l1 = literal_true();
         let l2 = literal_false();
         let l3 = or(vec![l1, l2]);
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "TRUE");
+        assert_eq!(format!("{d}"), "TRUE");
 
         // FALSE OR FALSE
         let l1 = literal_false();
         let l2 = literal_false();
         let l3 = or(vec![l1, l2]);
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "FALSE");
+        assert_eq!(format!("{d}"), "FALSE");
 
         // 2 == 3
         let l1 = literal_i64(2);
@@ -409,7 +403,7 @@ mod tests {
 
         let l3 = equal(&ecx, &l1, &l2)?;
         let d = l3.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "FALSE");
+        assert_eq!(format!("{d}"), "FALSE");
 
         // ((1 + 4) == 5) AND (6 > 3)
         let l1 = add(&ecx, &literal_i64(1), &literal_i64(4))?;
@@ -417,7 +411,7 @@ mod tests {
         let l3 = gt(&ecx, &literal_i64(6), &literal_i64(3))?;
         let l4 = and(vec![l2, l3]);
         let d = l4.evaluate(&ecx, &Row::empty())?;
-        assert_eq!(format!("{}", d), "TRUE");
+        assert_eq!(format!("{d}"), "TRUE");
 
         Ok(())
     }

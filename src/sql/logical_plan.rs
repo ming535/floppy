@@ -115,12 +115,12 @@ impl LogicalPlan {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
-                            write!(f, "{}", expr_item,)?;
+                            write!(f, "{expr_item}",)?;
                         }
                         Ok(())
                     }
                     LogicalPlan::Filter { predicate, .. } => {
-                        write!(f, "Filter: {}", predicate,)
+                        write!(f, "Filter: {predicate}",)
                     }
                     LogicalPlan::Empty => write!(f, "EmptyTable"),
                 }

@@ -42,9 +42,7 @@ impl BinaryExpr {
         let datum2 = self.expr2.evaluate(ecx, row)?;
 
         if self.expr1.typ(ecx) != self.expr2.typ(ecx) {
-            return Err(FloppyError::Internal(format!(
-                "expression should have the same type for binary function"
-            )));
+            return Err(FloppyError::Internal("expression should have the same type for binary function".to_string()));
         }
 
         match self.func {
@@ -93,8 +91,7 @@ pub fn add(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
 
     if ty1 != ty2 {
         return Err(FloppyError::Internal(format!(
-            "add two different type, expr1: {}, expr2: {}",
-            ty1, ty2
+            "add two different type, expr1: {ty1}, expr2: {ty2}"
         )));
     }
 
@@ -102,8 +99,7 @@ pub fn add(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
         ScalarType::Int64 => BinaryFunc::AddInt64,
         _ => {
             return Err(FloppyError::Internal(format!(
-                "add only supports numeric types: {}",
-                ty1
+                "add only supports numeric types: {ty1}"
             )))
         }
     };
@@ -121,8 +117,7 @@ pub fn equal(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
 
     if ty1 != ty2 {
         return Err(FloppyError::Internal(format!(
-            "compare two different type, expr1: {}, expr2: {}",
-            ty1, ty2
+            "compare two different type, expr1: {ty1}, expr2: {ty2}"
         )));
     }
 
@@ -139,8 +134,7 @@ pub fn gt(ecx: &ExprContext, expr1: &Expr, expr2: &Expr) -> Result<Expr> {
 
     if ty1 != ty2 {
         return Err(FloppyError::Internal(format!(
-            "compare two different type, expr1: {}, expr2: {}",
-            ty1, ty2
+            "compare two different type, expr1: {ty1}, expr2: {ty2}"
         )));
     }
 
@@ -164,7 +158,7 @@ impl fmt::Display for VariadicExpr {
                 let exprs = self
                     .exprs
                     .iter()
-                    .map(|e| format!("{}", e))
+                    .map(|e| format!("{e}"))
                     .collect::<Vec<String>>();
                 write!(f, "{}", exprs.join(format!("{}", self.func).as_str()))
             }
@@ -189,9 +183,7 @@ impl VariadicExpr {
             .collect::<Result<Vec<Datum>>>()?;
 
         if datums.len() < 2 {
-            return Err(FloppyError::EvalExpr(format!(
-                "at least two expression is required"
-            )));
+            return Err(FloppyError::EvalExpr("at least two expression is required".to_string()));
         }
 
         // since we only support "AND", "OR", let's simplify the
