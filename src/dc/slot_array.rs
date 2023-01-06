@@ -202,7 +202,7 @@ where
     pub fn split_half(
         &self,
     ) -> (
-        K,
+        IVec,
         SlotArrayRangeIterator<K, V>,
         SlotArrayRangeIterator<K, V>,
     ) {
@@ -212,7 +212,7 @@ where
         let record = self.slot_content(mid);
         let left = self.range(SlotId(0)..mid);
         let right = self.range(mid..num_slots.try_into().unwrap());
-        (record.key, left, right)
+        (IVec::from(record.key.as_ref()), left, right)
     }
 
     pub fn reset_zero(&self) {

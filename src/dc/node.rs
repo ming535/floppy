@@ -148,7 +148,7 @@ impl<'a> TreeNode<'a, &'a [u8], PageId> for InteriorNode<'a> {
     fn from_page(page: &'a PagePtr) -> Result<Self> {
         if page.page_type() != PageType::TreeNodeInterior {
             return Err(FloppyError::Internal(format!(
-                "node type wrong, expect interior: {:?}",
+                "node type wrong, expect interior type, got {:?}",
                 page.page_type()
             )));
         }

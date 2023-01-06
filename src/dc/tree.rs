@@ -40,10 +40,12 @@ where
 
     pub async fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>> {
         assert!(key.as_ref().len() <= MAX_KEY_SIZE);
-        let guard_stack =
+        let mut guard_stack =
             self.find_leaf(key.as_ref(), AccessMode::Read).await?;
-        assert_eq!(guard_stack.len(), 1);
-        self.find_value(key.as_ref(), &guard_stack[0])
+        let leaf_guard = guard_stack
+            .pop()
+            .ok_or(FloppyError::Internal("guard_stack empty".to_string()))?;
+        self.find_value(key.as_ref(), &leaf_guard)
     }
 
     pub async fn insert<K, V>(&self, key: K, value: V) -> Result<()>
@@ -106,26 +108,40 @@ where
                 TreeNodeInterior => {
                     page_id = self.find_child(key, &guard)?;
                     let child_guard = self.buf_mgr.fix_page(page_id).await?;
-                    // add parent to the guard chain if SMO might happen.
-                    let child_node =
-                        InteriorNode::from_page(child_guard.page_ptr())?;
-                    if (mode == AccessMode::Insert
-                        && child_node.slot_array().will_overfull(key, page_id))
-                        || (mode == AccessMode::Delete
-                            && child_node.slot_array().will_underfull())
-                    {
-                        let parent_guard = guard;
-                        guard_stack.push(parent_guard);
-                        guard = child_guard;
-                    } else {
-                        //
-                        // the child is safe, we can release all latches on
-                        // ancestors
-                        //
-                        // 1. drop parent's guard to release its latch
-                        guard = child_guard;
-                        // 2. drop all ancestor's guard to release their latches
-                        guard_stack.clear();
+                    let child_type = child_guard.page_ptr().page_type();
+                    match child_type {
+                        TreeNodeLeaf => {
+                            guard_stack.push(child_guard);
+                            return Ok(guard_stack);
+                        }
+                        TreeNodeInterior => {
+                            // add parent to the guard chain if SMO might
+                            // happen.
+                            let child_node = InteriorNode::from_page(
+                                child_guard.page_ptr(),
+                            )?;
+                            if (mode == AccessMode::Insert
+                                && child_node
+                                    .slot_array()
+                                    .will_overfull(key, page_id))
+                                || (mode == AccessMode::Delete
+                                    && child_node.slot_array().will_underfull())
+                            {
+                                let parent_guard = guard;
+                                guard_stack.push(parent_guard);
+                                guard = child_guard;
+                            } else {
+                                //
+                                // the child is safe, we can release all latches
+                                // on ancestors
+                                //
+                                // 1. drop parent's guard to release its latch
+                                guard = child_guard;
+                                // 2. drop all ancestor's guard to release their
+                                // latches
+                                guard_stack.clear();
+                            }
+                        }
                     }
                 }
             }
@@ -306,7 +322,7 @@ where
         let right_node = Node::from_page(new_page.page_ptr())?;
         right_node.slot_array().with_iter(right_iter)?;
 
-        self.insert_split_key(key, value, split_key, node, right_node)
+        self.insert_key_for_split(key, value, split_key, node, right_node)
     }
 
     async fn split_root<'a, V, Node>(
@@ -331,26 +347,44 @@ where
         new_right_node.slot_array().with_iter(right_iter)?;
 
         if new_right_page.page_ptr().page_type() == TreeNodeInterior {
+            // Interior node's split will move up the split key.
+            // So we don't insert the split key here; and we need to
+            // set the inf min flag.
             new_right_node.slot_array().set_inf_min();
+        } else {
+            // leaf node's split will copy up the split key.
+            // SO we need to insert the split key here.
+            self.insert_key_for_split(
+                key,
+                value,
+                split_key.clone(),
+                new_left_node,
+                new_right_node,
+            )?;
         }
 
-        self.insert_split_key(
-            key,
-            value,
-            split_key,
-            new_left_node,
-            new_right_node,
-        )?;
-
+        node.slot_array().reset_zero();
+        guard.page_ptr().set_page_type(TreeNodeInterior);
         let root = InteriorNode::from_page(guard.page_ptr())?;
-        root.init(split_key, new_left_page.page_id(), new_right_page.page_id())
+        println!(
+            "root split: page_id = {:?}, split_key = {:?}, new_left = {:?}, new_right = {:?}",
+            guard.page_id(),
+            split_key,
+            new_left_page.page_id(),
+            new_right_page.page_id()
+        );
+        root.init(
+            split_key.as_ref(),
+            new_left_page.page_id(),
+            new_right_page.page_id(),
+        )
     }
 
-    fn insert_split_key<'a, V, Node>(
+    fn insert_key_for_split<'a, V, Node>(
         &self,
         key: &'a [u8],
         value: V,
-        split_key: &'a [u8],
+        split_key: IVec,
         left: Node,
         right: Node,
     ) -> Result<()>
@@ -358,7 +392,7 @@ where
         V: NodeValue,
         Node: TreeNode<'a, &'a [u8], V>,
     {
-        let cmp = key.cmp(split_key);
+        let cmp = key.cmp(split_key.as_ref());
         if cmp == Ordering::Less {
             left.insert(key, value)
         } else if cmp == Ordering::Greater {
@@ -387,9 +421,19 @@ mod tests {
     async fn test_tree_simple() -> Result<()> {
         let env = SimEnv;
         let tree = Tree::open(SIM_PATH, env).await?;
-        tree.insert(b"1", b"1").await?;
-        let v = tree.get(b"1").await?;
-        assert_eq!(v, Some(b"1".into()));
+        for i in 0..200usize {
+            let b = &i.to_le_bytes();
+            tree.insert(b, b).await?;
+        }
+
+        for i in 0..200usize {
+            let b = &i.to_le_bytes();
+            let v = tree
+                .get(b)
+                .await?
+                .unwrap_or_else(|| panic!("should not be none, key = {i}"));
+            assert_eq!(b, v.as_ref());
+        }
         Ok(())
     }
 }
