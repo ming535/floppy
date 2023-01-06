@@ -1,15 +1,5 @@
-use crate::common::{
-    error::{DCError, FloppyError, Result},
-    ivec::IVec,
-};
-use crate::dc::{
-    codec::{Codec, Decoder, Encoder},
-    page::{PageId, PagePtr},
-    slot_array::{SlotArray, SlotId, FLAG_INFINITE_SMALL},
-};
-use std::{fmt, mem};
-
-/// The b-tree node header is 12 bytes. It is composed of the following fields:
+/// The b-tree node header is 12 bytes. It is composed of the following
+/// fields:
 ///
 /// OFFSET  SIZE   DESCRIPTION
 /// 0       1      The one-byte flag at offset 0 indicating the b-tree node
@@ -30,37 +20,23 @@ use std::{fmt, mem};
 /// 7       1      The one-byte integer at offset 7 gives the number of
 ///                fragmented free bytes within the slot content area.
 /// 8       4092   slotted array area.
-/// 4096    4      The four-byte integer at the end of a page is the right-child
-///                pointer for interior and root nodes.
-pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
-pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
+/// 4096    4      The four-byte integer at the end of a page is the
+/// right-child                pointer for interior and root nodes.
+use crate::common::{
+    error::{DCError, FloppyError, Result},
+    ivec::IVec,
+};
+use crate::dc::{
+    codec::{Codec, Decoder, Encoder},
+    page::{PageId, PagePtr, PageType},
+    slot_array::{SlotArray, SlotId, FLAG_INFINITE_SMALL},
+};
+use std::{fmt, mem};
 
-#[derive(PartialEq, Debug)]
-pub(crate) enum NodeType {
-    Interior,
-    Leaf,
+pub(crate) trait NodeKey:
+    AsRef<[u8]> + Codec + Ord + fmt::Debug
+{
 }
-
-impl From<u8> for NodeType {
-    fn from(flag: u8) -> Self {
-        match flag {
-            PAGE_TYPE_INTERIOR => NodeType::Interior,
-            PAGE_TYPE_LEAF => NodeType::Leaf,
-            _ => panic!("invalid page type"),
-        }
-    }
-}
-
-impl From<NodeType> for u8 {
-    fn from(node_type: NodeType) -> Self {
-        match node_type {
-            NodeType::Interior => PAGE_TYPE_INTERIOR,
-            NodeType::Leaf => PAGE_TYPE_LEAF,
-        }
-    }
-}
-
-pub(crate) trait NodeKey: Codec + Ord + fmt::Debug {}
 
 pub(crate) trait NodeValue: Codec {}
 
@@ -88,23 +64,16 @@ pub(crate) struct LeafNode<'a> {
     array: SlotArray<'a, &'a [u8], IVec>,
 }
 
-impl<'a> LeafNode<'a> {
-    pub fn min_key(&self) -> IVec {
-        let record = self.array.slot_content(SlotId(0));
-        IVec::from(record.key)
-    }
-}
-
 impl<'a> TreeNode<'a, &'a [u8], IVec> for LeafNode<'a> {
     fn from_page(page: &'a PagePtr) -> Result<Self> {
-        if page.node_type() != NodeType::Leaf {
+        if page.page_type() != PageType::TreeNodeLeaf {
             return Err(FloppyError::Internal(format!(
                 "node type wrong, expect leaf: {:?}",
-                page.node_type()
+                page.page_type()
             )));
         }
 
-        let array = SlotArray::from_data(page.node_data_mut());
+        let array = SlotArray::from_data(page.payload_data_mut());
         Ok(Self { array })
     }
 
@@ -156,17 +125,6 @@ pub(crate) struct InteriorNode<'a> {
 }
 
 impl<'a> InteriorNode<'a> {
-    pub fn set_inf_min(&self) -> IVec {
-        let record = self.array.slot_content(SlotId(0));
-        self.array.update_at(
-            SlotId(0),
-            record.key,
-            record.value,
-            FLAG_INFINITE_SMALL,
-        );
-        IVec::from(record.key)
-    }
-
     /// Init a Interior node fro a single key and two page pointer.
     pub fn init(
         &self,
@@ -188,14 +146,14 @@ impl<'a> InteriorNode<'a> {
 
 impl<'a> TreeNode<'a, &'a [u8], PageId> for InteriorNode<'a> {
     fn from_page(page: &'a PagePtr) -> Result<Self> {
-        if page.node_type() != NodeType::Interior {
+        if page.page_type() != PageType::TreeNodeInterior {
             return Err(FloppyError::Internal(format!(
                 "node type wrong, expect interior: {:?}",
-                page.node_type()
+                page.page_type()
             )));
         }
 
-        let array = SlotArray::from_data(page.node_data_mut());
+        let array = SlotArray::from_data(page.payload_data_mut());
         Ok(Self { array })
     }
 
@@ -298,7 +256,7 @@ mod tests {
     #[test]
     fn test_node_simple_leaf() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        page_ptr.set_node_type(NodeType::Leaf);
+        page_ptr.set_page_type(PageType::TreeNodeLeaf);
         let leaf = LeafNode::from_page(&page_ptr)?;
 
         leaf.insert(b"2", b"2".into())?;
@@ -328,7 +286,7 @@ mod tests {
     #[test]
     fn test_node_leaf_iter() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        page_ptr.set_node_type(NodeType::Leaf);
+        page_ptr.set_page_type(PageType::TreeNodeLeaf);
         let leaf = LeafNode::from_page(&page_ptr)?;
         let mut idx = 0;
         loop {
@@ -346,7 +304,7 @@ mod tests {
     #[test]
     fn test_node_simple_interior() -> Result<()> {
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        page_ptr.set_node_type(NodeType::Interior);
+        page_ptr.set_page_type(PageType::TreeNodeInterior);
         let node = InteriorNode::from_page(&page_ptr)?;
         // P1, (b), P2
         node.init(b"b", PageId(1), PageId(2))?;

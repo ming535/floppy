@@ -1,4 +1,5 @@
 use crate::common::error::{DCError, FloppyError, Result};
+use crate::common::ivec::IVec;
 use crate::dc::{
     codec::{Codec, Decoder, Encoder},
     node::{NodeKey, NodeValue},
@@ -48,13 +49,6 @@ where
         Self {
             data,
             _marker: PhantomData,
-        }
-    }
-
-    pub fn reset_zero(&self) {
-        unsafe {
-            let ptr = self.data.as_ptr() as *mut u8;
-            ptr.write_bytes(0, self.data.len());
         }
     }
 
@@ -112,6 +106,17 @@ where
             size = right - left;
         }
         Err(left.try_into().unwrap())
+    }
+
+    pub fn min_key(&self) -> IVec {
+        let record = self.slot_content(SlotId(0));
+        IVec::from(record.key.as_ref())
+    }
+
+    pub fn set_inf_min(&self) {
+        let record = self.slot_content(SlotId(0));
+        let flag = record.flag | FLAG_INFINITE_SMALL;
+        self.update_at(SlotId(0), record.key, record.value, flag);
     }
 
     pub fn will_overfull(&self, key: K, value: V) -> bool {
@@ -208,6 +213,13 @@ where
         let left = self.range(SlotId(0)..mid);
         let right = self.range(mid..num_slots.try_into().unwrap());
         (record.key, left, right)
+    }
+
+    pub fn reset_zero(&self) {
+        unsafe {
+            let ptr = self.data.as_ptr() as *mut u8;
+            ptr.write_bytes(0, self.data.len());
+        }
     }
 
     fn record_size(&self, key: K, value: V) -> usize {

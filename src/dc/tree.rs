@@ -2,11 +2,16 @@ use crate::common::{
     error::{DCError, FloppyError, Result},
     ivec::IVec,
 };
+
 use crate::dc::{
     buf_frame::BufferFrameGuard,
     buf_mgr::BufMgr,
-    node::{InteriorNode, LeafNode, NodeType, NodeValue, TreeNode},
-    page::{PageId, PAGE_ID_ROOT},
+    node::{InteriorNode, LeafNode, NodeValue, TreeNode},
+    page::{
+        PageId,
+        PageType::{TreeNodeInterior, TreeNodeLeaf},
+        PAGE_ID_ROOT,
+    },
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 use crate::env::Env;
@@ -35,10 +40,10 @@ where
 
     pub async fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>> {
         assert!(key.as_ref().len() <= MAX_KEY_SIZE);
-        let mut guard_chain =
+        let guard_stack =
             self.find_leaf(key.as_ref(), AccessMode::Read).await?;
-        assert_eq!(guard_chain.len(), 1);
-        self.find_value(key.as_ref(), &mut guard_chain[0])
+        assert_eq!(guard_stack.len(), 1);
+        self.find_value(key.as_ref(), &guard_stack[0])
     }
 
     pub async fn insert<K, V>(&self, key: K, value: V) -> Result<()>
@@ -49,17 +54,16 @@ where
         let value = value.into();
         assert!(key.as_ref().len() <= MAX_KEY_SIZE);
         assert!(value.len() <= MAX_VALUE_SIZE);
-        let guard_chain =
+        let guard_stack =
             self.find_leaf(key.as_ref(), AccessMode::Insert).await?;
-        self.insert_value(key.as_ref(), value, guard_chain).await
+        self.insert_value(key.as_ref(), value, guard_stack).await
     }
 
     /// init root node if not exists
     async fn init_index(buf_mgr: &BufMgr<E>) -> Result<()> {
         match buf_mgr.fix_page(PAGE_ID_ROOT).await {
             Err(FloppyError::DC(DCError::PageNotFound(_))) => {
-                let guard = buf_mgr.alloc_page().await?;
-                guard.page_ptr().set_node_type(NodeType::Leaf);
+                let guard = buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
                 assert_eq!(guard.page_id(), PAGE_ID_ROOT);
                 Ok(())
             }
@@ -91,16 +95,16 @@ where
         mode: AccessMode,
     ) -> Result<Vec<BufferFrameGuard>> {
         let mut page_id = PAGE_ID_ROOT;
-        let mut guard_chain = vec![];
+        let mut guard_stack = vec![];
         let mut guard = self.buf_mgr.fix_page(page_id).await?;
         loop {
-            match guard.page_ptr().node_type() {
-                NodeType::Leaf => {
-                    guard_chain.push(guard);
-                    return Ok(guard_chain);
+            match guard.page_ptr().page_type() {
+                TreeNodeLeaf => {
+                    guard_stack.push(guard);
+                    return Ok(guard_stack);
                 }
-                NodeType::Interior => {
-                    page_id = self.find_child(key, &mut guard)?;
+                TreeNodeInterior => {
+                    page_id = self.find_child(key, &guard)?;
                     let child_guard = self.buf_mgr.fix_page(page_id).await?;
                     // add parent to the guard chain if SMO might happen.
                     let child_node =
@@ -111,7 +115,7 @@ where
                             && child_node.slot_array().will_underfull())
                     {
                         let parent_guard = guard;
-                        guard_chain.push(parent_guard);
+                        guard_stack.push(parent_guard);
                         guard = child_guard;
                     } else {
                         //
@@ -121,7 +125,7 @@ where
                         // 1. drop parent's guard to release its latch
                         guard = child_guard;
                         // 2. drop all ancestor's guard to release their latches
-                        guard_chain.clear();
+                        guard_stack.clear();
                     }
                 }
             }
@@ -131,16 +135,18 @@ where
     fn find_child(
         &self,
         key: &[u8],
-        parent_guard: &mut BufferFrameGuard,
+        parent_guard: &BufferFrameGuard,
     ) -> Result<PageId> {
         let node = InteriorNode::from_page(parent_guard.page_ptr())?;
-        node.get(key).map(|v| v.unwrap())
+        node.get(key)?.ok_or(FloppyError::Internal(format!(
+            "child page is none, key: {key:?}"
+        )))
     }
 
     fn find_value(
         &self,
         key: &[u8],
-        guard: &mut BufferFrameGuard,
+        guard: &BufferFrameGuard,
     ) -> Result<Option<IVec>> {
         let node = LeafNode::from_page(guard.page_ptr())?;
         node.get(key)
@@ -150,14 +156,14 @@ where
         &self,
         key: &[u8],
         value: IVec,
-        mut guard_chain: Vec<BufferFrameGuard>,
+        mut guard_stack: Vec<BufferFrameGuard>,
     ) -> Result<()> {
-        let chain_len = guard_chain.len();
-        assert!(chain_len >= 1);
-        let leaf_guard = &mut guard_chain[chain_len - 1];
+        let stack_len = guard_stack.len();
+        assert!(stack_len >= 1);
+        let leaf_guard = &mut guard_stack[stack_len - 1];
         let node = LeafNode::from_page(leaf_guard.page_ptr())?;
         if node.slot_array().will_overfull(key, value.clone()) {
-            self.split(key, value, guard_chain.as_mut_slice()).await
+            self.split(key, value, &mut guard_stack).await
         } else {
             // drop parent guards to release their latches
             node.insert(key, value)
@@ -205,43 +211,56 @@ where
         &self,
         key: &[u8],
         value: IVec,
-        guard_chain: &mut [BufferFrameGuard],
+        guard_stack: &mut Vec<BufferFrameGuard>,
     ) -> Result<()> {
-        guard_chain.reverse();
+        assert!(!guard_stack.is_empty());
 
-        assert!(!guard_chain.is_empty());
-
-        let leaf_guard = &mut guard_chain[0];
+        let leaf_guard = guard_stack
+            .pop()
+            .ok_or(FloppyError::Internal("guard stack empty".to_string()))?;
 
         if leaf_guard.page_id() == PAGE_ID_ROOT {
-            let new_left = self.buf_mgr.alloc_page().await?;
-            let new_right = self.buf_mgr.alloc_page().await?;
+            let new_left =
+                self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
+            let new_right =
+                self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
             return self
                 .split_root::<IVec, LeafNode>(
-                    leaf_guard, &new_left, &new_right, key, value,
+                    &leaf_guard,
+                    &new_left,
+                    &new_right,
+                    key,
+                    value,
                 )
                 .await;
         }
 
-        let mut new_page = self.buf_mgr.alloc_page().await?;
-        self.split_node::<IVec, LeafNode>(leaf_guard, &new_page, key, value)
+        let mut new_page =
+            self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
+        self.split_node::<IVec, LeafNode>(&leaf_guard, &new_page, key, value)
             .await?;
         let new_node = LeafNode::from_page(new_page.page_ptr())?;
-        let mut split_key = new_node.min_key();
+        let mut split_key = new_node.slot_array().min_key();
 
-        let parents = &mut guard_chain[1..];
-        for guard in parents.iter_mut() {
+        // add index to interior node.
+        while let Some(guard) = guard_stack.pop() {
             let node = InteriorNode::from_page(guard.page_ptr())?;
             if node
                 .slot_array()
                 .will_overfull(&split_key, new_page.page_id())
             {
                 if guard.page_id() == PAGE_ID_ROOT {
-                    let new_left = self.buf_mgr.alloc_page().await?;
-                    let new_right = self.buf_mgr.alloc_page().await?;
+                    let new_left = self
+                        .buf_mgr
+                        .alloc_page_with_type(TreeNodeInterior)
+                        .await?;
+                    let new_right = self
+                        .buf_mgr
+                        .alloc_page_with_type(TreeNodeInterior)
+                        .await?;
                     return self
                         .split_root::<PageId, InteriorNode>(
-                            guard,
+                            &guard,
                             &new_left,
                             &new_right,
                             &split_key,
@@ -249,16 +268,18 @@ where
                         )
                         .await;
                 }
-                new_page = self.buf_mgr.alloc_page().await?;
+                new_page =
+                    self.buf_mgr.alloc_page_with_type(TreeNodeInterior).await?;
                 self.split_node::<PageId, InteriorNode>(
-                    guard,
+                    &guard,
                     &new_page,
                     &split_key,
                     new_page.page_id(),
                 )
                 .await?;
                 let new_node = InteriorNode::from_page(new_page.page_ptr())?;
-                split_key = new_node.set_inf_min();
+                split_key = new_node.slot_array().min_key();
+                new_node.slot_array().set_inf_min();
             } else {
                 node.insert(&split_key, new_page.page_id())?;
                 break;
@@ -279,24 +300,13 @@ where
         Node: TreeNode<'a, &'a [u8], V>,
     {
         let node = Node::from_page(guard.page_ptr())?;
-        let (split_key, _left_iter, right_iter) =
-            node.slot_array().split_half();
+        let (split_key, left_iter, right_iter) = node.slot_array().split_half();
+        node.slot_array().with_iter(left_iter)?;
 
         let right_node = Node::from_page(new_page.page_ptr())?;
         right_node.slot_array().with_iter(right_iter)?;
 
-        let cmp = key.cmp(split_key);
-        if cmp == Ordering::Less {
-            node.insert(key, value)?;
-        } else if cmp == Ordering::Greater {
-            right_node.insert(key, value)?;
-        } else {
-            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "key already exists {key:?}"
-            ))));
-        }
-
-        Ok(())
+        self.insert_split_key(key, value, split_key, node, right_node)
     }
 
     async fn split_root<'a, V, Node>(
@@ -320,22 +330,44 @@ where
         let new_right_node = Node::from_page(new_right_page.page_ptr())?;
         new_right_node.slot_array().with_iter(right_iter)?;
 
-        // todo
-        // set inf min
-
-        let cmp = key.cmp(split_key);
-        if cmp == Ordering::Less {
-            new_left_node.insert(key, value)?;
-        } else if cmp == Ordering::Greater {
-            new_right_node.insert(key, value)?;
-        } else {
-            return Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
-                "key already exists {key:?}"
-            ))));
+        if new_right_page.page_ptr().page_type() == TreeNodeInterior {
+            new_right_node.slot_array().set_inf_min();
         }
+
+        self.insert_split_key(
+            key,
+            value,
+            split_key,
+            new_left_node,
+            new_right_node,
+        )?;
 
         let root = InteriorNode::from_page(guard.page_ptr())?;
         root.init(split_key, new_left_page.page_id(), new_right_page.page_id())
+    }
+
+    fn insert_split_key<'a, V, Node>(
+        &self,
+        key: &'a [u8],
+        value: V,
+        split_key: &'a [u8],
+        left: Node,
+        right: Node,
+    ) -> Result<()>
+    where
+        V: NodeValue,
+        Node: TreeNode<'a, &'a [u8], V>,
+    {
+        let cmp = key.cmp(split_key);
+        if cmp == Ordering::Less {
+            left.insert(key, value)
+        } else if cmp == Ordering::Greater {
+            right.insert(key, value)
+        } else {
+            Err(FloppyError::DC(DCError::KeyAlreadyExists(format!(
+                "key already exists {key:?}"
+            ))))
+        }
     }
 }
 

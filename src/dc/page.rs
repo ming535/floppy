@@ -1,8 +1,35 @@
 use crate::common::error::{FloppyError, Result};
-use crate::dc::node::NodeType;
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::ptr::NonNull;
 use std::{mem, slice};
+
+pub(crate) const PAGE_TYPE_INTERIOR: u8 = 0x02;
+pub(crate) const PAGE_TYPE_LEAF: u8 = 0x04;
+
+#[derive(PartialEq, Debug)]
+pub(crate) enum PageType {
+    TreeNodeInterior,
+    TreeNodeLeaf,
+}
+
+impl From<u8> for PageType {
+    fn from(flag: u8) -> Self {
+        match flag {
+            PAGE_TYPE_INTERIOR => PageType::TreeNodeInterior,
+            PAGE_TYPE_LEAF => PageType::TreeNodeLeaf,
+            _ => panic!("invalid page type"),
+        }
+    }
+}
+
+impl From<PageType> for u8 {
+    fn from(node_type: PageType) -> Self {
+        match node_type {
+            PageType::TreeNodeInterior => PAGE_TYPE_INTERIOR,
+            PageType::TreeNodeLeaf => PAGE_TYPE_LEAF,
+        }
+    }
+}
 
 pub(crate) const PAGE_SIZE: usize = 4096;
 pub(super) const PAGE_ID_ZERO: PageId = PageId(0);
@@ -77,12 +104,12 @@ impl PagePtr {
         u64::from_le_bytes(data[0..8].try_into().unwrap())
     }
 
-    pub fn node_type(&self) -> NodeType {
+    pub fn page_type(&self) -> PageType {
         let data = self.data();
         u8::from_le_bytes(data[8..9].try_into().unwrap()).into()
     }
 
-    pub fn set_node_type(&self, node_type: NodeType) -> &Self {
+    pub fn set_page_type(&self, node_type: PageType) -> &Self {
         let data = self.data_mut();
         let type_flag: u8 = node_type.into();
         data[8..9].copy_from_slice(&type_flag.to_le_bytes());
@@ -97,11 +124,11 @@ impl PagePtr {
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
 
-    pub fn node_data<'a>(&self) -> &'a [u8] {
+    pub fn payload_data<'a>(&self) -> &'a [u8] {
         &self.data()[9..]
     }
 
-    pub fn node_data_mut<'a>(&self) -> &'a mut [u8] {
+    pub fn payload_data_mut<'a>(&self) -> &'a mut [u8] {
         unsafe {
             slice::from_raw_parts_mut(self.buf.as_ptr().add(9), self.size - 9)
         }

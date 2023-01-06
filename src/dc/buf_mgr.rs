@@ -1,4 +1,5 @@
 use crate::common::error::{DCError, FloppyError, Result};
+use crate::dc::page::PageType;
 use crate::dc::{
     buf_frame::{BufferFrame, BufferFrameGuard},
     eviction_strategy::EvictionPool,
@@ -71,18 +72,12 @@ where
         })
     }
 
-    /// Allocate a new page from buffer pool. This happens when a node in the
-    /// tree splits.
-    /// To allocate a page, we first check if there is a free page in the
-    /// freelist. If there is, we return the page. Otherwise, we extend the
-    /// file and return the new page.
-    pub async fn alloc_page(&self) -> Result<BufferFrameGuard> {
-        let page_id: PageId =
-            self.next_page_id.fetch_add(1, Ordering::Release).into();
-        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
-        let frame = BufferFrame::new(page_id, page_ptr);
-        let guard = frame.guard(None).await;
-        self.active_pages.insert(page_id, frame);
+    pub async fn alloc_page_with_type(
+        &self,
+        page_type: PageType,
+    ) -> Result<BufferFrameGuard> {
+        let guard = self.alloc_page().await?;
+        guard.page_ptr().set_page_type(page_type);
         Ok(guard)
     }
 
@@ -124,6 +119,21 @@ where
             self.active_pages.insert(page_id, frame.clone());
             Ok(guard)
         }
+    }
+
+    /// Allocate a new page from buffer pool. This happens when a node in the
+    /// tree splits.
+    /// To allocate a page, we first check if there is a free page in the
+    /// freelist. If there is, we return the page. Otherwise, we extend the
+    /// file and return the new page.
+    async fn alloc_page(&self) -> Result<BufferFrameGuard> {
+        let page_id: PageId =
+            self.next_page_id.fetch_add(1, Ordering::Release).into();
+        let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
+        let frame = BufferFrame::new(page_id, page_ptr);
+        let guard = frame.guard(None).await;
+        self.active_pages.insert(page_id, frame);
+        Ok(guard)
     }
 
     async fn read_page(
