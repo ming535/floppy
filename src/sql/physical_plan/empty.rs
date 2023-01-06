@@ -20,7 +20,10 @@ impl EmptyExec {
 }
 
 impl EmptyExec {
-    pub fn stream(&self, _exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
+    pub fn stream(
+        &self,
+        _exec_ctx: Arc<ExecutionContext>,
+    ) -> Result<RowStream> {
         Ok(Box::pin(FilterExecStream { index: 0 }))
     }
 }
@@ -32,7 +35,10 @@ struct FilterExecStream {
 impl Stream for FilterExecStream {
     type Item = Result<Row>;
 
-    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if self.index == 1 {
             return Poll::Ready(None);
         }

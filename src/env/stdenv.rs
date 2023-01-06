@@ -22,7 +22,10 @@ impl Env for StdEnv {
     type JoinHandle<T: Send> = JoinHandle<T>;
     type Directory = Directory;
 
-    async fn open_file<P>(&self, path: P) -> Result<Self::PositionalReaderWriter>
+    async fn open_file<P>(
+        &self,
+        path: P,
+    ) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send,
     {
@@ -61,12 +64,18 @@ impl Env for StdEnv {
     }
 
     /// An async version of [`std::fs::create_dir`].
-    async fn create_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
+    async fn create_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()> {
         std::fs::create_dir_all(path)
     }
 
     /// An async version of [`std::fs::remove_dir`].
-    async fn remove_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()> {
+    async fn remove_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()> {
         std::fs::remove_dir_all(path)
     }
 
@@ -76,7 +85,10 @@ impl Env for StdEnv {
         std::fs::read_dir(path)
     }
 
-    async fn metadata<P: AsRef<Path> + Send>(&self, path: P) -> Result<Metadata> {
+    async fn metadata<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Metadata> {
         let raw_metadata = std::fs::metadata(path)?;
         Ok(Metadata {
             len: raw_metadata.len(),
@@ -84,7 +96,10 @@ impl Env for StdEnv {
         })
     }
 
-    async fn open_dir<P: AsRef<Path> + Send>(&self, path: P) -> Result<Self::Directory> {
+    async fn open_dir<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Self::Directory> {
         let file = File::open(path)?;
         if !file.metadata()?.is_dir() {
             return Err(std::io::Error::new(
@@ -121,7 +136,11 @@ impl super::PositionalReader for PositionalReaderWriter {
     type ReadAt<'a> = impl Future<Output = Result<usize>> + 'a;
 
     #[cfg(unix)]
-    fn read_at<'a>(&'a self, buf: &'a mut [u8], offset: u64) -> Self::ReadAt<'a> {
+    fn read_at<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+        offset: u64,
+    ) -> Self::ReadAt<'a> {
         use std::os::unix::fs::FileExt;
         async move { self.0.read_at(buf, offset) }
     }
@@ -144,7 +163,10 @@ pub struct JoinHandle<T> {
 impl<T> Future for JoinHandle<T> {
     type Output = T;
 
-    fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+    ) -> Poll<Self::Output> {
         let handle = self.handle.take().unwrap();
         match handle.join() {
             Ok(v) => Poll::Ready(v),

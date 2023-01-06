@@ -23,11 +23,18 @@ lazy_static! {
 
 pub fn seed_catalog() -> Arc<dyn catalog::CatalogStore> {
     let mut catalog = catalog::memory::MemCatalog::default();
-    catalog.insert_table(*TEST_TABLE_NAME, *TEST_TABLE_ID, TEST_REL_DESC.clone());
+    catalog.insert_table(
+        *TEST_TABLE_NAME,
+        *TEST_TABLE_ID,
+        TEST_REL_DESC.clone(),
+    );
     Arc::new(catalog)
 }
 
-pub fn seed_table(rel_desc: RelationDesc, data: &Vec<Row>) -> Result<Arc<dyn storage::TableStore>> {
+pub fn seed_table(
+    rel_desc: RelationDesc,
+    data: &Vec<Row>,
+) -> Result<Arc<dyn storage::TableStore>> {
     let table = Arc::new(storage::memory::MemoryEngine::new(rel_desc));
     table.seed(&TEST_TABLE_ID, data)?;
     Ok(table)

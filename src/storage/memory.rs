@@ -1,5 +1,7 @@
 use crate::common::error::Result;
-use crate::common::relation::{GlobalId, IndexKeyDatums, IndexRange, RelationDesc, Row};
+use crate::common::relation::{
+    GlobalId, IndexKeyDatums, IndexRange, RelationDesc, Row,
+};
 use crate::storage::{RowIter, TableStore};
 use std::collections::BTreeMap;
 use std::ops::RangeBounds;
@@ -25,7 +27,11 @@ impl MemoryEngine {
 struct EngineInner(Mutex<BTreeMap<IndexKeyDatums, Row>>);
 
 impl TableStore for MemoryEngine {
-    fn primary_index_range(&self, _: &GlobalId, index_range: &IndexRange) -> Result<RowIter> {
+    fn primary_index_range(
+        &self,
+        _: &GlobalId,
+        index_range: &IndexRange,
+    ) -> Result<RowIter> {
         let index_range = index_range.clone();
         let result_set = self
             .inner

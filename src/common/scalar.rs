@@ -34,10 +34,12 @@ impl ops::Add for Datum {
 
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Self::Int64(d1), Self::Int64(d2)) => d1.checked_add(d2).map_or_else(
-                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
-                |v| Ok(Datum::Int64(v)),
-            ),
+            (Self::Int64(d1), Self::Int64(d2)) => {
+                d1.checked_add(d2).map_or_else(
+                    || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                    |v| Ok(Datum::Int64(v)),
+                )
+            }
             _ => Err(FloppyError::Internal(format!(
                 "mismatched type for addition"
             ))),
@@ -50,10 +52,12 @@ impl ops::Sub for Datum {
 
     fn sub(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Self::Int64(d1), Self::Int64(d2)) => d1.checked_sub(d2).map_or_else(
-                || Err(FloppyError::EvalExpr(format!("integer over flow"))),
-                |v| Ok(Datum::Int64(v)),
-            ),
+            (Self::Int64(d1), Self::Int64(d2)) => {
+                d1.checked_sub(d2).map_or_else(
+                    || Err(FloppyError::EvalExpr(format!("integer over flow"))),
+                    |v| Ok(Datum::Int64(v)),
+                )
+            }
             _ => Err(FloppyError::Internal(format!(
                 "mismatched type for addition"
             ))),
@@ -81,14 +85,18 @@ impl fmt::Display for Datum {
 impl Datum {
     pub fn logical_and(&self, other: &Datum) -> Result<Datum> {
         match (self, other) {
-            (Self::Boolean(d1), Self::Boolean(d2)) => Ok(Datum::Boolean(*d1 && *d2)),
+            (Self::Boolean(d1), Self::Boolean(d2)) => {
+                Ok(Datum::Boolean(*d1 && *d2))
+            }
             _ => Err(FloppyError::Internal(format!("AND type error"))),
         }
     }
 
     pub fn logical_or(&self, other: &Datum) -> Result<Datum> {
         match (self, other) {
-            (Self::Boolean(d1), Self::Boolean(d2)) => Ok(Datum::Boolean(*d1 || *d2)),
+            (Self::Boolean(d1), Self::Boolean(d2)) => {
+                Ok(Datum::Boolean(*d1 || *d2))
+            }
             _ => Err(FloppyError::Internal(format!("OR type error"))),
         }
     }

@@ -1,4 +1,6 @@
-use crate::catalog::{FLOPPY_DB_ID, FLOPPY_DB_NAME, FLOPPY_SCHEMA_ID, FLOPPY_SCHEMA_NAME};
+use crate::catalog::{
+    FLOPPY_DB_ID, FLOPPY_DB_NAME, FLOPPY_SCHEMA_ID, FLOPPY_SCHEMA_NAME,
+};
 use crate::common::error::FloppyError;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::ObjectName as SqlObjectName;
@@ -130,11 +132,33 @@ pub struct ObjectQualifiers {
 }
 
 /// The identifier for a database
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub struct DatabaseId(pub u64);
 
 /// The identifier for a schema.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub struct SchemaId(pub u64);
 
 #[cfg(test)]

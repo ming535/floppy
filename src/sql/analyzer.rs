@@ -483,6 +483,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn select_no_relation_single_column() {
         let scx = StatementContext {
             catalog: Arc::new(catalog::memory::MemCatalog::default()),

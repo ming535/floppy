@@ -28,6 +28,6 @@ impl fmt::Display for Operator {
             Self::And => "AND",
             Self::Or => "OR",
         };
-        write!(f, "{}", display)
+        write!(f, "{display}")
     }
 }

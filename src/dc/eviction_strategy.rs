@@ -10,7 +10,8 @@ impl EvictionPool {
     /// Makes the page held by `BufferFrame` a candidate for eviction.
     pub fn insert(&self, _frame: BufferFrame) {}
 
-    /// Ensures the page held by `BufferFrame` is no longer a candidate for eviction.
+    /// Ensures the page held by `BufferFrame` is no longer a candidate for
+    /// eviction.
     pub fn delete(&self, _frame: BufferFrame) {}
 
     /// Evicts a page previously marked as a candidate for eviction (if any),

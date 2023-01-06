@@ -197,12 +197,16 @@ impl VariadicExpr {
         // since we only support "AND", "OR", let's simplify the
         // logic here.
         match self.func {
-            VariadicFunc::And => datums
-                .iter()
-                .try_fold(Datum::Boolean(true), |acc, item| acc.logical_and(item)),
-            VariadicFunc::Or => datums
-                .iter()
-                .try_fold(Datum::Boolean(false), |acc, item| acc.logical_or(item)),
+            VariadicFunc::And => {
+                datums.iter().try_fold(Datum::Boolean(true), |acc, item| {
+                    acc.logical_and(item)
+                })
+            }
+            VariadicFunc::Or => {
+                datums.iter().try_fold(Datum::Boolean(false), |acc, item| {
+                    acc.logical_or(item)
+                })
+            }
         }
     }
 }

@@ -29,8 +29,12 @@ pub enum Expr {
 impl Expr {
     pub fn typ(&self, ecx: &ExprContext) -> ColumnType {
         match self {
-            Self::Column(ColumnRef { id, .. }) => ecx.rel_desc.rel_type().column_type(*id).clone(),
-            Self::Parameter(n) => ecx.param_types().borrow()[n].clone().nullable(true),
+            Self::Column(ColumnRef { id, .. }) => {
+                ecx.rel_desc.rel_type().column_type(*id).clone()
+            }
+            Self::Parameter(n) => {
+                ecx.param_types().borrow()[n].clone().nullable(true)
+            }
             Self::Literal(Literal { datum, scalar_type }) => ColumnType {
                 scalar_type: scalar_type.clone(),
                 nullable: datum.is_null(),
@@ -240,9 +244,12 @@ impl CoercibleExpr {
         let expr = match self {
             Self::Coerced(e) => e.clone(),
             Self::LiteralNull => literal_null(ty.clone()),
-            Self::LiteralString(s) => cast(&Datum::Text(s.clone()), &ScalarType::Text, ty)?,
+            Self::LiteralString(s) => {
+                cast(&Datum::Text(s.clone()), &ScalarType::Text, ty)?
+            }
             Self::Parameter(n) => {
-                let prev = ecx.param_types().borrow_mut().insert(*n, ty.clone());
+                let prev =
+                    ecx.param_types().borrow_mut().insert(*n, ty.clone());
                 assert!(prev.is_none());
                 Expr::Parameter(*n)
             }
@@ -269,7 +276,11 @@ pub fn parse_sql_number(n: &str) -> Result<Expr> {
     }
 }
 
-fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr> {
+fn cast(
+    datum: &Datum,
+    scalar_type: &ScalarType,
+    to: &ScalarType,
+) -> Result<Expr> {
     match (datum, scalar_type, to) {
         (Datum::Text(s), ScalarType::Text, ScalarType::Int64) => {
             let d = Decimal::from_str_exact(s)?;
@@ -282,7 +293,9 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
                 )))
             }
         }
-        (Datum::Text(s), ScalarType::Text, ScalarType::Text) => Ok(literal_text(s)),
+        (Datum::Text(s), ScalarType::Text, ScalarType::Text) => {
+            Ok(literal_text(s))
+        }
         _ => Err(FloppyError::NotImplemented(format!(
             "cast not implemented from datum: {} typ: {}, to : {}",
             datum, scalar_type, to
@@ -294,12 +307,11 @@ fn cast(datum: &Datum, scalar_type: &ScalarType, to: &ScalarType) -> Result<Expr
 mod tests {
     use super::*;
     use crate::catalog;
-    
-    
+
     use crate::common::relation::RelationDesc;
     use crate::sql::context::StatementContext;
     use crate::sql::primitive::func::{add, and, equal, gt, or};
-    
+
     use std::sync::Arc;
 
     fn seed_catalog(catalog: &mut catalog::memory::MemCatalog) {

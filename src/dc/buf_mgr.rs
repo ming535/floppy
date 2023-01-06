@@ -30,8 +30,8 @@ use std::{
 /// `PageFrame`:
 /// 1. Freelist: The free memory that can be used to store new pages.
 ///    Note that this is different from a `Page`'s Freelist.
-/// 2. FlushList: The pages that have been modified and need to be flushed to disk.
-/// 3. LruList: The pages that are tracked by the LRU algorithm.
+/// 2. FlushList: The pages that have been modified and need to be flushed to
+/// disk. 3. LruList: The pages that are tracked by the LRU algorithm.
 pub(crate) struct BufMgr<E: Env> {
     env: E,
     active_pages: DashMap<PageId, BufferFrame>,
@@ -46,7 +46,11 @@ where
 {
     /// Open the file at the given path. If the file does not exist, create it.
     /// Page 0 is initialized with an empty freelist page header.
-    pub async fn open<P: AsRef<Path>>(env: E, path: P, pool_size: usize) -> Result<Self> {
+    pub async fn open<P: AsRef<Path>>(
+        env: E,
+        path: P,
+        pool_size: usize,
+    ) -> Result<Self> {
         let file = env.open_file(path.as_ref()).await?;
         let size = file.file_size().await;
         let next_page_id = if size == 0 {
@@ -73,7 +77,8 @@ where
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
     pub async fn alloc_page(&self) -> Result<BufferFrameGuard> {
-        let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release).into();
+        let page_id: PageId =
+            self.next_page_id.fetch_add(1, Ordering::Release).into();
         let page_ptr = PagePtr::zero_content(PAGE_SIZE)?;
         let frame = BufferFrame::new(page_id, page_ptr);
         let guard = frame.guard(None).await;
@@ -122,7 +127,11 @@ where
         }
     }
 
-    async fn read_page(&self, page_id: PageId, frame: &mut BufferFrameGuard) -> Result<()> {
+    async fn read_page(
+        &self,
+        page_id: PageId,
+        frame: &mut BufferFrameGuard,
+    ) -> Result<()> {
         let file = self.env.open_file(self.file_path.as_path()).await?;
         let pos = page_id.0 as u64 * PAGE_SIZE as u64;
         match file.read_exact_at(frame.page_ptr().data_mut(), pos).await {

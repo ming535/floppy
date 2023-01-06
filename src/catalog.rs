@@ -3,7 +3,10 @@ pub mod names;
 
 use crate::common::error::Result;
 use crate::common::relation::{GlobalId, RelationDesc};
-use names::{DatabaseId, FullObjectName, PartialObjectName, QualifiedObjectName, SchemaId};
+use names::{
+    DatabaseId, FullObjectName, PartialObjectName, QualifiedObjectName,
+    SchemaId,
+};
 use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
@@ -38,24 +41,26 @@ const FLOPPY_SCHEMA_ID: SchemaId = SchemaId(101);
 ///
 /// There are two classes of operations provided by a
 /// catalog:
-///   * Resolution operations, like [`resolve_item`]. These
-///     fill in missing name components based upon
-///     connection defaults, e.g., resolving the partial
-///     name `test_table` to the fully-specified name
-///     `test.public.test_table`.
+///   * Resolution operations, like [`resolve_item`]. These fill in missing name
+///     components based upon connection defaults, e.g., resolving the partial
+///     name `test_table` to the fully-specified name `test.public.test_table`.
 ///
-///   * Lookup operations, like [`get_item`]. These retrieve
-///     metadata about a catalog entity based on a
-///     fully-specified name that is known to be valid
-///     (i.e., because the name was successfully resolved,
-///     or was constructed based on the output of a prior
-///     lookup operation).
+///   * Lookup operations, like [`get_item`]. These retrieve metadata about a
+///     catalog entity based on a fully-specified name that is known to be valid
+///     (i.e., because the name was successfully resolved, or was constructed
+///     based on the output of a prior lookup operation).
 pub trait CatalogStore: fmt::Debug + Send + Sync {
-    fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem>;
+    fn resolve_item(
+        &self,
+        item_name: &PartialObjectName,
+    ) -> Result<&dyn CatalogItem>;
 }
 
 impl<C: CatalogStore + ?Sized + Send + Sync> CatalogStore for Arc<C> {
-    fn resolve_item(&self, item_name: &PartialObjectName) -> Result<&dyn CatalogItem> {
+    fn resolve_item(
+        &self,
+        item_name: &PartialObjectName,
+    ) -> Result<&dyn CatalogItem> {
         (**self).resolve_item(item_name)
     }
 }

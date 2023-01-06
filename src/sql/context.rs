@@ -52,7 +52,10 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn new(catalog_store: Arc<dyn CatalogStore>, table_store: Arc<dyn TableStore>) -> Self {
+    pub fn new(
+        catalog_store: Arc<dyn CatalogStore>,
+        table_store: Arc<dyn TableStore>,
+    ) -> Self {
         Self {
             catalog_store,
             table_store,

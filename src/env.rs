@@ -11,14 +11,19 @@ use std::{future::Future, io::Result, path::Path};
 #[async_trait]
 pub trait Env: Clone + Send + Sync + 'static {
     /// Positional writer and reader returned by the environment.
-    type PositionalReaderWriter: PositionalReader + PositionalWriter + DioEnabler;
+    type PositionalReaderWriter: PositionalReader
+        + PositionalWriter
+        + DioEnabler;
     /// Handles to await tasks spawned by the environment.
     type JoinHandle<T: Send>: Future<Output = T> + Send;
     /// Directories returned by the environment.
     type Directory: Directory + Send + Sync + 'static;
 
     /// Opens a file for positional read and write
-    async fn open_file<P>(&self, path: P) -> Result<Self::PositionalReaderWriter>
+    async fn open_file<P>(
+        &self,
+        path: P,
+    ) -> Result<Self::PositionalReaderWriter>
     where
         P: AsRef<Path> + Send;
 
@@ -42,11 +47,17 @@ pub trait Env: Clone + Send + Sync + 'static {
     /// Recursively create a directory and all of its parent components if they
     /// are missing.
     /// See also [`std::fs::create_dir_all`].
-    async fn create_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()>;
+    async fn create_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()>;
 
     /// Removes a directory at this path, after removing all its contents.
     /// See also [`std::fs::remove_dir_all`].
-    async fn remove_dir_all<P: AsRef<Path> + Send>(&self, path: P) -> Result<()>;
+    async fn remove_dir_all<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<()>;
 
     /// Returns an iterator over the entries within a directory.
     /// See also [`std::fs::read_dir`].
@@ -56,10 +67,16 @@ pub trait Env: Clone + Send + Sync + 'static {
     /// Given a path, query the file system to get information about a file,
     /// directory, etc.
     /// See also [`std::fs::metadata`].
-    async fn metadata<P: AsRef<Path> + Send>(&self, path: P) -> Result<Metadata>;
+    async fn metadata<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Metadata>;
 
     /// Open the directory.
-    async fn open_dir<P: AsRef<Path> + Send>(&self, path: P) -> Result<Self::Directory>;
+    async fn open_dir<P: AsRef<Path> + Send>(
+        &self,
+        path: P,
+    ) -> Result<Self::Directory>;
 }
 
 /// A reader that allows positional reads.
@@ -86,7 +103,11 @@ pub trait PositionalReaderExt {
         Self: 'a;
 
     /// Reads the exact number of bytes from this object at `pos` to fill `buf`.
-    fn read_exact_at<'a>(&'a self, buf: &'a mut [u8], pos: u64) -> Self::ReadExactAt<'a>;
+    fn read_exact_at<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+        pos: u64,
+    ) -> Self::ReadExactAt<'a>;
 }
 
 impl<T> PositionalReaderExt for T
@@ -95,11 +116,17 @@ where
 {
     type ReadExactAt<'a> = impl Future<Output = Result<()>> + 'a where Self: 'a;
 
-    fn read_exact_at<'a>(&'a self, mut buf: &'a mut [u8], mut pos: u64) -> Self::ReadExactAt<'a> {
+    fn read_exact_at<'a>(
+        &'a self,
+        mut buf: &'a mut [u8],
+        mut pos: u64,
+    ) -> Self::ReadExactAt<'a> {
         async move {
             while !buf.is_empty() {
                 match self.read_at(buf, pos).await {
-                    Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
+                    Ok(0) => {
+                        return Err(std::io::ErrorKind::UnexpectedEof.into())
+                    }
                     Ok(n) => {
                         buf = &mut buf[n..];
                         pos += n as u64;
@@ -144,7 +171,11 @@ pub trait PositionalWriterExt {
     where
         Self: 'a;
 
-    fn write_exact_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteExactAt<'a>;
+    fn write_exact_at<'a>(
+        &'a self,
+        buf: &'a [u8],
+        pos: u64,
+    ) -> Self::WriteExactAt<'a>;
 }
 
 impl<T> PositionalWriterExt for T
@@ -153,7 +184,11 @@ where
 {
     type WriteExactAt<'a>  = impl Future<Output = Result<()>> + 'a where Self: 'a;
 
-    fn write_exact_at<'a>(&'a self, buf: &'a [u8], pos: u64) -> Self::WriteExactAt<'a> {
+    fn write_exact_at<'a>(
+        &'a self,
+        buf: &'a [u8],
+        pos: u64,
+    ) -> Self::WriteExactAt<'a> {
         async move {
             let mut buf = buf;
             let mut pos = pos;

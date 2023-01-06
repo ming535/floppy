@@ -30,7 +30,10 @@ struct PriKeyScanExecStream {
 impl Stream for PriKeyScanExecStream {
     type Item = Result<Row>;
 
-    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         let row = self.row_iter.next();
         match row {
             None => Poll::Ready(None),

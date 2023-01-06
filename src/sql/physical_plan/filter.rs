@@ -12,7 +12,10 @@ pub struct FilterExec {
 }
 
 impl FilterExec {
-    pub fn stream(&self, _exec_ctx: Arc<ExecutionContext>) -> Result<RowStream> {
+    pub fn stream(
+        &self,
+        _exec_ctx: Arc<ExecutionContext>,
+    ) -> Result<RowStream> {
         todo!()
         //     loop {
         //         if let Some(r) = self.input.evaluate()? {

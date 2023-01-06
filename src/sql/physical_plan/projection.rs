@@ -46,7 +46,10 @@ impl ProjectionExecStream {
 impl Stream for ProjectionExecStream {
     type Item = Result<Row>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(cx).map(|x| match x {
             Some(Ok(r)) => Some(self.project(&r)),
             other => other,

@@ -28,16 +28,20 @@ impl CatalogStore for MemCatalog {
             return Ok(result);
         }
 
-        Err(FloppyError::Catalog(CatalogError::TableNotFound(format!(
-            "{}",
-            partial_name.item
-        ))))
+        Err(FloppyError::Catalog(CatalogError::TableNotFound(
+            partial_name.item.to_string(),
+        )))
     }
 }
 
 impl MemCatalog {
     #[allow(dead_code)]
-    pub fn insert_table(&mut self, name: &str, id: GlobalId, desc: RelationDesc) {
+    pub fn insert_table(
+        &mut self,
+        name: &str,
+        id: GlobalId,
+        desc: RelationDesc,
+    ) {
         let mut tmp = self.tables.clone();
         tmp.insert(
             name.into(),
@@ -63,7 +67,7 @@ pub enum MemCatalogItem {
 impl CatalogItem for MemCatalogItem {
     fn name(&self) -> &QualifiedObjectName {
         match &self {
-            Self::Table { name, .. } => &name,
+            Self::Table { name, .. } => name,
         }
     }
 
@@ -77,7 +81,10 @@ impl CatalogItem for MemCatalogItem {
         unimplemented!()
     }
 
-    fn desc(&self, _: &FullObjectName) -> common::error::Result<Cow<RelationDesc>> {
+    fn desc(
+        &self,
+        _: &FullObjectName,
+    ) -> common::error::Result<Cow<RelationDesc>> {
         match &self {
             Self::Table { desc, .. } => Ok(Cow::Borrowed(desc)),
         }

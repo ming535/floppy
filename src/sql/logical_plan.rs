@@ -50,7 +50,10 @@ impl LogicalPlan {
 }
 
 impl LogicalPlan {
-    pub fn accept<V>(&self, visitor: &mut V) -> std::result::Result<bool, V::Error>
+    pub fn accept<V>(
+        &self,
+        visitor: &mut V,
+    ) -> std::result::Result<bool, V::Error>
     where
         V: ExprVisitor<LogicalPlan>,
     {
