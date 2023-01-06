@@ -10,6 +10,7 @@ serde = {version = "1.0", features = ["derive"]}
 rust_decimal = "1.26"
 futures = "0.3"
 lazy_static = "1.4"
+libc = "0.2.137"
 tokio = {version = "1.0", features = ["full"]}
 dashmap = "5.4"
 
