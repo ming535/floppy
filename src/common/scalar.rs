@@ -22,10 +22,7 @@ pub enum Datum {
 
 impl Datum {
     pub fn is_null(&self) -> bool {
-        match self {
-            Self::Null => true,
-            _ => false,
-        }
+        matches!(self, Self::Null)
     }
 }
 
@@ -36,11 +33,17 @@ impl ops::Add for Datum {
         match (self, rhs) {
             (Self::Int64(d1), Self::Int64(d2)) => {
                 d1.checked_add(d2).map_or_else(
-                    || Err(FloppyError::EvalExpr("integer over flow".to_string())),
+                    || {
+                        Err(FloppyError::EvalExpr(
+                            "integer over flow".to_string(),
+                        ))
+                    },
                     |v| Ok(Datum::Int64(v)),
                 )
             }
-            _ => Err(FloppyError::Internal("mismatched type for addition".to_string())),
+            _ => Err(FloppyError::Internal(
+                "mismatched type for addition".to_string(),
+            )),
         }
     }
 }
@@ -52,11 +55,17 @@ impl ops::Sub for Datum {
         match (self, rhs) {
             (Self::Int64(d1), Self::Int64(d2)) => {
                 d1.checked_sub(d2).map_or_else(
-                    || Err(FloppyError::EvalExpr("integer over flow".to_string())),
+                    || {
+                        Err(FloppyError::EvalExpr(
+                            "integer over flow".to_string(),
+                        ))
+                    },
                     |v| Ok(Datum::Int64(v)),
                 )
             }
-            _ => Err(FloppyError::Internal("mismatched type for addition".to_string())),
+            _ => Err(FloppyError::Internal(
+                "mismatched type for addition".to_string(),
+            )),
         }
     }
 }

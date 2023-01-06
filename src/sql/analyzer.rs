@@ -138,7 +138,7 @@ struct ProjectionCtx {
 fn transform_projection(
     scx: &StatementContext,
     input: LogicalPlan,
-    projection: &Vec<SelectItem>,
+    projection: &[SelectItem],
 ) -> Result<LogicalPlan> {
     let ecx = ExprContext {
         scx: Arc::new(scx.clone()),

@@ -112,7 +112,7 @@ pub struct Literal {
 
 impl fmt::Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", format!("{}({})", self.scalar_type, self.datum))
+        write!(f, "{}({})", self.scalar_type, self.datum)
     }
 }
 
