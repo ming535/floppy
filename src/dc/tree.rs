@@ -17,8 +17,9 @@ use crate::dc::{
 use crate::env::Env;
 use std::{cmp::Ordering, path::Path};
 
-pub struct Tree<E: Env> {
+pub(crate) struct Tree<E: Env> {
     buf_mgr: BufMgr<E>,
+    options: TreeOptions,
 }
 
 impl<E> Tree<E>
@@ -28,10 +29,14 @@ where
     /// Open a tree from the given path.
     /// The root of the tree is stored in Page 1.
     /// All interior pages are read into buffer pool.
-    pub async fn open<P: AsRef<Path>>(path: P, env: E) -> Result<Self> {
+    pub async fn open<P: AsRef<Path>>(
+        path: P,
+        env: E,
+        options: TreeOptions,
+    ) -> Result<Self> {
         let buf_mgr = BufMgr::open(env, path, 1000).await?;
         Self::init_index(&buf_mgr).await?;
-        Ok(Self { buf_mgr })
+        Ok(Self { buf_mgr, options })
     }
 
     pub fn close() -> Result<()> {
@@ -121,9 +126,11 @@ where
                                 child_guard.page_ptr(),
                             )?;
                             if (mode == AccessMode::Insert
-                                && child_node
-                                    .slot_array()
-                                    .will_overfull(key, page_id))
+                                && child_node.slot_array().will_overfull(
+                                    key,
+                                    page_id,
+                                    self.options.fanout,
+                                ))
                                 || (mode == AccessMode::Delete
                                     && child_node.slot_array().will_underfull())
                             {
@@ -178,7 +185,11 @@ where
         assert!(stack_len >= 1);
         let leaf_guard = &mut guard_stack[stack_len - 1];
         let node = LeafNode::from_page(leaf_guard.page_ptr())?;
-        if node.slot_array().will_overfull(key, value.clone()) {
+        if node.slot_array().will_overfull(
+            key,
+            value.clone(),
+            self.options.fanout,
+        ) {
             self.split(key, value, &mut guard_stack).await
         } else {
             // drop parent guards to release their latches
@@ -261,10 +272,11 @@ where
         // add index to interior node.
         while let Some(guard) = guard_stack.pop() {
             let node = InteriorNode::from_page(guard.page_ptr())?;
-            if node
-                .slot_array()
-                .will_overfull(&split_key, new_page.page_id())
-            {
+            if node.slot_array().will_overfull(
+                &split_key,
+                new_page.page_id(),
+                self.options.fanout,
+            ) {
                 if guard.page_id() == PAGE_ID_ROOT {
                     let new_left = self
                         .buf_mgr
@@ -412,21 +424,28 @@ enum AccessMode {
     Delete,
 }
 
+#[derive(Default)]
+pub(crate) struct TreeOptions {
+    fanout: Option<usize>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::env::sim::{SimEnv, SIM_PATH};
 
-    #[tokio::test]
-    async fn test_tree_simple() -> Result<()> {
+    async fn build_tree(options: TreeOptions) -> Result<Tree<SimEnv>> {
         let env = SimEnv;
-        let tree = Tree::open(SIM_PATH, env).await?;
-        for i in 0..200usize {
+        Tree::open(SIM_PATH, env, options).await
+    }
+
+    async fn insert_and_get(tree: &Tree<SimEnv>, range: usize) -> Result<()> {
+        for i in 0..range {
             let b = &i.to_le_bytes();
             tree.insert(b, b).await?;
         }
 
-        for i in 0..200usize {
+        for i in 0..range {
             let b = &i.to_le_bytes();
             let v = tree
                 .get(b)
@@ -435,5 +454,18 @@ mod tests {
             assert_eq!(b, v.as_ref());
         }
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_tree_simple() -> Result<()> {
+        let tree = build_tree(TreeOptions::default()).await?;
+        insert_and_get(&tree, 200).await
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_tree_small_fanout() -> Result<()> {
+        let tree = build_tree(TreeOptions { fanout: Some(4) }).await?;
+        insert_and_get(&tree, 200).await
     }
 }

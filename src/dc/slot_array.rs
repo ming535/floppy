@@ -119,9 +119,21 @@ where
         self.update_at(SlotId(0), record.key, record.value, flag);
     }
 
-    pub fn will_overfull(&self, key: K, value: V) -> bool {
-        // we need to consider the space for slot pointer.
-        self.record_size(key, value) + 2 > self.free_space()
+    pub fn will_overfull(
+        &self,
+        key: K,
+        value: V,
+        fanout: Option<usize>,
+    ) -> bool {
+        // We have two strategies, one is based on configured fanout,
+        // the other is based on the number of bytes left.
+        match fanout {
+            Some(fanout) => self.num_slots() == fanout,
+            None => {
+                // we need to consider the space for slot pointer.
+                self.record_size(key, value) + 2 > self.free_space()
+            }
+        }
     }
 
     pub fn will_underfull(&self) -> bool {
@@ -544,8 +556,11 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array
-            .will_overfull(&(i.to_le_bytes()), IVec::from(&i.to_le_bytes())));
+        assert!(array.will_overfull(
+            &(i.to_le_bytes()),
+            IVec::from(&i.to_le_bytes()),
+            None
+        ));
         Ok(i)
     }
 
@@ -575,7 +590,11 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array.will_overfull(&(i.to_le_bytes()), i.try_into().unwrap()));
+        assert!(array.will_overfull(
+            &(i.to_le_bytes()),
+            i.try_into().unwrap(),
+            None
+        ));
         Ok(i)
     }
 
