@@ -121,8 +121,7 @@ where
 
     pub fn will_overfull(
         &self,
-        key: K,
-        value: V,
+        record_size: usize,
         fanout: Option<usize>,
     ) -> bool {
         // We have two strategies, one is based on configured fanout,
@@ -131,7 +130,7 @@ where
             Some(fanout) => self.num_slots() == fanout,
             None => {
                 // we need to consider the space for slot pointer.
-                self.record_size(key, value) + 2 > self.free_space()
+                record_size + 2 > self.free_space()
             }
         }
     }
@@ -202,7 +201,7 @@ where
         SlotArrayRangeIterator {
             node: self,
             next_slot: range.start,
-            range,
+            max_exclusive_slot: range.end,
             _marker: PhantomData,
         }
     }
@@ -220,7 +219,8 @@ where
     ) {
         let num_slots = self.num_slots();
         assert!(num_slots >= 2);
-        let mid: SlotId = (num_slots / 2).try_into().unwrap();
+        // let mid: SlotId = (num_slots / 2).try_into().unwrap();
+        let mid: SlotId = num_slots.div_ceil(2).try_into().unwrap();
         let record = self.slot_content(mid);
         let left = self.range(SlotId(0)..mid);
         let right = self.range(mid..num_slots.try_into().unwrap());
@@ -342,7 +342,12 @@ where
     }
 
     pub fn slot_content(&self, slot: SlotId) -> Record<K, V> {
-        assert!(slot < self.num_slots().try_into().unwrap());
+        assert!(
+            slot < self.num_slots().try_into().unwrap(),
+            "slot = {:?}, num_slots = {:?}",
+            slot,
+            self.num_slots()
+        );
         let offset = self.slot_offset(slot);
         let buf = &self.data[offset as usize..];
         let mut dec = Decoder::new(buf);
@@ -455,7 +460,7 @@ where
 pub struct SlotArrayRangeIterator<'a, K, V> {
     node: &'a SlotArray<'a, K, V>,
     next_slot: SlotId,
-    range: Range<SlotId>,
+    max_exclusive_slot: SlotId,
     _marker: PhantomData<(K, V)>,
 }
 
@@ -467,9 +472,7 @@ where
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next_slot > self.node.num_slots().try_into().unwrap()
-            || self.next_slot >= self.range.end
-        {
+        if self.next_slot >= self.max_exclusive_slot {
             None
         } else {
             let slot_content = self.node.slot_content(self.next_slot);
@@ -556,11 +559,16 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array.will_overfull(
-            &(i.to_le_bytes()),
-            IVec::from(&i.to_le_bytes()),
-            None
-        ));
+
+        let binding = i.to_le_bytes();
+        let k = binding.as_slice();
+
+        let record = Record {
+            flag: 0,
+            key: k,
+            value: IVec::from(&0usize.to_le_bytes()),
+        };
+        assert!(array.will_overfull(record.encode_size(), None));
         Ok(i)
     }
 
@@ -590,11 +598,16 @@ mod tests {
                 Err(other) => return Err(other),
             };
         }
-        assert!(array.will_overfull(
-            &(i.to_le_bytes()),
-            i.try_into().unwrap(),
-            None
-        ));
+
+        let binding = i.to_le_bytes();
+        let k = binding.as_slice();
+
+        let record = Record {
+            flag: 0,
+            key: k,
+            value: IVec::from(&0usize.to_le_bytes()),
+        };
+        assert!(array.will_overfull(record.encode_size(), None));
         Ok(i)
     }
 

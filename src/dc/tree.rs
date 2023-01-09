@@ -3,15 +3,19 @@ use crate::common::{
     ivec::IVec,
 };
 
+use crate::dc::page::{PagePtr, PAGE_SIZE};
+use crate::dc::slot_array::SlotArray;
 use crate::dc::{
     buf_frame::BufferFrameGuard,
     buf_mgr::BufMgr,
+    codec::Codec,
     node::{InteriorNode, LeafNode, NodeValue, TreeNode},
     page::{
         PageId,
         PageType::{TreeNodeInterior, TreeNodeLeaf},
         PAGE_ID_ROOT,
     },
+    slot_array::Record,
     MAX_KEY_SIZE, MAX_VALUE_SIZE,
 };
 use crate::env::Env;
@@ -61,8 +65,16 @@ where
         let value = value.into();
         assert!(key.as_ref().len() <= MAX_KEY_SIZE);
         assert!(value.len() <= MAX_VALUE_SIZE);
-        let guard_stack =
-            self.find_leaf(key.as_ref(), AccessMode::Insert).await?;
+        println!("--- insert key: {:?} ---", key.as_ref());
+        let record = Record {
+            flag: 0,
+            key: key.as_ref(),
+            value: value.clone(),
+        };
+
+        let guard_stack = self
+            .find_leaf(key.as_ref(), AccessMode::Insert(record.encode_size()))
+            .await?;
         self.insert_value(key.as_ref(), value, guard_stack).await
     }
 
@@ -116,7 +128,14 @@ where
                     let child_type = child_guard.page_ptr().page_type();
                     match child_type {
                         TreeNodeLeaf => {
-                            guard_stack.push(child_guard);
+                            let child_node =
+                                LeafNode::from_page(child_guard.page_ptr())?;
+                            if self.child_is_safe(mode, child_node) {
+                                guard_stack.push(child_guard);
+                            } else {
+                                guard_stack.push(guard);
+                                guard_stack.push(child_guard);
+                            }
                             return Ok(guard_stack);
                         }
                         TreeNodeInterior => {
@@ -125,19 +144,7 @@ where
                             let child_node = InteriorNode::from_page(
                                 child_guard.page_ptr(),
                             )?;
-                            if (mode == AccessMode::Insert
-                                && child_node.slot_array().will_overfull(
-                                    key,
-                                    page_id,
-                                    self.options.fanout,
-                                ))
-                                || (mode == AccessMode::Delete
-                                    && child_node.slot_array().will_underfull())
-                            {
-                                let parent_guard = guard;
-                                guard_stack.push(parent_guard);
-                                guard = child_guard;
-                            } else {
+                            if self.child_is_safe(mode, child_node) {
                                 //
                                 // the child is safe, we can release all latches
                                 // on ancestors
@@ -147,6 +154,9 @@ where
                                 // 2. drop all ancestor's guard to release their
                                 // latches
                                 guard_stack.clear();
+                            } else {
+                                guard_stack.push(guard);
+                                guard = child_guard;
                             }
                         }
                     }
@@ -175,6 +185,20 @@ where
         node.get(key)
     }
 
+    fn child_is_safe<'a, V, Node>(&self, mode: AccessMode, child: Node) -> bool
+    where
+        V: NodeValue,
+        Node: TreeNode<'a, &'a [u8], V>,
+    {
+        match mode {
+            AccessMode::Insert(record_size) => !child
+                .slot_array()
+                .will_overfull(record_size, self.options.fanout),
+            AccessMode::Delete => !child.slot_array().will_underfull(),
+            AccessMode::Read => true,
+        }
+    }
+
     async fn insert_value(
         &self,
         key: &[u8],
@@ -185,11 +209,15 @@ where
         assert!(stack_len >= 1);
         let leaf_guard = &mut guard_stack[stack_len - 1];
         let node = LeafNode::from_page(leaf_guard.page_ptr())?;
-        if node.slot_array().will_overfull(
+        let record = Record {
+            flag: 0,
             key,
-            value.clone(),
-            self.options.fanout,
-        ) {
+            value: value.clone(),
+        };
+        if node
+            .slot_array()
+            .will_overfull(record.encode_size(), self.options.fanout)
+        {
             self.split(key, value, &mut guard_stack).await
         } else {
             // drop parent guards to release their latches
@@ -241,6 +269,7 @@ where
         guard_stack: &mut Vec<BufferFrameGuard>,
     ) -> Result<()> {
         assert!(!guard_stack.is_empty());
+        println!("guard_stack length = {:?}", guard_stack.len());
 
         let leaf_guard = guard_stack
             .pop()
@@ -251,32 +280,45 @@ where
                 self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
             let new_right =
                 self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
-            return self
-                .split_root::<IVec, LeafNode>(
-                    &leaf_guard,
-                    &new_left,
-                    &new_right,
-                    key,
-                    value,
-                )
-                .await;
+            self.split_root::<IVec, LeafNode>(
+                &leaf_guard,
+                &new_left,
+                &new_right,
+                key,
+                value,
+            )
+            .await?;
+            println!("split root LeafNode, page = {:?}, new_left = {:?}, new_right = {:?}", leaf_guard.page_id(), new_left.page_id(), new_right.page_id());
+            return Ok(());
         }
 
         let mut new_page =
             self.buf_mgr.alloc_page_with_type(TreeNodeLeaf).await?;
         self.split_node::<IVec, LeafNode>(&leaf_guard, &new_page, key, value)
             .await?;
+
         let new_node = LeafNode::from_page(new_page.page_ptr())?;
         let mut split_key = new_node.slot_array().min_key();
+
+        println!(
+            "split leaf node, page = {:?}, new_page = {:?}, min_key = {:?}",
+            leaf_guard.page_id(),
+            new_page.page_id(),
+            split_key,
+        );
 
         // add index to interior node.
         while let Some(guard) = guard_stack.pop() {
             let node = InteriorNode::from_page(guard.page_ptr())?;
-            if node.slot_array().will_overfull(
-                &split_key,
-                new_page.page_id(),
-                self.options.fanout,
-            ) {
+            let record = Record {
+                flag: 0,
+                key: split_key.as_ref(),
+                value: new_page.page_id(),
+            };
+            if node
+                .slot_array()
+                .will_overfull(record.encode_size(), self.options.fanout)
+            {
                 if guard.page_id() == PAGE_ID_ROOT {
                     let new_left = self
                         .buf_mgr
@@ -286,15 +328,17 @@ where
                         .buf_mgr
                         .alloc_page_with_type(TreeNodeInterior)
                         .await?;
-                    return self
-                        .split_root::<PageId, InteriorNode>(
-                            &guard,
-                            &new_left,
-                            &new_right,
-                            &split_key,
-                            new_page.page_id(),
-                        )
-                        .await;
+
+                    self.split_root::<PageId, InteriorNode>(
+                        &guard,
+                        &new_left,
+                        &new_right,
+                        &split_key,
+                        new_page.page_id(),
+                    )
+                    .await?;
+                    println!("split root InteriorNode, page = {:?}, new_left = {:?}, new_right = {:?}", guard.page_id(), new_left.page_id(), new_right.page_id());
+                    return Ok(());
                 }
                 new_page =
                     self.buf_mgr.alloc_page_with_type(TreeNodeInterior).await?;
@@ -308,8 +352,14 @@ where
                 let new_node = InteriorNode::from_page(new_page.page_ptr())?;
                 split_key = new_node.slot_array().min_key();
                 new_node.slot_array().set_inf_min();
+                println!(
+                    "split InteriorNode, page = {:?}, new_page = {:?}",
+                    guard.page_id(),
+                    new_page.page_id()
+                );
             } else {
                 node.insert(&split_key, new_page.page_id())?;
+                println!("post index to InteriorNode, page = {:?}, key = {:?}, new_page = {:?}", guard.page_id(), split_key, new_page.page_id());
                 break;
             }
         }
@@ -328,13 +378,37 @@ where
         Node: TreeNode<'a, &'a [u8], V>,
     {
         let node = Node::from_page(guard.page_ptr())?;
-        let (split_key, left_iter, right_iter) = node.slot_array().split_half();
+        println!(
+            "split_node, before split, count = {:?}",
+            node.slot_array().num_slots()
+        );
+
+        // copy original node's content to a temporary page.
+        let tmp_page = PagePtr::zero_content(PAGE_SIZE)?;
+        let tmp_array = SlotArray::from_data(tmp_page.data_mut());
+        tmp_array.with_iter(node.slot_array().iter())?;
+        let (split_key, left_iter, right_iter) = tmp_array.split_half();
+
+        // let (split_key, left_iter, right_iter) =
+        // node.slot_array().split_half();
+
         node.slot_array().with_iter(left_iter)?;
 
         let right_node = Node::from_page(new_page.page_ptr())?;
         right_node.slot_array().with_iter(right_iter)?;
 
-        self.insert_key_for_split(key, value, split_key, node, right_node)
+        let left_count = node.slot_array().num_slots();
+        let right_count = right_node.slot_array().num_slots();
+
+        self.insert_key_for_split(
+            key,
+            value,
+            split_key.clone(),
+            node,
+            right_node,
+        )?;
+        println!("split_node: split_key = {:?}, left count = {:?}, right count = {:?}", split_key.as_ref(), left_count, right_count);
+        Ok(())
     }
 
     async fn split_root<'a, V, Node>(
@@ -378,18 +452,13 @@ where
         node.slot_array().reset_zero();
         guard.page_ptr().set_page_type(TreeNodeInterior);
         let root = InteriorNode::from_page(guard.page_ptr())?;
-        println!(
-            "root split: page_id = {:?}, split_key = {:?}, new_left = {:?}, new_right = {:?}",
-            guard.page_id(),
-            split_key,
-            new_left_page.page_id(),
-            new_right_page.page_id()
-        );
         root.init(
             split_key.as_ref(),
             new_left_page.page_id(),
             new_right_page.page_id(),
-        )
+        )?;
+        println!("split root, split_key = {:?}", split_key.as_ref());
+        Ok(())
     }
 
     fn insert_key_for_split<'a, V, Node>(
@@ -417,10 +486,10 @@ where
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 enum AccessMode {
     Read,
-    Insert,
+    Insert(usize),
     Delete,
 }
 
@@ -439,7 +508,10 @@ mod tests {
         Tree::open(SIM_PATH, env, options).await
     }
 
-    async fn insert_and_get(tree: &Tree<SimEnv>, range: usize) -> Result<()> {
+    async fn batch_insert_and_get(
+        tree: &Tree<SimEnv>,
+        range: usize,
+    ) -> Result<()> {
         for i in 0..range {
             let b = &i.to_le_bytes();
             tree.insert(b, b).await?;
@@ -456,16 +528,35 @@ mod tests {
         Ok(())
     }
 
+    async fn insert_and_get(tree: &Tree<SimEnv>, range: usize) -> Result<()> {
+        for i in 0..range {
+            let b = &i.to_le_bytes();
+            tree.insert(b, b).await?;
+            let v = tree
+                .get(b)
+                .await?
+                .unwrap_or_else(|| panic!("should not be none, key = {i}"));
+            assert_eq!(b, v.as_ref());
+        }
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_tree_simple() -> Result<()> {
         let tree = build_tree(TreeOptions::default()).await?;
+        batch_insert_and_get(&tree, 200).await
+    }
+
+    #[tokio::test]
+    async fn test_tree_small_fanout() -> Result<()> {
+        let tree = build_tree(TreeOptions { fanout: Some(3) }).await?;
         insert_and_get(&tree, 200).await
     }
 
     #[tokio::test]
     #[ignore]
-    async fn test_tree_small_fanout() -> Result<()> {
+    async fn test_tree_small_fanout_batch() -> Result<()> {
         let tree = build_tree(TreeOptions { fanout: Some(4) }).await?;
-        insert_and_get(&tree, 200).await
+        batch_insert_and_get(&tree, 200).await
     }
 }

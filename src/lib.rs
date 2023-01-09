@@ -1,7 +1,8 @@
 #![feature(
     type_alias_impl_trait,
     io_error_more,
-    anonymous_lifetime_in_impl_trait
+    anonymous_lifetime_in_impl_trait,
+    int_roundings
 )]
 // todo fix this
 #![allow(dead_code)]
