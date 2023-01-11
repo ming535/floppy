@@ -10,6 +10,7 @@
 mod catalog;
 mod common;
 mod dc;
+mod dc2;
 mod env;
 mod session;
 mod sql;
