@@ -38,10 +38,11 @@ pub(crate) struct PagePtr {
     inited: bool,
 }
 
-macro_rules! access_header_data {
+macro_rules! header_data_accessor {
     ($name:ident, $t:ty) => {
         paste! {
-            pub fn [<get $name>](&self) -> $t {
+            #[inline]
+            pub fn [<get _ $name>](&self) -> $t {
                 let offset = self.[<$name _offset>]();
                 let data = self.data();
                 $t::from_le_bytes(
@@ -50,7 +51,9 @@ macro_rules! access_header_data {
                         .unwrap(),
                 )
             }
-            pub fn [<set $name>](&mut self, v: $t) {
+
+            #[inline]
+            pub fn [<set _ $name>](&mut self, v: $t) {
                 let offset = self.[<$name _offset>]();
                 let data = self.data_mut();
                 data[offset..offset + mem::size_of::<$t>()].copy_from_slice(&v.to_le_bytes());
@@ -80,23 +83,38 @@ impl PagePtr {
 
     pub fn init(&mut self, special_size: usize) {
         unsafe { ptr::write_bytes(self.buf.as_ptr(), 0, self.size) }
+        self.set_lower(self.header_size() as LocationIndex);
+        self.set_upper((self.size - special_size) as LocationIndex);
+        self.set_special((self.size - special_size) as LocationIndex);
+        self.inited = true
     }
 
-    access_header_data!(lsn, PageLsn);
-    access_header_data!(checksum, PageChecksum);
-    access_header_data!(flags, PageFlags);
-    access_header_data!(lower, LocationIndex);
-    access_header_data!(upper, LocationIndex);
-    access_header_data!(special, LocationIndex);
+    header_data_accessor!(lsn, PageLsn);
+    header_data_accessor!(checksum, PageChecksum);
+    header_data_accessor!(flags, PageFlags);
+    header_data_accessor!(lower, LocationIndex);
+    header_data_accessor!(upper, LocationIndex);
+    header_data_accessor!(special, LocationIndex);
 
     fn data(&self) -> &[u8] {
-        assert!(self.inited);
+        if !self.inited {
+            panic!("page not inited");
+        }
         unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.size) }
     }
 
     fn data_mut(&mut self) -> &mut [u8] {
-        assert!(self.inited);
+        if !self.inited {
+            panic!("page not inited");
+        }
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
+    }
+
+    fn header_size(&self) -> usize {
+        mem::size_of::<PageLsn>()
+            + mem::size_of::<PageChecksum>()
+            + mem::size_of::<PageFlags>()
+            + 2 * mem::size_of::<LocationIndex>()
     }
 
     #[inline]
