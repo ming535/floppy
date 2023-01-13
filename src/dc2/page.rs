@@ -26,9 +26,13 @@
 use crate::common::error::DCError;
 use crate::dc2::lp::{is_valid_slot_id, LinePointerFlag, SlotId};
 
+use crate::dc2::codec::{Decoder, Encoder};
 use crate::{
     common::error::{FloppyError, Result},
-    dc2::lp::{LinePointer, PageOffset},
+    dc2::{
+        codec::{Codec, Record},
+        lp::{LinePointer, PageOffset},
+    },
 };
 use paste::paste;
 use std::{
@@ -39,6 +43,20 @@ use std::{
 pub const PAGE_SIZE: usize = 1024 * 8;
 
 pub type PageId = u32;
+
+impl Codec for PageId {
+    fn encode_size(&self) -> usize {
+        mem::size_of::<u32>()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        enc.put_u32(*self)
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        dec.get_u32()
+    }
+}
 
 type PageLsn = u64;
 
@@ -137,8 +155,17 @@ impl Page {
     /// Insert a slot and a line pointer to this page at specific
     /// offset. If there is already a valid line pointer,
     /// it will move line pointers to the right to make space.
-    pub fn insert_slot(&mut self, slot: &[u8], slot_id: SlotId) -> Result<()> {
-        if slot.len() > self.get_free_space() {
+    pub(crate) fn insert_slot<K, V>(
+        &mut self,
+        record: Record<K, V>,
+        slot_id: SlotId,
+    ) -> Result<()>
+    where
+        K: Codec,
+        V: Codec,
+    {
+        let record_size = record.encode_size();
+        if record_size > self.get_free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(
                 format!("page exhausted when insert slot at {slot_id:?}"),
             )));
@@ -148,11 +175,11 @@ impl Page {
 
         // construct a new line pointer array that includes the new slot
         // and slots after the offset.
-        let new_slot_offset = upper as usize - slot.len();
+        let new_slot_offset = upper as usize - record_size;
         let new_slot_lp = LinePointer::new(
             new_slot_offset as PageOffset,
             LinePointerFlag::Normal,
-            slot.len(),
+            record_size,
         );
 
         let mut new_lp_array = vec![];
@@ -171,14 +198,15 @@ impl Page {
 
         // copy slot into page
         let s =
-            &mut self.data_mut()[upper as usize - slot.len()..upper as usize];
-        s.copy_from_slice(slot);
+            &mut self.data_mut()[upper as usize - record_size..upper as usize];
+        let mut enc = Encoder::new(s);
+        unsafe { record.encode_to(&mut enc) };
 
         // update lower, upper
         self.set_lower(
             (lower as usize + mem::size_of::<LinePointer>()) as PageOffset,
         );
-        self.set_upper((upper as usize - slot.len()) as PageOffset);
+        self.set_upper((upper as usize - record_size) as PageOffset);
         Ok(())
     }
 
@@ -319,7 +347,11 @@ mod tests {
         page.init(0);
         let mut i: usize = 0;
         let count_insert_asc = loop {
-            match page.insert_slot(&i.to_le_bytes(), i as SlotId) {
+            let record = Record {
+                key: i.to_le_bytes().as_slice(),
+                value: i.to_le_bytes().as_slice(),
+            };
+            match page.insert_slot(record, i as SlotId) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => {
                     break i
                 }
@@ -334,13 +366,15 @@ mod tests {
 
         page.init(0);
         let round_size = count_insert_asc / 2;
-        for i in 0..round_size {
-            page.insert_slot(&i.to_le_bytes(), i as SlotId)?;
-        }
-
-        // insert with the same slot id, so we can test the movement of line pointer.
-        for i in 0..round_size {
-            page.insert_slot(&i.to_le_bytes(), i as SlotId)?;
+        // insert with the same slot id twice, so we can test the movement of line pointer.
+        for _ in 0..2 {
+            for i in 0..round_size {
+                let record = Record {
+                    key: i.to_le_bytes().as_slice(),
+                    value: i.to_le_bytes().as_slice(),
+                };
+                page.insert_slot(record, i as SlotId)?;
+            }
         }
         Ok(())
     }

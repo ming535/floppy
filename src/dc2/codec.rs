@@ -133,3 +133,60 @@ impl Decoder {
         slice::from_raw_parts(cursor, len)
     }
 }
+
+impl Codec for &[u8] {
+    fn encode_size(&self) -> usize {
+        // 2 bytes for size
+        mem::size_of::<u16>() + self.len()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        enc.put_u16(self.len() as u16);
+        enc.put_byte_slice(self);
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let len = dec.get_u16() as usize;
+        dec.get_byte_slice(len)
+    }
+}
+
+/// A [`Record`] is a container for a pair of key value.
+/// It can be encoded and decode.
+pub(crate) struct Record<K, V> {
+    pub key: K,
+    pub value: V,
+}
+
+impl<K, V> Record<K, V>
+where
+    K: Codec,
+    V: Codec,
+{
+    pub(crate) fn decode_value(record: &[u8], key: K) -> V {
+        let offset = key.encode_size();
+        let mut decoder = Decoder::new(&record[offset..]);
+        unsafe { V::decode_from(&mut decoder) }
+    }
+}
+
+impl<K, V> Codec for Record<K, V>
+where
+    K: Codec,
+    V: Codec,
+{
+    fn encode_size(&self) -> usize {
+        self.key.encode_size() + self.value.encode_size()
+    }
+
+    unsafe fn encode_to(&self, enc: &mut Encoder) {
+        self.key.encode_to(enc);
+        self.value.encode_to(enc);
+    }
+
+    unsafe fn decode_from(dec: &mut Decoder) -> Self {
+        let key = K::decode_from(dec);
+        let value = V::decode_from(dec);
+        Self { key, value }
+    }
+}

@@ -1,7 +1,6 @@
-use crate::common::error::Result;
-use crate::dc2::codec::{Decoder, Encoder};
+use crate::common::error::{DCError, FloppyError, Result};
 use crate::dc2::{
-    codec::Codec,
+    codec::{Codec, Decoder, Record},
     lp::SlotId,
     page::{Page, PageId},
 };
@@ -15,6 +14,10 @@ pub(crate) trait NodeKey:
 }
 
 pub(crate) trait NodeValue: Codec {}
+
+impl NodeKey for &[u8] {}
+
+impl NodeValue for PageId {}
 
 type TreeLevel = u32;
 
@@ -227,7 +230,7 @@ where
         Err(_) => Ok(None),
         Ok(slot_id) => {
             let slot_content = node.page.get_slot(slot_id)?;
-            Ok(Some(decode_value(slot_content, target.as_ref())))
+            Ok(Some(Record::decode_value(slot_content, target.as_ref())))
         }
     }
 }
@@ -245,57 +248,68 @@ where
         Ok(slot) => slot,
     };
     let slot_content = node.page.get_slot(slot_id - 1)?;
-    Ok(decode_value(slot_content, target.as_ref()))
+    Ok(Record::decode_value(slot_content, target.as_ref()))
 }
 
+/// Insert a pair of key value into leaf node.
+/// We do not allow duplicate key.
 pub(crate) fn insert_leaf_node<K, V>(
-    node: &Node,
-    key: K,
-    value: V,
+    node: &mut Node,
+    record: Record<K, V>,
 ) -> Result<()>
 where
     K: NodeKey,
     V: NodeValue,
 {
-    todo!()
+    let key = record.key.as_ref();
+    match node.rank(key, false) {
+        Err(slot_id) => node.page.insert_slot(record, slot_id),
+        Ok(slot_id) => Err(FloppyError::DC(DCError::KeyAlreadyExists(
+            format!("key already existed, key = {key:?}, slot_id = {slot_id:}"),
+        ))),
+    }
 }
 
+/// Insert into a internal node.
+/// The key in [`Record`] is a high key.
+/// The value in [`Record`] is a new page.
 pub(crate) fn insert_internal_node<K, V>(
-    node: &Node,
-    left_high_key: K,
-    new_page: V,
+    node: &mut Node,
+    record: Record<K, V>,
 ) -> Result<()>
 where
     K: NodeKey,
     V: NodeValue,
 {
-    todo!()
+    let key = record.key.as_ref();
+    match node.rank(key, true) {
+        Err(slot_id) => node.page.insert_slot(record, slot_id),
+        Ok(slot_id) => Err(FloppyError::DC(DCError::KeyAlreadyExists(
+            format!("key already existed, key = {key:?}, slot_id = {slot_id:}"),
+        ))),
+    }
 }
 
-fn decode_value<V>(slot_content: &[u8], key: &[u8]) -> V
+pub(crate) fn init_root<K>(
+    node: &mut Node,
+    key: K,
+    left_pid: PageId,
+    right_pid: PageId,
+) -> Result<()>
 where
-    V: NodeValue,
+    K: NodeKey,
 {
-    let offset = key.encode_size();
-    let mut decoder = Decoder::new(&slot_content[offset..]);
-    unsafe { V::decode_from(&mut decoder) }
+    let minus_infinity = [0; 0];
+    let first_record = Record {
+        key: minus_infinity.as_slice(),
+        value: left_pid,
+    };
+    let first_data_slot = node.first_data_slot();
+    node.page.insert_slot(first_record, first_data_slot)?;
+
+    let second_record = Record {
+        key,
+        value: right_pid,
+    };
+    node.page.insert_slot(second_record, first_data_slot + 1)
 }
-
-impl Codec for &[u8] {
-    fn encode_size(&self) -> usize {
-        // 2 bytes for size
-        mem::size_of::<u16>() + self.len()
-    }
-
-    unsafe fn encode_to(&self, enc: &mut Encoder) {
-        enc.put_u16(self.len() as u16);
-        enc.put_byte_slice(self);
-    }
-
-    unsafe fn decode_from(dec: &mut Decoder) -> Self {
-        let len = dec.get_u16() as usize;
-        dec.get_byte_slice(len)
-    }
-}
-
-impl NodeKey for &[u8] {}
