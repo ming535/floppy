@@ -1,5 +1,3 @@
-use crate::common::error::DCError;
-use crate::dc2::lp::{is_valid_slot_id, LinePointerFlag, SlotId};
 /// Floppy's disk page is very similar to postgres.
 /// Page is arranged as:
 /// - Header: used for page space management and page lsn.
@@ -23,6 +21,11 @@ use crate::dc2::lp::{is_valid_slot_id, LinePointerFlag, SlotId};
 ///  * +--------------------------------+-----------------+
 ///  *                                  ^ Header#opaque
 ///
+///
+///
+use crate::common::error::DCError;
+use crate::dc2::lp::{is_valid_slot_id, LinePointerFlag, SlotId};
+
 use crate::{
     common::error::{FloppyError, Result},
     dc2::lp::{LinePointer, PageOffset},
@@ -33,7 +36,9 @@ use std::{
     mem, ptr, slice,
 };
 
-pub(crate) const PAGE_SIZE: usize = 1024 * 8;
+pub const PAGE_SIZE: usize = 1024 * 8;
+
+pub type PageId = u32;
 
 type PageLsn = u64;
 
@@ -55,7 +60,7 @@ type PageFlags = u8; // dead, may or may not have storage
 /// The page's offset is in the range: [0, 1024 * 8)
 /// The page's free space's offset is in the range [`lower`, `upper`).
 /// The number of bytes in the free space is `upper` - `lower`.
-pub(crate) struct PagePtr {
+pub struct Page {
     buf: ptr::NonNull<u8>,
     size: usize,
     inited: bool,
@@ -85,7 +90,7 @@ macro_rules! header_data_accessor {
     };
 }
 
-impl PagePtr {
+impl Page {
     pub fn alloc(size: usize) -> Result<Self> {
         let layout = Layout::from_size_align(size, mem::size_of::<usize>())?;
         unsafe {
@@ -185,6 +190,34 @@ impl PagePtr {
         Ok(&self.data()[offset..offset + slot_len])
     }
 
+    /// Returns the max [`SlotId`] in this page. Since [`SlotId`]
+    /// starts with 1, this is also the number of slots on the page.
+    /// If the page is not initialized (lower = 0), we return zero.
+    pub fn max_slot(&self) -> SlotId {
+        let lower = self.get_lower() as usize;
+        let header_size = self.header_size();
+
+        if lower <= header_size {
+            0
+        } else {
+            ((lower - header_size) / mem::size_of::<LinePointer>()) as SlotId
+        }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        if !self.inited {
+            panic!("page not inited");
+        }
+        unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.size) }
+    }
+
+    pub fn data_mut(&mut self) -> &mut [u8] {
+        if !self.inited {
+            panic!("page not inited");
+        }
+        unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
+    }
+
     /// Returns the size of the free allocatable space on a page,
     /// reduced by the space needed for a new line pointer.
     fn get_free_space(&self) -> usize {
@@ -194,20 +227,6 @@ impl PagePtr {
         } else {
             space as usize - mem::size_of::<LinePointer>()
         }
-    }
-
-    fn data(&self) -> &[u8] {
-        if !self.inited {
-            panic!("page not inited");
-        }
-        unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.size) }
-    }
-
-    fn data_mut(&mut self) -> &mut [u8] {
-        if !self.inited {
-            panic!("page not inited");
-        }
-        unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
 
     fn header_size(&self) -> usize {
@@ -282,13 +301,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_page_need_init() {
-        let page_ptr = PagePtr::alloc(PAGE_SIZE).unwrap();
+        let page_ptr = Page::alloc(PAGE_SIZE).unwrap();
         page_ptr.opaque_data();
     }
 
     #[test]
     fn test_page_init() -> Result<()> {
-        let mut page_ptr = PagePtr::alloc(PAGE_SIZE)?;
+        let mut page_ptr = Page::alloc(PAGE_SIZE)?;
         page_ptr.init(0);
         page_ptr.opaque_data();
         Ok(())
@@ -296,35 +315,32 @@ mod tests {
 
     #[test]
     fn test_page_insert_get() -> Result<()> {
-        let mut page_ptr = PagePtr::alloc(PAGE_SIZE)?;
-        page_ptr.init(0);
+        let mut page = Page::alloc(PAGE_SIZE)?;
+        page.init(0);
         let mut i: usize = 0;
         let count_insert_asc = loop {
-            match page_ptr.insert_slot(&i.to_le_bytes(), i as SlotId) {
+            match page.insert_slot(&i.to_le_bytes(), i as SlotId) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => {
                     break i
                 }
                 Ok(_) => {
-                    assert_eq!(
-                        page_ptr.get_slot(i as SlotId)?,
-                        &i.to_le_bytes()
-                    );
+                    assert_eq!(page.get_slot(i as SlotId)?, &i.to_le_bytes());
                     i += 1;
                 }
                 _ => unreachable!(),
             }
         };
-        assert!(page_ptr.get_free_space() < 8 + 4);
+        assert!(page.get_free_space() < 8 + 4);
 
-        page_ptr.init(0);
+        page.init(0);
         let round_size = count_insert_asc / 2;
         for i in 0..round_size {
-            page_ptr.insert_slot(&i.to_le_bytes(), i as SlotId)?;
+            page.insert_slot(&i.to_le_bytes(), i as SlotId)?;
         }
 
         // insert with the same slot id, so we can test the movement of line pointer.
         for i in 0..round_size {
-            page_ptr.insert_slot(&i.to_le_bytes(), i as SlotId)?;
+            page.insert_slot(&i.to_le_bytes(), i as SlotId)?;
         }
         Ok(())
     }

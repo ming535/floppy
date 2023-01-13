@@ -92,7 +92,7 @@ impl LinePointer {
 
 /// SlotId is the 1 based index into line pointer array
 /// in the header of each disk page.
-pub(crate) type SlotId = u16;
+pub type SlotId = u16;
 
 const INVALID_OFFSET_NUMBER: SlotId = 0;
 const FIRST_OFFSET_NUMBER: SlotId = 1;
