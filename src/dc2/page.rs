@@ -130,7 +130,9 @@ impl Page {
     pub fn init(&mut self, opaque_size: usize) {
         unsafe { ptr::write_bytes(self.buf.as_ptr(), 0, self.size) }
         self.inited = true;
-        self.set_lower(self.header_size() as PageOffset);
+        let header_size = Self::header_size();
+        println!("init header_size= {header_size}");
+        self.set_lower(Self::header_size() as PageOffset);
         self.set_upper((self.size - opaque_size) as PageOffset);
         self.set_opaque((self.size - opaque_size) as PageOffset);
     }
@@ -225,7 +227,7 @@ impl Page {
     /// If the page is not initialized (lower = 0), we return zero.
     pub fn max_slot(&self) -> SlotId {
         let lower = self.get_lower() as usize;
-        let header_size = self.header_size();
+        let header_size = Self::header_size();
 
         if lower <= header_size {
             0
@@ -259,11 +261,12 @@ impl Page {
         }
     }
 
-    fn header_size(&self) -> usize {
+    // 8 + 2 + 1 + 2 (lower) + 2 (upper) + 2 (opaque) = 17
+    fn header_size() -> usize {
         mem::size_of::<PageLsn>()
             + mem::size_of::<PageChecksum>()
             + mem::size_of::<PageFlags>()
-            + 2 * mem::size_of::<PageOffset>()
+            + 3 * mem::size_of::<PageOffset>()
     }
 
     #[inline(always)]
@@ -285,10 +288,9 @@ impl Page {
             )));
         }
 
-        let offset = self.get_lower()
-            + ((slot_id as usize - 1) * mem::size_of::<LinePointer>())
-                as PageOffset;
-        Ok(offset)
+        let offset = Page::header_size()
+            + ((slot_id as usize - 1) * mem::size_of::<LinePointer>());
+        Ok(offset as PageOffset)
     }
 
     #[inline(always)]
