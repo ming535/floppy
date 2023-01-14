@@ -101,8 +101,8 @@ macro_rules! header_data_accessor {
             #[inline]
             pub fn [<set _ $name>](&mut self, v: $t) {
                 let offset = self.[<$name _offset>]();
-                let data = self.data_mut();
-                data[offset..offset + mem::size_of::<$t>()].copy_from_slice(&v.to_le_bytes());
+                let data_mut = self.data_mut();
+                data_mut[offset..offset + mem::size_of::<$t>()].copy_from_slice(v.to_le_bytes().as_slice());
             }
         }
     };
@@ -143,27 +143,29 @@ impl Page {
     header_data_accessor!(opaque, PageOffset);
 
     pub fn opaque_data(&self) -> &[u8] {
-        let offset = self.opaque_offset();
+        let offset = self.get_opaque() as usize;
+        println!("opaque_data: offset = {offset:?}");
         &self.data()[offset..]
     }
 
     pub fn opaque_data_mut(&mut self) -> &mut [u8] {
-        let offset = self.opaque_offset();
+        let offset = self.get_opaque() as usize;
+        println!("opaque_data: offset = {offset:?}");
         &mut self.data_mut()[offset..]
     }
 
     /// Insert a slot and a line pointer to this page at specific
     /// offset. If there is already a valid line pointer,
     /// it will move line pointers to the right to make space.
-    pub(crate) fn insert_slot<K, V>(
+    pub(crate) fn insert_slot<V>(
         &mut self,
-        record: Record<K, V>,
+        record: Record<V>,
         slot_id: SlotId,
     ) -> Result<()>
     where
-        K: Codec,
         V: Codec,
     {
+        println!("insert at slot: {slot_id}");
         let record_size = record.encode_size();
         if record_size > self.get_free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(
@@ -282,38 +284,36 @@ impl Page {
                 "invalid slot_id {slot_id:?}"
             )));
         }
-        let offset = self.lp_offset()
-            + (slot_id as usize - 1) * mem::size_of::<LinePointer>();
-        Ok(offset as PageOffset)
+
+        let offset = self.get_lower()
+            + ((slot_id as usize - 1) * mem::size_of::<LinePointer>())
+                as PageOffset;
+        Ok(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     fn lsn_offset(&self) -> usize {
         0
     }
 
-    #[inline]
+    #[inline(always)]
     fn checksum_offset(&self) -> usize {
         self.lsn_offset() + mem::size_of::<PageLsn>()
     }
 
-    #[inline]
+    #[inline(always)]
     fn flags_offset(&self) -> usize {
         self.checksum_offset() + mem::size_of::<PageChecksum>()
     }
 
-    #[inline]
+    #[inline(always)]
     fn lower_offset(&self) -> usize {
         self.flags_offset() + mem::size_of::<PageFlags>()
     }
 
-    #[inline]
+    #[inline(always)]
     fn upper_offset(&self) -> usize {
         self.lower_offset() + mem::size_of::<PageOffset>()
-    }
-
-    fn lp_offset(&self) -> usize {
-        self.upper_offset() + mem::size_of::<PageOffset>()
     }
 
     #[inline]
@@ -345,33 +345,41 @@ mod tests {
     fn test_page_insert_get() -> Result<()> {
         let mut page = Page::alloc(PAGE_SIZE)?;
         page.init(0);
-        let mut i: usize = 0;
+        let mut i: usize = 1;
         let count_insert_asc = loop {
+            let v = i.to_le_bytes();
             let record = Record {
-                key: i.to_le_bytes().as_slice(),
-                value: i.to_le_bytes().as_slice(),
+                key: v.as_slice(),
+                value: v.as_slice(),
             };
             match page.insert_slot(record, i as SlotId) {
                 Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => {
                     break i
                 }
                 Ok(_) => {
-                    assert_eq!(page.get_slot(i as SlotId)?, &i.to_le_bytes());
+                    let slot_content = page.get_slot(i as SlotId)?;
+                    let key = Record::<&[u8]>::decode_key(slot_content);
+                    let value =
+                        Record::<&[u8]>::decode_value(slot_content, key);
+                    assert_eq!(key, v.as_slice());
+                    assert_eq!(value, v.as_slice());
                     i += 1;
                 }
-                _ => unreachable!(),
+                Err(other) => panic!("error: {other:?}"),
             }
         };
-        assert!(page.get_free_space() < 8 + 4);
+        // encoded key/value is 2 + 8 bytes
+        assert!(page.get_free_space() < (2 + 8) * 2);
 
         page.init(0);
         let round_size = count_insert_asc / 2;
         // insert with the same slot id twice, so we can test the movement of line pointer.
         for _ in 0..2 {
-            for i in 0..round_size {
+            for i in 1..round_size {
+                let v = i.to_le_bytes();
                 let record = Record {
-                    key: i.to_le_bytes().as_slice(),
-                    value: i.to_le_bytes().as_slice(),
+                    key: v.as_slice(),
+                    value: v.as_slice(),
                 };
                 page.insert_slot(record, i as SlotId)?;
             }

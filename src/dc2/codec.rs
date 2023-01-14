@@ -153,26 +153,29 @@ impl Codec for &[u8] {
 
 /// A [`Record`] is a container for a pair of key value.
 /// It can be encoded and decode.
-pub(crate) struct Record<K, V> {
-    pub key: K,
+pub(crate) struct Record<'a, V> {
+    pub key: &'a [u8],
     pub value: V,
 }
 
-impl<K, V> Record<K, V>
+impl<'a, V> Record<'a, V>
 where
-    K: Codec,
     V: Codec,
 {
-    pub(crate) fn decode_value(record: &[u8], key: K) -> V {
+    pub(crate) fn decode_value(record: &[u8], key: &[u8]) -> V {
         let offset = key.encode_size();
         let mut decoder = Decoder::new(&record[offset..]);
         unsafe { V::decode_from(&mut decoder) }
     }
+
+    pub(crate) fn decode_key(record: &[u8]) -> &[u8] {
+        let mut decoder = Decoder::new(record);
+        unsafe { <&[u8]>::decode_from(&mut decoder) }
+    }
 }
 
-impl<K, V> Codec for Record<K, V>
+impl<'a, V> Codec for Record<'a, V>
 where
-    K: Codec,
     V: Codec,
 {
     fn encode_size(&self) -> usize {
@@ -185,7 +188,7 @@ where
     }
 
     unsafe fn decode_from(dec: &mut Decoder) -> Self {
-        let key = K::decode_from(dec);
+        let key = <&[u8]>::decode_from(dec);
         let value = V::decode_from(dec);
         Self { key, value }
     }
