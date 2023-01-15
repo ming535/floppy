@@ -1,13 +1,14 @@
-use crate::common::error::{DCError, FloppyError, Result};
-use crate::common::ivec::IVec;
+use crate::common::{
+    error::{DCError, FloppyError, Result},
+    ivec::IVec,
+};
 use crate::dc2::{
     codec::{Codec, Decoder, Record},
     lp::SlotId,
     page::{Page, PageId},
 };
 use paste::paste;
-use std::cmp::Ordering;
-use std::{fmt, mem};
+use std::{cmp::Ordering, fmt, marker::PhantomData, mem};
 
 pub(crate) trait NodeKey:
     AsRef<[u8]> + Codec + Ord + fmt::Debug
@@ -19,6 +20,7 @@ pub(crate) trait NodeValue: Codec {}
 impl NodeKey for &[u8] {}
 
 impl NodeValue for &[u8] {}
+
 impl NodeValue for PageId {}
 
 type TreeLevel = u32;
@@ -107,21 +109,70 @@ impl<'a> Node<'a> {
     opaque_data_accessor!(tree_level, TreeLevel);
     opaque_data_accessor!(flags, NodeFlags);
 
+    #[inline(always)]
     fn left_sibling_offset(&self) -> usize {
         0
     }
 
+    #[inline(always)]
     fn right_sibling_offset(&self) -> usize {
         self.left_sibling_offset() + mem::size_of::<PageId>()
     }
 
+    #[inline(always)]
     fn tree_level_offset(&self) -> usize {
         self.right_sibling_offset() + mem::size_of::<PageId>()
     }
 
+    #[inline(always)]
     fn flags_offset(&self) -> usize {
         self.tree_level_offset() + mem::size_of::<TreeLevel>()
     }
+}
+
+pub(super) struct NodeIterator<'a, 'b, V> {
+    node: &'b Node<'a>,
+    next_slot: SlotId,
+    _marker: PhantomData<V>,
+}
+
+impl<'a, 'b, V> NodeIterator<'a, 'b, V> {
+    fn new(node: &'b Node<'a>, next_slot: SlotId) -> Self {
+        Self {
+            node,
+            next_slot,
+            _marker: PhantomData::default(),
+        }
+    }
+}
+
+impl<'a, 'b, V> Iterator for NodeIterator<'a, 'b, V>
+where
+    V: NodeValue,
+{
+    type Item = (&'a [u8], V);
+    fn next(&mut self) -> Option<Self::Item> {
+        let max_slot = self.node.page.max_slot();
+        if self.next_slot <= max_slot {
+            let content = self.node.page.get_slot(self.next_slot).unwrap();
+            self.next_slot += 1;
+            let mut dec = Decoder::new(content);
+            let record = unsafe { Record::<V>::decode_from(&mut dec) };
+            Some((record.key, record.value))
+        } else {
+            None
+        }
+    }
+}
+
+pub(super) fn new_iterator<'a, 'b: 'a, V>(
+    node: &'b Node<'a>,
+) -> impl 'a + 'b + Iterator<Item = (&'a [u8], V)>
+where
+    V: NodeValue + 'a,
+{
+    let next_slot = first_data_slot(node);
+    NodeIterator::new(node, next_slot)
 }
 
 /// Find a value in the leaf node. When [`Tree`] identifies the correct
@@ -396,6 +447,34 @@ mod tests {
             assert_eq!(v.as_slice(), value.as_ref());
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_iterator() -> Result<()> {
+        let mut page = Page::alloc(PAGE_SIZE)?;
+        let mut node = init_single_leaf(&mut page);
+
+        {
+            let mut iter = new_iterator::<&[u8]>(&node);
+            assert!(iter.next().is_none());
+        }
+
+        let vec = [b"1", b"3", b"2"];
+        for v in vec.iter() {
+            insert_leaf_node(
+                &mut node,
+                Record {
+                    key: (*v).as_slice(),
+                    value: (*v).as_slice(),
+                },
+            )?;
+        }
+
+        let mut iter = new_iterator::<&[u8]>(&node);
+        assert_eq!(iter.next().unwrap().0, b"1");
+        assert_eq!(iter.next().unwrap().0, b"2");
+        assert_eq!(iter.next().unwrap().0, b"3");
         Ok(())
     }
 }
