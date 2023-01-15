@@ -477,4 +477,26 @@ mod tests {
         assert_eq!(iter.next().unwrap().0, b"3");
         Ok(())
     }
+
+    mod pt {
+        use super::*;
+        use proptest::prelude::*;
+        use rand::{rngs::SmallRng, SeedableRng};
+
+        proptest! {
+            #[test]
+            fn insert_and_get(v in 0..300u64) {
+                let mut rng = SmallRng::seed_from_u64(v);
+                let mut page = Page::alloc(PAGE_SIZE).unwrap();
+                let mut node = init_single_leaf(&mut page);
+
+                for _ in 0..v {
+                    let r = rng.gen::<u32>().to_le_bytes();
+                    let s = r.as_slice();
+                    insert_leaf_node(&mut node, Record{key: s, value: s}).unwrap();
+                    prop_assert_eq!(find_in_leaf(&node, s).unwrap().unwrap(), s);
+                }
+            }
+        }
+    }
 }
