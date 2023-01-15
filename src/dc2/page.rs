@@ -130,8 +130,6 @@ impl Page {
     pub fn init(&mut self, opaque_size: usize) {
         unsafe { ptr::write_bytes(self.buf.as_ptr(), 0, self.size) }
         self.inited = true;
-        let header_size = Self::header_size();
-        println!("init header_size= {header_size}");
         self.set_lower(Self::header_size() as PageOffset);
         self.set_upper((self.size - opaque_size) as PageOffset);
         self.set_opaque((self.size - opaque_size) as PageOffset);
@@ -146,13 +144,11 @@ impl Page {
 
     pub fn opaque_data(&self) -> &[u8] {
         let offset = self.get_opaque() as usize;
-        println!("opaque_data: offset = {offset:?}");
         &self.data()[offset..]
     }
 
     pub fn opaque_data_mut(&mut self) -> &mut [u8] {
         let offset = self.get_opaque() as usize;
-        println!("opaque_data: offset = {offset:?}");
         &mut self.data_mut()[offset..]
     }
 
@@ -167,7 +163,6 @@ impl Page {
     where
         V: Codec,
     {
-        println!("insert at slot: {slot_id}");
         let record_size = record.encode_size();
         if record_size > self.get_free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(
