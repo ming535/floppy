@@ -11,16 +11,16 @@
 ///  * +-----------+----+---------------------------------+
 ///  * | ... linpN |                                      |
 ///  * +-----------+--------------------------------------+
-///  * |           ^ Header#lower                         |
 ///  * |                                                  |
-///  * |              v Header#upper                      |
 ///  * +-------------+------------------------------------+
 ///  * |             | slotN ...                          |
 ///  * +-------------+------------------+-----------------+
 ///  * |       ...    slot3 slot2 slot1 | "opaque space"  |
 ///  * +--------------------------------+-----------------+
-///  *                                  ^ Header#opaque
 ///
+///  lower in header points to the end of line pointers.
+///  upper in header points to start of the slot contents.
+///  opaque in header points to the start of the opaque space.
 ///
 ///
 use crate::common::error::DCError;
