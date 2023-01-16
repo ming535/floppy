@@ -2,7 +2,8 @@
     type_alias_impl_trait,
     io_error_more,
     anonymous_lifetime_in_impl_trait,
-    int_roundings
+    int_roundings,
+    iter_order_by
 )]
 // todo fix this
 #![allow(dead_code)]

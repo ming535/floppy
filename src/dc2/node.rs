@@ -394,6 +394,8 @@ pub(super) fn rank(
 mod tests {
     use super::*;
     use crate::dc2::page::PAGE_SIZE;
+    use rand::{seq::SliceRandom, thread_rng};
+    use std::collections::BTreeMap;
 
     fn init_single_leaf(page: &mut Page) -> Node {
         page.init(Node::opaque_size());
@@ -475,6 +477,47 @@ mod tests {
         assert_eq!(iter.next().unwrap().0, b"1");
         assert_eq!(iter.next().unwrap().0, b"2");
         assert_eq!(iter.next().unwrap().0, b"3");
+        Ok(())
+    }
+
+    #[test]
+    fn test_with_btree() -> Result<()> {
+        let mut page = Page::alloc(PAGE_SIZE)?;
+        let mut node = init_single_leaf(&mut page);
+
+        let mut model = BTreeMap::new();
+
+        let mut rng = thread_rng();
+        let mut keys: Vec<i32> = (0..1000).collect();
+        keys.shuffle(&mut rng);
+        let mut values: Vec<i32> = (0..1000).collect();
+        values.shuffle(&mut rng);
+        let length = keys.len();
+        let mut compare_size = 0usize;
+        for i in 0..length {
+            let key = keys[i].to_le_bytes();
+            let value = values[i].to_le_bytes();
+            let record = Record {
+                key: key.as_slice(),
+                value: value.as_slice(),
+            };
+
+            match insert_leaf_node(&mut node, record) {
+                Err(FloppyError::DC(DCError::SpaceExhaustedInPage(_))) => break,
+                Ok(_) => {
+                    assert_eq!(model.insert(key, value), None);
+                    compare_size += 1;
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        // iterator through the model.
+        let model_iter = model.iter();
+        let node_iter = new_iterator::<&[u8]>(&node);
+        assert!(model_iter
+            .eq_by(node_iter, |(mk, mv), (nk, nv)| { mk == nk && mv == nv }));
+        println!("compared {compare_size} records");
         Ok(())
     }
 
