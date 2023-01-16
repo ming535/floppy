@@ -1,7 +1,7 @@
 use crate::common::error::{DCError, FloppyError, Result};
 
 use crate::dc2::{
-    buf::{BufferFrame, BufferFrameGuard},
+    buf::{Buffer, PinGuard},
     eviction::EvictionPool,
     page::{Page, PageId, PAGE_SIZE},
 };
@@ -35,7 +35,7 @@ use std::{
 /// disk. 3. LruList: The pages that are tracked by the LRU algorithm.
 pub(crate) struct BufMgr<E: Env> {
     env: E,
-    active_pages: DashMap<PageId, BufferFrame>,
+    active_pages: DashMap<PageId, Buffer>,
     eviction_pages: EvictionPool,
     file_path: PathBuf,
     next_page_id: AtomicU32,
@@ -79,13 +79,13 @@ where
     /// To allocate a page, we first check if there is a free page in the
     /// freelist. If there is, we return the page. Otherwise, we extend the
     /// file and return the new page.
-    pub async fn alloc_page(&self) -> Result<BufferFrameGuard> {
+    pub async fn alloc_page(&self) -> Result<PinGuard> {
         let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release);
-        let page_ptr = Page::alloc(PAGE_SIZE)?;
-        let frame = BufferFrame::new(page_id, page_ptr);
-        let guard = frame.guard(None).await;
-        self.active_pages.insert(page_id, frame);
-        Ok(guard)
+        let page = Page::alloc(PAGE_SIZE)?;
+        let buf = Buffer::new(page_id, page);
+        let pin_guard = buf.pin();
+        self.active_pages.insert(page_id, buf);
+        Ok(pin_guard)
     }
 
     /// Free a page in the buffer pool. This happens when a node in the tree
@@ -97,14 +97,14 @@ where
     }
 
     /// Flush the page content to disk.
-    pub async fn flush_page(&self, _guard: &BufferFrameGuard) -> Result<()> {
+    pub async fn flush_page(&self, _page: &Page) -> Result<()> {
         todo!()
     }
 
     /// Fix and lock a page frame in the buffer pool.
     /// "Fix" means the page won't be evicted.
     /// If the page is not in the buffer pool, we read it from disk.
-    pub async fn fix_page(&self, page_id: PageId) -> Result<BufferFrameGuard> {
+    pub async fn fix_page(&self, page_id: PageId) -> Result<PinGuard> {
         if page_id >= self.next_page_id.load(Ordering::Acquire) {
             return Err(FloppyError::DC(DCError::PageNotFound(format!(
                 "page not found, page_id = {page_id:?}"
@@ -114,28 +114,29 @@ where
         let entry = self.active_pages.get(&page_id);
         if let Some(entry) = entry {
             let frame = entry.value();
-            Ok(BufferFrameGuard::new(frame.clone()).await)
+            Ok(frame.pin())
         } else {
-            let frame = self.eviction_pages.evict();
-            let mut guard = BufferFrameGuard::new(frame.clone()).await;
-            if guard.is_dirty() {
-                self.flush_page(&guard).await?;
-            }
+            let buf = self.eviction_pages.evict();
+            let pin_guard = buf.pin();
+            {
+                let mut lock_guard = pin_guard.lock().await;
+                if lock_guard.is_dirty {
+                    self.flush_page(&lock_guard.page).await?;
+                }
 
-            self.read_page(page_id, &mut guard).await?;
-            self.active_pages.insert(page_id, frame.clone());
-            Ok(guard)
+                self.read_page(page_id, &mut lock_guard.page).await?;
+                lock_guard.is_dirty = false;
+                lock_guard.page_id = page_id;
+            }
+            self.active_pages.insert(page_id, buf);
+            Ok(pin_guard)
         }
     }
 
-    async fn read_page(
-        &self,
-        page_id: PageId,
-        frame: &mut BufferFrameGuard,
-    ) -> Result<()> {
+    async fn read_page(&self, page_id: PageId, page: &mut Page) -> Result<()> {
         let file = self.env.open_file(self.file_path.as_path()).await?;
         let pos = page_id as u64 * PAGE_SIZE as u64;
-        match file.read_exact_at(frame.page_mut().data_mut(), pos).await {
+        match file.read_exact_at(page.raw_data_mut(), pos).await {
             Err(e) => Err(FloppyError::Io(e)),
             Ok(_) => Ok(()),
         }

@@ -1,108 +1,66 @@
 use crate::dc2::page::{Page, PageId};
-use std::{
-    ops::{Deref, DerefMut},
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc,
 };
+use tokio::sync::{Mutex, MutexGuard};
 
-use tokio::sync::{Mutex, OwnedMutexGuard};
+pub(crate) struct PinGuard {
+    // todo should we use reference?
+    buf: Buffer,
+}
+
+impl PinGuard {
+    pub fn new(buf: Buffer) -> Self {
+        buf.inner.pin_count.fetch_add(1, Ordering::Release);
+        Self { buf }
+    }
+
+    pub async fn lock(&self) -> MutexGuard<BufferState> {
+        self.buf.inner.state.lock().await
+    }
+}
+
+impl Drop for PinGuard {
+    fn drop(&mut self) {
+        self.buf.inner.pin_count.fetch_add(-1, Ordering::Release);
+    }
+}
 
 #[derive(Clone)]
-pub(crate) struct BufferFrame {
-    inner: Arc<Mutex<BufferFrameInner>>,
+pub(crate) struct Buffer {
+    inner: Arc<BufferInner>,
 }
 
-impl BufferFrame {
+impl Buffer {
     pub fn new(page_id: PageId, page: Page) -> Self {
+        let inner = BufferInner {
+            pin_count: AtomicI64::new(0),
+            state: Mutex::new(BufferState {
+                page_id,
+                is_dirty: false,
+                page,
+            }),
+        };
         Self {
-            inner: Arc::new(Mutex::new(BufferFrameInner::new(page_id, page))),
+            inner: Arc::new(inner),
         }
     }
 
-    pub async fn guard(
-        &self,
-        _parent_guard: Option<BufferFrameGuard>,
-    ) -> BufferFrameGuard {
-        let guard = self.inner.clone().lock_owned().await;
-        guard.fix();
-        BufferFrameGuard { guard }
+    pub fn pin(&self) -> PinGuard {
+        PinGuard::new(self.clone())
     }
 }
 
-pub(crate) struct BufferFrameInner {
-    page_id: PageId,
-    page: Page,
-    fix_count: AtomicI64,
-    dirty: bool,
+/// Shared state for a buffer. Operations on this struct should
+/// hold a lock.
+pub(crate) struct BufferState {
+    pub page_id: PageId,
+    pub is_dirty: bool,
+    pub page: Page,
 }
 
-impl BufferFrameInner {
-    pub fn new(page_id: PageId, page: Page) -> Self {
-        Self {
-            page_id,
-            page,
-            fix_count: AtomicI64::new(0),
-            dirty: false,
-        }
-    }
-
-    pub fn init(&mut self) {}
-
-    pub fn page_id(&self) -> PageId {
-        self.page_id
-    }
-
-    pub fn page(&self) -> &Page {
-        &self.page
-    }
-
-    pub fn page_mut(&mut self) -> &mut Page {
-        &mut self.page
-    }
-
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
-    pub fn fix(&self) -> i64 {
-        self.fix_count.fetch_add(1, Ordering::Release)
-    }
-
-    pub fn unfix(&self) -> i64 {
-        self.fix_count.fetch_add(-1, Ordering::Release)
-    }
-}
-
-pub(crate) struct BufferFrameGuard {
-    guard: OwnedMutexGuard<BufferFrameInner>,
-}
-
-impl Deref for BufferFrameGuard {
-    type Target = BufferFrameInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.guard
-    }
-}
-
-impl DerefMut for BufferFrameGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.guard
-    }
-}
-
-impl BufferFrameGuard {
-    pub async fn new(frame: BufferFrame) -> Self {
-        let guard = frame.inner.clone().lock_owned().await;
-        guard.fix();
-        Self { guard }
-    }
-}
-
-impl Drop for BufferFrameGuard {
-    fn drop(&mut self) {
-        self.guard.unfix();
-    }
+struct BufferInner {
+    pin_count: AtomicI64,
+    state: Mutex<BufferState>,
 }

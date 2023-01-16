@@ -127,6 +127,10 @@ impl Page {
         }
     }
 
+    pub fn raw_data_mut(&mut self) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
+    }
+
     pub fn init(&mut self, opaque_size: usize) {
         unsafe { ptr::write_bytes(self.buf.as_ptr(), 0, self.size) }
         self.inited = true;
