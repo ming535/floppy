@@ -7,6 +7,7 @@ use crate::dc2::{
 };
 use crate::env::*;
 use dashmap::DashMap;
+use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicU32, Ordering},
@@ -81,10 +82,9 @@ where
     /// file and return the new page.
     pub async fn alloc_page(&self) -> Result<PinGuard> {
         let page_id: PageId = self.next_page_id.fetch_add(1, Ordering::Release);
-        let page = Page::alloc(PAGE_SIZE)?;
-        let buf = Buffer::new(page_id, page);
-        let pin_guard = buf.pin();
-        self.active_pages.insert(page_id, buf);
+        let buf = Buffer::new(page_id, Page::alloc(PAGE_SIZE)?);
+        self.active_pages.insert(page_id, buf.clone());
+        let pin_guard = PinGuard::new(buf);
         Ok(pin_guard)
     }
 
@@ -114,21 +114,21 @@ where
         let entry = self.active_pages.get(&page_id);
         if let Some(entry) = entry {
             let frame = entry.value();
-            Ok(frame.pin())
+            Ok(PinGuard::new(frame.clone()))
         } else {
             let buf = self.eviction_pages.evict();
-            let pin_guard = buf.pin();
-            {
-                let mut lock_guard = pin_guard.lock().await;
-                if lock_guard.is_dirty {
-                    self.flush_page(&lock_guard.page).await?;
-                }
+            let pin_guard = PinGuard::new(buf.clone());
+            let mut lock_guard = pin_guard.lock();
 
-                self.read_page(page_id, &mut lock_guard.page).await?;
-                lock_guard.is_dirty = false;
-                lock_guard.page_id = page_id;
+            if lock_guard.is_dirty {
+                self.flush_page(&lock_guard.page).await?;
             }
-            self.active_pages.insert(page_id, buf);
+
+            self.read_page(page_id, &mut lock_guard.page).await?;
+            lock_guard.is_dirty = false;
+            lock_guard.page_id = page_id;
+            drop(lock_guard);
+            self.active_pages.insert(page_id, buf.clone());
             Ok(pin_guard)
         }
     }

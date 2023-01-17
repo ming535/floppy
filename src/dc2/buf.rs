@@ -1,29 +1,73 @@
 use crate::dc2::page::{Page, PageId};
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    Arc,
+use std::{
+    mem,
+    ops::{Deref, DerefMut},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
 };
-use tokio::sync::{Mutex, MutexGuard};
 
-pub(crate) struct PinGuard {
-    // todo should we use reference?
-    buf: Buffer,
-}
+#[derive(Clone)]
+pub(crate) struct PinGuard(Arc<PinGuardInner>);
 
 impl PinGuard {
     pub fn new(buf: Buffer) -> Self {
-        buf.inner.pin_count.fetch_add(1, Ordering::Release);
-        Self { buf }
+        PinGuard(Arc::new(PinGuardInner::new(buf)))
     }
 
-    pub async fn lock(&self) -> MutexGuard<BufferState> {
-        self.buf.inner.state.lock().await
+    pub fn lock(&self) -> LockGuard {
+        LockGuard {
+            pin_guard: self.clone(),
+            guard: unsafe {
+                // transmute to a 'static Guard.
+                mem::transmute(self.0.buf.inner.state.lock().unwrap())
+            },
+        }
     }
 }
 
-impl Drop for PinGuard {
+struct PinGuardInner {
+    buf: Buffer,
+}
+
+impl PinGuardInner {
+    fn new(buf: Buffer) -> Self {
+        buf.inner.pin_count.fetch_add(1, Ordering::Release);
+        Self { buf }
+    }
+}
+
+impl Drop for PinGuardInner {
     fn drop(&mut self) {
         self.buf.inner.pin_count.fetch_add(-1, Ordering::Release);
+    }
+}
+
+pub(crate) struct LockGuard {
+    pin_guard: PinGuard,
+    guard: MutexGuard<'static, BufferState>,
+}
+
+impl LockGuard {
+    /// Consume the current [`LockGuard`], release the lock
+    /// and returns a [`PinGuard`]
+    pub fn unlock(self) -> PinGuard {
+        self.pin_guard
+    }
+}
+
+impl Deref for LockGuard {
+    type Target = MutexGuard<'static, BufferState>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl DerefMut for LockGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
     }
 }
 
@@ -45,10 +89,6 @@ impl Buffer {
         Self {
             inner: Arc::new(inner),
         }
-    }
-
-    pub fn pin(&self) -> PinGuard {
-        PinGuard::new(self.clone())
     }
 }
 

@@ -5,6 +5,7 @@ use crate::common::{
 use crate::dc2::{
     codec::{Codec, Decoder, Record},
     lp::SlotId,
+    opaque::opaque_data_accessor,
     page::{Page, PageId},
 };
 use paste::paste;
@@ -44,33 +45,14 @@ pub(super) struct Node<'a> {
     page: &'a mut Page,
 }
 
-macro_rules! opaque_data_accessor {
-    ($name:ident, $t:ty) => {
-        paste! {
-            #[inline(always)]
-            pub fn [<get _ $name>](&self) -> $t {
-                let offset = self.[<$name _offset>]();
-                let opaque = self.page.opaque_data();
-                $t::from_le_bytes(
-                    opaque[offset..offset + mem::size_of::<$t>()]
-                        .try_into()
-                        .unwrap(),
-                )
-            }
-
-            #[inline(always)]
-            pub fn [<set _ $name>](&mut self, v: $t) {
-                let offset = self.[<$name _offset>]();
-                let opaque_mut = self.page.opaque_data_mut();
-                opaque_mut[offset..offset + mem::size_of::<$t>()].copy_from_slice(v.to_le_bytes().as_slice());
-            }
-        }
-    };
-}
-
 impl<'a> Node<'a> {
     pub fn from_page(page: &'a mut Page) -> Self {
         Self { page }
+    }
+
+    pub fn format_page(&mut self) {
+        let opaque_size = Self::opaque_size();
+        self.page.init(opaque_size);
     }
 
     pub fn opaque_size() -> usize {
@@ -194,17 +176,13 @@ pub(super) fn find_in_leaf(node: &Node, target: &[u8]) -> Result<Option<IVec>> {
 /// Find a value ([`PageId`]) in a internal node.
 /// The logic of following the right sibling ("move right") is handled
 /// by [`Tree`], not here.
-pub(super) fn find_in_child<K, V>(node: &Node, target: K) -> Result<V>
-where
-    K: NodeKey,
-    V: NodeValue,
-{
-    let slot_id = match rank(node, target.as_ref()) {
+pub(super) fn find_child(node: &Node, target: &[u8]) -> Result<PageId> {
+    let slot_id = match rank(node, target) {
         Err(slot) => slot,
         Ok(slot) => slot,
     };
     let slot_content = node.page.get_slot(slot_id - 1)?;
-    Ok(Record::decode_value(slot_content, target.as_ref()))
+    Ok(Record::decode_value(slot_content, target))
 }
 
 /// Insert a pair of key value into leaf node.
@@ -214,7 +192,7 @@ pub(super) fn insert_leaf_node(
     record: Record<&[u8]>,
 ) -> Result<()> {
     let key = record.key;
-    validate_insertion_key::<&[u8]>(node, key)?;
+    validate_insertion_key(node, key)?;
 
     match rank(node, key) {
         Err(slot_id) => node.page.insert_slot(record, slot_id),
@@ -234,7 +212,7 @@ pub(super) fn insert_internal_node(
     record: Record<PageId>,
 ) -> Result<()> {
     let key = record.key;
-    validate_insertion_key::<PageId>(node, key)?;
+    validate_insertion_key(node, key)?;
 
     match rank(node, key) {
         Err(slot_id) => node.page.insert_slot(record, slot_id - 1),
@@ -285,11 +263,8 @@ pub(super) fn set_high_key(node: &mut Node, key: &[u8]) -> Result<()> {
     }
 }
 
-fn validate_insertion_key<V>(node: &Node, key: &[u8]) -> Result<()>
-where
-    V: NodeValue,
-{
-    if compare_high_key::<V>(node, key) == Ordering::Greater {
+fn validate_insertion_key(node: &Node, key: &[u8]) -> Result<()> {
+    if compare_high_key(node, key) == Ordering::Greater {
         Err(FloppyError::Internal(
             "insert a key grater than high key".to_string(),
         ))
@@ -298,10 +273,7 @@ where
     }
 }
 
-pub(super) fn compare_high_key<V>(node: &Node, key: &[u8]) -> Ordering
-where
-    V: NodeValue,
-{
+pub(super) fn compare_high_key(node: &Node, key: &[u8]) -> Ordering {
     if node.is_rightmost() {
         Ordering::Less
     } else {
