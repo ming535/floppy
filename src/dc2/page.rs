@@ -127,6 +127,17 @@ impl Page {
         }
     }
 
+    pub fn copy_from(page: &Page) -> Result<Self> {
+        let new_page = Self::alloc(page.size)?;
+        unsafe {
+            new_page
+                .buf
+                .as_ptr()
+                .copy_from_nonoverlapping(page.buf.as_ptr(), page.size)
+        };
+        Ok(new_page)
+    }
+
     pub fn raw_data_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.size) }
     }
@@ -135,6 +146,20 @@ impl Page {
         unsafe { ptr::write_bytes(self.buf.as_ptr(), 0, self.size) }
         self.inited = true;
         self.set_lower(Self::header_size() as PageOffset);
+        self.set_upper((self.size - opaque_size) as PageOffset);
+        self.set_opaque((self.size - opaque_size) as PageOffset);
+    }
+
+    pub fn clear_records(&mut self, opaque_size: usize) {
+        let header_size = Self::header_size();
+        unsafe {
+            ptr::write_bytes(
+                self.buf.as_ptr().add(header_size),
+                0,
+                self.size - header_size,
+            )
+        }
+        self.set_lower(header_size as PageOffset);
         self.set_upper((self.size - opaque_size) as PageOffset);
         self.set_opaque((self.size - opaque_size) as PageOffset);
     }
@@ -272,7 +297,7 @@ impl Page {
     }
 
     // 8 + 2 + 1 + 2 (lower) + 2 (upper) + 2 (opaque) = 17
-    fn header_size() -> usize {
+    pub fn header_size() -> usize {
         mem::size_of::<PageLsn>()
             + mem::size_of::<PageChecksum>()
             + mem::size_of::<PageFlags>()

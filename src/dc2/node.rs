@@ -3,6 +3,7 @@ use crate::common::{
     ivec::IVec,
 };
 use crate::dc2::lp::{LinePointer, PageOffset};
+use crate::dc2::page::PAGE_SIZE;
 use crate::dc2::{
     codec::{Codec, Decoder, Record},
     lp::SlotId,
@@ -56,6 +57,11 @@ impl<'a> Node<'a> {
         self.page.init(opaque_size);
     }
 
+    pub fn clear_records(&mut self) {
+        let opaque_size = Self::opaque_size();
+        self.page.clear_records(opaque_size);
+    }
+
     pub fn opaque_size() -> usize {
         2 * mem::size_of::<PageId>()
             + mem::size_of::<TreeLevel>()
@@ -64,6 +70,16 @@ impl<'a> Node<'a> {
 
     pub fn will_overfull(&self, record_size: usize) -> bool {
         self.page.get_record_free_space() < record_size
+    }
+
+    /// We assumes we can fit at least three items per page
+    /// (a "high key" and two real data items).  Therefore it's unsafe
+    /// to accept items larger than 1/3rd page size. Larger items would
+    /// work sometimes, but could cause failures later on depending on
+    /// what else gets put on their page
+    ///
+    pub fn max_record_size() -> usize {
+        (PAGE_SIZE - Page::header_size() - Node::opaque_size()) / 3
     }
 
     #[inline(always)]
@@ -117,7 +133,7 @@ impl<'a> Node<'a> {
     }
 }
 
-pub(super) struct NodeIterator<'a, 'b, V> {
+pub(super) struct NodeIterator<'a, 'b: 'a, V> {
     node: &'b Node<'a>,
     next_slot: SlotId,
     _marker: PhantomData<V>,
@@ -141,10 +157,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let max_slot = self.node.page.max_slot();
         if self.next_slot <= max_slot {
-            let content = self.node.page.get_slot(self.next_slot).unwrap();
+            let record = get_record(self.node, self.next_slot).unwrap();
             self.next_slot += 1;
-            let mut dec = Decoder::new(content);
-            let record = unsafe { Record::<V>::decode_from(&mut dec) };
             Some((record.key, record.value))
         } else {
             None
@@ -160,6 +174,67 @@ where
 {
     let next_slot = first_data_slot(node);
     NodeIterator::new(node, next_slot)
+}
+
+pub(super) struct NodeRangeIterator<'a, 'b: 'a, V> {
+    node: &'b Node<'a>,
+    next_slot: SlotId,
+    max_exclusive_slot: SlotId,
+    _marker: PhantomData<V>,
+}
+
+impl<'a, 'b, V> NodeRangeIterator<'a, 'b, V> {
+    fn new(
+        node: &'b Node<'a>,
+        next_slot: SlotId,
+        max_exclusive_slot: SlotId,
+    ) -> Self {
+        Self {
+            node,
+            next_slot,
+            max_exclusive_slot,
+            _marker: PhantomData::default(),
+        }
+    }
+}
+
+impl<'a, 'b, V> Iterator for NodeRangeIterator<'a, 'b, V>
+where
+    V: NodeValue,
+{
+    type Item = (&'a [u8], V);
+    fn next(&mut self) -> Option<Self::Item> {
+        let max_slot = self.node.page.max_slot();
+        if self.next_slot <= max_slot
+            && self.next_slot < self.max_exclusive_slot
+        {
+            let record = get_record(self.node, self.next_slot).unwrap();
+            self.next_slot += 1;
+            Some((record.key, record.value))
+        } else {
+            None
+        }
+    }
+}
+
+pub(super) fn split_at<'a, 'b: 'a, V>(
+    node: &'b Node<'a>,
+    split_slot: SlotId,
+) -> (NodeRangeIterator<'a, 'b, V>, NodeRangeIterator<'a, 'b, V>) {
+    let first_slot = first_data_slot(node);
+    let max_slot = node.page.max_slot();
+    let left = NodeRangeIterator::<V>::new(node, first_slot, split_slot);
+    let right = NodeRangeIterator::<V>::new(node, split_slot, max_slot + 1);
+    (left, right)
+}
+
+fn get_record<'a, V>(node: &'a Node, slot: SlotId) -> Result<Record<'a, V>>
+where
+    V: NodeValue,
+{
+    let content = node.page.get_slot(slot)?;
+    let mut dec = Decoder::new(content);
+    Ok(unsafe { Record::decode_from(&mut dec) })
 }
 
 /// Find a value in the leaf node. When [`Tree`] identifies the correct
@@ -278,6 +353,16 @@ fn validate_insertion_key(node: &Node, key: &[u8]) -> Result<()> {
     }
 }
 
+pub fn validate_record_size(record_size: usize) -> Result<()> {
+    if record_size + mem::size_of::<LinePointer>() > Node::max_record_size() {
+        Err(FloppyError::DC(DCError::RecordSizeExceeded(
+            "cannot insert a record longer than 1/3 of page size".to_string(),
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 pub(super) fn compare_high_key(node: &Node, key: &[u8]) -> Ordering {
     if node.is_rightmost() {
         Ordering::Less
@@ -378,11 +463,14 @@ pub(super) fn rank(
 ///
 /// The basic idea is to imagine that a new record is already in the node, and
 /// split the node into half to make left and right page equally sized.
-pub(super) fn split_location(
+pub(super) fn split_location<V>(
     node: &Node,
     key: &[u8],
     insert_size: usize,
-) -> Result<SplitLocation> {
+) -> Result<SplitLocation>
+where
+    V: NodeValue,
+{
     let new_record_slot = match rank(node, key) {
         Err(s) => Ok(s),
         Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(
@@ -418,22 +506,36 @@ pub(super) fn split_location(
         for slot_iter in first_data_slot..=max_slot {
             acc_size = acc_slot_size(node, acc_size, slot_iter)?;
             if acc_size >= half_size {
+                // If the first data's size >= half_size, we use the second.
+                // It is ok here since we guaranteed we can have at least two data items
+                // in each page.
+                let split_slot = adjust_split_slot(node, slot_iter);
+                let high_key =
+                    IVec::from(get_record::<V>(node, split_slot - 1)?.key);
                 return Ok(SplitLocation {
-                    split_slot: slot_iter,
+                    high_key,
+                    split_slot,
                     new_record_slot,
                 });
             }
         }
+        let high_key =
+            IVec::from(get_record::<V>(node, new_record_slot - 1)?.key);
         Ok(SplitLocation {
+            high_key,
             split_slot: new_record_slot,
             new_record_slot,
         })
     } else {
         for slot_iter in first_data_slot..new_record_slot {
             acc_size = acc_slot_size(node, acc_size, slot_iter)?;
+            let split_slot = adjust_split_slot(node, slot_iter);
+            let high_key =
+                IVec::from(get_record::<V>(node, split_slot - 1)?.key);
             if acc_size >= half_size {
                 return Ok(SplitLocation {
-                    split_slot: slot_iter,
+                    high_key,
+                    split_slot,
                     new_record_slot,
                 });
             }
@@ -441,8 +543,12 @@ pub(super) fn split_location(
         // haven't found the split point. handle the new record slot first.
         acc_size += insert_size + mem::size_of::<LinePointer>();
         if acc_size >= half_size {
+            let split_slot = adjust_split_slot(node, new_record_slot);
             return Ok(SplitLocation {
-                split_slot: new_record_slot,
+                high_key: IVec::from(
+                    get_record::<V>(node, split_slot - 1)?.key,
+                ),
+                split_slot,
                 new_record_slot,
             });
         }
@@ -450,8 +556,12 @@ pub(super) fn split_location(
         for slot_iter in new_record_slot..=max_slot {
             acc_size = acc_slot_size(node, acc_size, slot_iter)?;
             if acc_size >= half_size {
+                let split_slot = adjust_split_slot(node, slot_iter);
                 return Ok(SplitLocation {
-                    split_slot: slot_iter,
+                    high_key: IVec::from(
+                        get_record::<V>(node, split_slot - 1)?.key,
+                    ),
+                    split_slot,
                     new_record_slot,
                 });
             }
@@ -462,16 +572,25 @@ pub(super) fn split_location(
     }
 }
 
-#[derive(Clone, Copy)]
+fn adjust_split_slot(node: &Node, split_slot: SlotId) -> SlotId {
+    let first_data = first_data_slot(node);
+    if split_slot == first_data {
+        split_slot + 1
+    } else {
+        split_slot
+    }
+}
+
 pub struct SplitLocation {
+    pub high_key: IVec,
     /// [1, split_slot) will be on the left node,
     /// [split_slot,..) will be on the right node.
-    split_slot: SlotId,
+    pub split_slot: SlotId,
     /// When `new_record_slot` < `split_slot`, the new record will be inserted
     /// into left node.
     /// When `new_record_slot` >= `split_slot`, the new record will be inserted
     /// into right node.
-    new_record_slot: SlotId,
+    pub new_record_slot: SlotId,
 }
 
 #[cfg(test)]

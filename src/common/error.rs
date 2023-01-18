@@ -51,6 +51,7 @@ pub enum DCError {
     KeyNotFound(String),
     KeyAlreadyExists(String),
     PageNotFound(String),
+    RecordSizeExceeded(String),
 }
 
 /// Create a "field not found" Floppy::SchemaError

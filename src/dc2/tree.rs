@@ -2,14 +2,16 @@ use crate::common::{
     error::{FloppyError, Result},
     ivec::IVec,
 };
-use crate::dc2::codec::Codec;
-use crate::dc2::node::insert_leaf_node;
+use crate::dc2::page::Page;
 use crate::dc2::{
     buf::{LockGuard, PinGuard},
     bufmgr::BufMgr,
-    codec::Record,
+    codec::{Codec, Record},
     meta::MetaPage,
-    node::{compare_high_key, find_child, Node},
+    node::{
+        compare_high_key, find_child, insert_leaf_node, split_at,
+        split_location, validate_record_size, Node,
+    },
 };
 use crate::env::Env;
 use std::cmp::Ordering;
@@ -37,16 +39,18 @@ where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        let (mut lock_guard, stack) = self.find_leaf(key.as_ref()).await?;
         let record = Record {
             key: key.as_ref(),
             value: value.as_ref(),
         };
+        validate_record_size(record.encode_size())?;
 
+        let (mut lock_guard, stack) = self.find_leaf(key.as_ref()).await?;
         let mut node = Node::from_page(&mut lock_guard.page);
 
         if node.will_overfull(record.encode_size()) {
             // need split
+            // when to drop lock guard?
             todo!()
         } else {
             insert_leaf_node(&mut node, record)
@@ -78,9 +82,56 @@ where
 
     async fn split(
         &self,
-        node: &mut Node<'_>,
+        mut lock_guard: LockGuard,
         record: Record<'_, &[u8]>,
     ) -> Result<()> {
+        // make a new tmp page and copy the current page's content.
+        let mut tmp_page = Page::copy_from(&lock_guard.page)?;
+        let tmp_node = Node::from_page(&mut tmp_page);
+        let loc = split_location::<&[u8]>(
+            &tmp_node,
+            record.key,
+            record.encode_size(),
+        )?;
+
+        // make a new new right page.
+        let right_pin = self.buf_mgr.alloc_page().await?;
+        let mut right_lock_guard = right_pin.lock();
+        let mut right_node = Node::from_page(&mut right_lock_guard.page);
+        let (left_iter, right_iter) =
+            split_at::<&[u8]>(&tmp_node, loc.split_slot);
+        // copy to right page.
+        for r in right_iter {
+            insert_leaf_node(
+                &mut right_node,
+                Record {
+                    key: r.0,
+                    value: r.1,
+                },
+            )?;
+        }
+
+        // copy to left page.
+        let mut left_node = Node::from_page(&mut lock_guard.page);
+        left_node.clear_records();
+        for r in left_iter {
+            insert_leaf_node(
+                &mut left_node,
+                Record {
+                    key: r.0,
+                    value: r.1,
+                },
+            )?;
+        }
+
+        if loc.new_record_slot < loc.split_slot {
+            // new record is at left node
+            insert_leaf_node(&mut left_node, record)?;
+        } else {
+            // new record is at right node
+            insert_leaf_node(&mut right_node, record)?;
+        }
+        // todo insert high key and right page into parent.
         todo!()
     }
 
