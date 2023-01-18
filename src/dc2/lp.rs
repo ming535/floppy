@@ -8,7 +8,7 @@ use std::mem;
 /// PageOffset is the byte offset within a page starts at 0.
 /// Only 15 bits are used, see [`LinePointer`] definition below.
 /// So in theory, the maximus page size is 32 KB, we use 8 KB by default.
-pub type PageOffset = u16;
+pub(crate) type PageOffset = u16;
 
 /// A line pointer on a page. The 32 bit is arranged as:
 ///

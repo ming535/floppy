@@ -2,6 +2,8 @@ use crate::common::{
     error::{FloppyError, Result},
     ivec::IVec,
 };
+use crate::dc2::codec::Codec;
+use crate::dc2::node::insert_leaf_node;
 use crate::dc2::{
     buf::{LockGuard, PinGuard},
     bufmgr::BufMgr,
@@ -35,13 +37,20 @@ where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        let (pin_guard, stack) = self.find_leaf(key.as_ref()).await?;
+        let (mut lock_guard, stack) = self.find_leaf(key.as_ref()).await?;
         let record = Record {
             key: key.as_ref(),
             value: value.as_ref(),
         };
 
-        Ok(())
+        let mut node = Node::from_page(&mut lock_guard.page);
+
+        if node.will_overfull(record.encode_size()) {
+            // need split
+            todo!()
+        } else {
+            insert_leaf_node(&mut node, record)
+        }
     }
 
     async fn find_leaf(
@@ -65,6 +74,14 @@ where
                 lock_guard = self.buf_mgr.fix_page(page_id).await?.lock();
             }
         }
+    }
+
+    async fn split(
+        &self,
+        node: &mut Node<'_>,
+        record: Record<'_, &[u8]>,
+    ) -> Result<()> {
+        todo!()
     }
 
     async fn move_right(

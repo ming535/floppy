@@ -168,7 +168,7 @@ impl Page {
         V: Codec,
     {
         let record_size = record.encode_size();
-        if record_size > self.get_free_space() {
+        if record_size > self.get_record_free_space() {
             return Err(FloppyError::DC(DCError::SpaceExhaustedInPage(
                 format!("page exhausted when insert slot at {slot_id:?}"),
             )));
@@ -251,13 +251,24 @@ impl Page {
 
     /// Returns the size of the free allocatable space on a page,
     /// reduced by the space needed for a new line pointer.
-    fn get_free_space(&self) -> usize {
+    pub fn get_record_free_space(&self) -> usize {
         let space = self.get_upper() - self.get_lower();
         if space < mem::size_of::<LinePointer>() as PageOffset {
             0
         } else {
             space as usize - mem::size_of::<LinePointer>()
         }
+    }
+
+    /// Returns the size of free allocatable space on a page,
+    /// do not count for space needed for a new line pointer.
+    pub fn get_free_space(&self) -> usize {
+        self.get_upper() as usize - self.get_lower() as usize
+    }
+
+    /// Returns the used size for records.
+    pub fn get_used_size(&self) -> usize {
+        self.size - Self::header_size() - self.get_free_space()
     }
 
     // 8 + 2 + 1 + 2 (lower) + 2 (upper) + 2 (opaque) = 17
@@ -370,7 +381,7 @@ mod tests {
             }
         };
         // encoded key/value is 2 + 8 bytes
-        assert!(page.get_free_space() < (2 + 8) * 2);
+        assert!(page.get_record_free_space() < (2 + 8) * 2);
 
         page.init(0);
         let round_size = count_insert_asc / 2;

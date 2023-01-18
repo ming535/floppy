@@ -2,6 +2,7 @@ use crate::common::{
     error::{DCError, FloppyError, Result},
     ivec::IVec,
 };
+use crate::dc2::lp::{LinePointer, PageOffset};
 use crate::dc2::{
     codec::{Codec, Decoder, Record},
     lp::SlotId,
@@ -59,6 +60,10 @@ impl<'a> Node<'a> {
         2 * mem::size_of::<PageId>()
             + mem::size_of::<TreeLevel>()
             + mem::size_of::<NodeFlags>()
+    }
+
+    pub fn will_overfull(&self, record_size: usize) -> bool {
+        self.page.get_record_free_space() < record_size
     }
 
     #[inline(always)]
@@ -362,6 +367,113 @@ pub(super) fn rank(
     Err(left)
 }
 
+/// Find a split location in a node.
+/// * Input
+/// - `node` is [`Node`] we would like to split.
+/// - `key` is the new record's key.
+/// - `insert_size` is the new record's encoded size.
+/// * Output
+/// - The page offset where new record will be inserted.
+/// - A boolean value indicates whether the new record is in left or right page.
+///
+/// The basic idea is to imagine that a new record is already in the node, and
+/// split the node into half to make left and right page equally sized.
+pub(super) fn split_location(
+    node: &Node,
+    key: &[u8],
+    insert_size: usize,
+) -> Result<SplitLocation> {
+    let new_record_slot = match rank(node, key) {
+        Err(s) => Ok(s),
+        Ok(_) => Err(FloppyError::DC(DCError::KeyAlreadyExists(
+            "key already exists when finding split location".to_string(),
+        ))),
+    }?;
+
+    // 1. let space = get the total used space + new record size
+    // 2. let half = space/2
+    // 3. iterator through slots and calculate the accumulated size on the way,
+    //    until we find a first slot when the accumulated size >= half.
+    //    We need to consider the new record during the iteration. The result of
+    //    this iteration is target slot, target offset.
+    //    slot >= target slot goes to the right page.
+    // 4.
+    //
+    let half_size = node.page.get_used_size() + insert_size / 2;
+    let mut acc_size = 0;
+    let first_data_slot = first_data_slot(node);
+    let max_slot = node.page.max_slot();
+
+    fn acc_slot_size(
+        node: &Node,
+        acc_size: usize,
+        slot_id: SlotId,
+    ) -> Result<usize> {
+        let content = node.page.get_slot(slot_id)?;
+        Ok(acc_size + content.len() + mem::size_of::<LinePointer>())
+    }
+
+    if new_record_slot > max_slot {
+        assert_eq!(new_record_slot, max_slot + 1);
+        for slot_iter in first_data_slot..=max_slot {
+            acc_size = acc_slot_size(node, acc_size, slot_iter)?;
+            if acc_size >= half_size {
+                return Ok(SplitLocation {
+                    split_slot: slot_iter,
+                    new_record_slot,
+                });
+            }
+        }
+        Ok(SplitLocation {
+            split_slot: new_record_slot,
+            new_record_slot,
+        })
+    } else {
+        for slot_iter in first_data_slot..new_record_slot {
+            acc_size = acc_slot_size(node, acc_size, slot_iter)?;
+            if acc_size >= half_size {
+                return Ok(SplitLocation {
+                    split_slot: slot_iter,
+                    new_record_slot,
+                });
+            }
+        }
+        // haven't found the split point. handle the new record slot first.
+        acc_size += insert_size + mem::size_of::<LinePointer>();
+        if acc_size >= half_size {
+            return Ok(SplitLocation {
+                split_slot: new_record_slot,
+                new_record_slot,
+            });
+        }
+
+        for slot_iter in new_record_slot..=max_slot {
+            acc_size = acc_slot_size(node, acc_size, slot_iter)?;
+            if acc_size >= half_size {
+                return Ok(SplitLocation {
+                    split_slot: slot_iter,
+                    new_record_slot,
+                });
+            }
+        }
+        Err(FloppyError::Internal(
+            "cannot find a split point".to_string(),
+        ))
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SplitLocation {
+    /// [1, split_slot) will be on the left node,
+    /// [split_slot,..) will be on the right node.
+    split_slot: SlotId,
+    /// When `new_record_slot` < `split_slot`, the new record will be inserted
+    /// into left node.
+    /// When `new_record_slot` >= `split_slot`, the new record will be inserted
+    /// into right node.
+    new_record_slot: SlotId,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,12 +504,28 @@ mod tests {
     #[test]
     fn test_node_rank_leaf() -> Result<()> {
         let mut page = Page::alloc(PAGE_SIZE)?;
-        let node = init_single_leaf(&mut page);
+        let mut node = init_single_leaf(&mut page);
 
         match rank(&node, b"random") {
             Err(slot_id) => assert_eq!(slot_id, 1),
             _ => panic!("this should not happen"),
         }
+
+        let vec = [b"1", b"2", b"3"];
+        for v in vec.iter() {
+            insert_leaf_node(
+                &mut node,
+                Record {
+                    key: (*v).as_slice(),
+                    value: (*v).as_slice(),
+                },
+            )?;
+        }
+        match rank(&node, b"4") {
+            Err(slot_id) => assert_eq!(slot_id, 4),
+            _ => panic!("this should not happen"),
+        }
+
         Ok(())
     }
 
